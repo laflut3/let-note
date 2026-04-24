@@ -1,0 +1,14 @@
+.git
+.github
+.vscode
+target
+.dockerignore
+.env
+.env.example
+.gitignore
+.pre-commit-config.yaml
+compose.yml
+Dockerfile
+README.md
+renovate.json
+rustfmt.toml
