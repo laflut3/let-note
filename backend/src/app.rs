@@ -18,12 +18,7 @@ async fn health_check() -> StatusCode {
 }
 
 async fn health_json() -> (StatusCode, Json<HealthResponse>) {
-  (
-    StatusCode::OK,
-    Json(HealthResponse {
-      status: "ok",
-    }),
-  )
+  (StatusCode::OK, Json(HealthResponse { status: "ok" }))
 }
 
 async fn fallback() -> (StatusCode, String) {

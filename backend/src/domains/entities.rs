@@ -1,0 +1,9 @@
+pub mod etudiant;
+pub mod matiere;
+pub mod matiere_ue;
+pub mod note;
+pub mod professeur;
+pub mod promotion;
+pub mod role;
+pub mod role_etu;
+pub mod ue;

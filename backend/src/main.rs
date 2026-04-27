@@ -5,6 +5,7 @@ use clap::Parser;
 use crate::app::create_router;
 
 pub mod app;
+pub mod domains;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -17,12 +18,7 @@ struct Args {
   )]
   host: String,
 
-  #[arg(
-    short = 'P',
-    long = "port",
-    env = "APP_PORT",
-    default_value_t = 8080
-  )]
+  #[arg(short = 'P', long = "port", env = "APP_PORT", default_value_t = 8080)]
   port: u16,
 }
 
