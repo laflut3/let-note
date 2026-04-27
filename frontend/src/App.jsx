@@ -15,10 +15,7 @@ export default function App() {
       <section className="card">
         <p className="badge">Frontend React</p>
         <h1>Let Note Example App</h1>
-        <p>
-          Ceci est une application d'exemple: le frontend React appelle un
-          backend Rust local.
-        </p>
+        <p>Ceci est une application d'exemple: le frontend React appelle un backend Rust local.</p>
         <p>
           Etat du backend: <strong>{health}</strong>
         </p>

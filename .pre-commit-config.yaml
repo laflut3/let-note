@@ -37,15 +37,21 @@ repos:
         language: system
       - id: frontend-lint
         name: Frontend lint
-        entry: npm --prefix frontend run lint
-        # Runs ESLint on the React frontend
+        entry: eslint
+        args: [--config, frontend/eslint.config.js, frontend]
+        # Runs ESLint in pre-commit's isolated node env (no local npm required)
         pass_filenames: false
         files: ^frontend/
-        language: system
+        language: node
+        additional_dependencies:
+          - eslint@9.30.0
       - id: frontend-format
         name: Frontend format check
-        entry: npm --prefix frontend run format:check
-        # Verifies Prettier formatting on frontend files
+        entry: prettier
+        args: [--check, frontend]
+        # Runs Prettier check in pre-commit's isolated node env
         pass_filenames: false
         files: ^frontend/
-        language: system
+        language: node
+        additional_dependencies:
+          - prettier@3.6.2
