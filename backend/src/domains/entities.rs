@@ -1,4 +1,6 @@
+pub mod etu_promo;
 pub mod etudiant;
+pub mod mat_promo;
 pub mod matiere;
 pub mod matiere_ue;
 pub mod note;
