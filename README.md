@@ -1,44 +1,33 @@
-# Rust-based-project
-rust based project
+# Let Note
 
-## Template changes
+Monolithe avec un frontend React et un backend Rust.
 
-When creating a new repository from this template, complete this checklist before the first merge:
+## Structure
 
-- [ ] Rename the project in `Cargo.toml` (`[package].name`) and adjust `version` if needed.
-- [ ] Update the binary name in `Dockerfile`:
-  - [ ] `COPY --from=builder /app/target/release/<binary-name> /usr/local/bin`
-  - [ ] `ENTRYPOINT ["/usr/local/bin/<binary-name>"]`
-- [ ] Update OCI labels in `Dockerfile` (`title`, `description`) to match the new project.
-- [ ] Update the image tag in `.github/workflows/build.yml` (replace `laflut3/rust-based-project` with `<owner>/<repo>`).
-- [ ] Update the `README.md` title and description.
-- [ ] Update `SECURITY.md` with the real vulnerability disclosure process (contact details, response times).
-- [ ] Review CI tool versions in `.github/workflows/*.yml` (Rust, Python, action versions).
-- [ ] Configure required CI secrets/settings if you publish container images (registry/package permissions).
-- [ ] Review `LICENSE` and attribution if the new project requires a different setup.
-- [ ] Create and document a `.env` file (or `.env.example`) if the application depends on environment variables.
-- [ ] Run quality checks and tests locally before the first push:
-  - [ ] `pre-commit run --all-files`
-  - [ ] `cargo test`
+- `frontend/`: application React (Vite)
+- `backend/`: serveur backend Rust
 
-## Development
-
-### Development compose
-
-In the included compose file is included a Postgres 18 instance.
-
-### Pre-commit
+## Lancer le backend
 
 ```sh
-uv tool install pre-commit
-pre-commit install
+cargo run -p let-note-backend
 ```
 
-## Tests
+Backend disponible sur `http://127.0.0.1:8080`.
+Endpoint santé: `GET /api/health`
 
-Make sure you ran the migration and the .env is setup correctly.
+## Lancer le frontend
 
-### Run the tests
 ```sh
-cargo test
+cd frontend
+npm install
+npm run dev
+```
+
+Frontend disponible sur `http://127.0.0.1:5173`.
+
+## Tests backend
+
+```sh
+cargo test --workspace
 ```

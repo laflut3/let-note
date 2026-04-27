@@ -23,15 +23,29 @@ repos:
     hooks:
       - id: rust-format
         name: Rust format
-        entry: cargo fmt --
+        entry: cargo fmt --all --
         # Formats Rust code according to rustfmt rules
         pass_filenames: false
         types: [file, rust]
         language: system
       - id: rust-clippy
         name: Rust clippy
-        entry: cargo clippy --
+        entry: cargo clippy --workspace --all-targets --
         # Runs Rust lints to catch common mistakes and bad patterns
         pass_filenames: false
         types: [file, rust]
+        language: system
+      - id: frontend-lint
+        name: Frontend lint
+        entry: npm --prefix frontend run lint
+        # Runs ESLint on the React frontend
+        pass_filenames: false
+        files: ^frontend/
+        language: system
+      - id: frontend-format
+        name: Frontend format check
+        entry: npm --prefix frontend run format:check
+        # Verifies Prettier formatting on frontend files
+        pass_filenames: false
+        files: ^frontend/
         language: system
