@@ -1,87 +1,51 @@
-use std::io::{Read, Write};
-use std::net::{TcpListener, TcpStream};
+use std::net::SocketAddr;
 
-const ADDRESS: &str = "127.0.0.1:8080";
+use clap::Parser;
 
-fn main() -> std::io::Result<()> {
-  let listener = TcpListener::bind(ADDRESS)?;
-  println!("Backend running on http://{ADDRESS}");
+use crate::app::create_router;
 
-  for stream in listener.incoming() {
-    match stream {
-      Ok(stream) => {
-        if let Err(error) = handle_connection(stream) {
-          eprintln!("connection error: {error}");
-        }
-      }
-      Err(error) => eprintln!("incoming connection failed: {error}"),
-    }
-  }
+pub mod app;
+
+#[derive(Parser, Debug)]
+#[command(version, about, long_about = None)]
+struct Args {
+  #[arg(
+    short = 'H',
+    long = "host",
+    env = "APP_HOST",
+    default_value = "127.0.0.1"
+  )]
+  host: String,
+
+  #[arg(
+    short = 'P',
+    long = "port",
+    env = "APP_PORT",
+    default_value_t = 8080
+  )]
+  port: u16,
+}
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+  let args = Args::parse();
+
+  let app = create_router();
+
+  let socket_addr = format!("{}:{}", args.host, args.port)
+    .parse::<SocketAddr>()
+    .expect("Invalid socket address.");
+
+  let listener = tokio::net::TcpListener::bind(socket_addr).await?;
+  axum::serve(listener, app)
+    .with_graceful_shutdown(shutdown_signal())
+    .await?;
 
   Ok(())
 }
 
-fn handle_connection(mut stream: TcpStream) -> std::io::Result<()> {
-  let mut buffer = [0_u8; 1024];
-  let _ = stream.read(&mut buffer)?;
-
-  let request = String::from_utf8_lossy(&buffer);
-  let first_line = request.lines().next().unwrap_or_default();
-  let path = first_line
-    .split_whitespace()
-    .nth(1)
-    .unwrap_or("/");
-
-  let (status_line, content_type, body) = response_for_path(path);
-  let response = format!(
-    "{status_line}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n{body}",
-    body.len()
-  );
-
-  stream.write_all(response.as_bytes())?;
-  stream.flush()?;
-
-  Ok(())
-}
-
-fn response_for_path(path: &str) -> (&'static str, &'static str, &'static str) {
-  match path {
-    "/api/health" => (
-      "HTTP/1.1 200 OK",
-      "application/json",
-      r#"{"status":"ok"}"#,
-    ),
-    "/" => (
-      "HTTP/1.1 200 OK",
-      "text/plain; charset=utf-8",
-      "Let Note backend is running.",
-    ),
-    _ => (
-      "HTTP/1.1 404 Not Found",
-      "application/json",
-      r#"{"error":"not found"}"#,
-    ),
-  }
-}
-
-#[cfg(test)]
-mod tests {
-  use super::response_for_path;
-
-  #[test]
-  fn health_endpoint_returns_ok() {
-    let (status, content_type, body) = response_for_path("/api/health");
-
-    assert_eq!(status, "HTTP/1.1 200 OK");
-    assert_eq!(content_type, "application/json");
-    assert_eq!(body, r#"{"status":"ok"}"#);
-  }
-
-  #[test]
-  fn unknown_endpoint_returns_not_found() {
-    let (status, _, body) = response_for_path("/missing");
-
-    assert_eq!(status, "HTTP/1.1 404 Not Found");
-    assert_eq!(body, r#"{"error":"not found"}"#);
-  }
+pub async fn shutdown_signal() {
+  tokio::signal::ctrl_c()
+    .await
+    .expect("Failed to install CTRL+C signal handler");
 }

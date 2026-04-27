@@ -14,13 +14,13 @@ export default function App() {
     <main className="app">
       <section className="card">
         <p className="badge">Frontend React</p>
-        <h1>Let Note Monolith</h1>
+        <h1>Let Note Example App</h1>
         <p>
-          Le frontend React tourne côté client et le backend Rust répond via
-          l'API locale.
+          Ceci est une application d'exemple: le frontend React appelle un
+          backend Rust local.
         </p>
         <p>
-          Etat backend: <strong>{health}</strong>
+          Etat du backend: <strong>{health}</strong>
         </p>
       </section>
     </main>
