@@ -35,7 +35,10 @@ async fn get_all_etudiants(State(db): State<PgPool>) -> impl IntoResponse {
   }
 }
 
-async fn create_etudiant(State(db): State<PgPool>, Json(etudiant): Json<CreateEtudiant>) -> impl IntoResponse {
+async fn create_etudiant(
+  State(db): State<PgPool>,
+  Json(etudiant): Json<CreateEtudiant>,
+) -> impl IntoResponse {
   match sqlx::query_as::<_, GetEtudiant>(
     r#"
     INSERT INTO etudiant (nom, prenom, email, date_naissance)
