@@ -18,3 +18,29 @@ metadata:
   name: postgres-config
 data:
   POSTGRES_DB: let_note_staging
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+data:
+  app-config.yaml: |
+    app:
+      name: let-note
+      env: staging
+    routes:
+      frontend_base_url: http://staging.app.local
+      backend_base_url: http://staging.app.local/api
+      health_path: /api/health
+      auth:
+        login_path: /api/auth/login
+        logout_path: /api/auth/logout
+    ingress:
+      host: staging.app.local
+      frontend_path: /
+      api_path: /api
+    cors:
+      allowed_origins:
+        - http://localhost:5173
+        - http://127.0.0.1:5173
+        - http://staging.app.local

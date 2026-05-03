@@ -18,6 +18,32 @@ data:
 apiVersion: v1
 kind: ConfigMap
 metadata:
+  name: app-config
+data:
+  app-config.yaml: |
+    app:
+      name: let-note
+      env: dev
+    routes:
+      frontend_base_url: http://dev.app.local
+      backend_base_url: http://dev.app.local/api
+      health_path: /api/health
+      auth:
+        login_path: /api/auth/login
+        logout_path: /api/auth/logout
+    ingress:
+      host: dev.app.local
+      frontend_path: /
+      api_path: /api
+    cors:
+      allowed_origins:
+        - http://localhost:5173
+        - http://127.0.0.1:5173
+        - http://dev.app.local
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
   name: postgres-config
 data:
   POSTGRES_DB: let_note_dev
