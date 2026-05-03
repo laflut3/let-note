@@ -33,6 +33,8 @@ env:
   CONTAINER_REGISTRY: ghcr.io
   BACKEND_IMAGE_NAME: laflut3/let-note-backend
   FRONTEND_IMAGE_NAME: laflut3/let-note-frontend
+  BACKEND_CACHE_IMAGE: ghcr.io/laflut3/let-note-backend-buildcache
+  FRONTEND_CACHE_IMAGE: ghcr.io/laflut3/let-note-frontend-buildcache
 
 jobs:
   build-backend-amd64:
@@ -63,8 +65,8 @@ jobs:
           context: ./backend
           file: ./backend/Dockerfile
           outputs: type=image,name=${{ env.CONTAINER_REGISTRY }}/${{ env.BACKEND_IMAGE_NAME }},push-by-digest=true,name-canonical=true
-          cache-from: type=gha,scope=buildkit-amd64
-          cache-to: type=gha,mode=max,scope=buildkit-amd64
+          cache-from: type=registry,ref=${{ env.BACKEND_CACHE_IMAGE }}:amd64
+          cache-to: type=registry,ref=${{ env.BACKEND_CACHE_IMAGE }}:amd64,mode=max
 
   build-backend-arm64:
     name: Build backend arm64 image
@@ -94,8 +96,8 @@ jobs:
           context: ./backend
           file: ./backend/Dockerfile
           outputs: type=image,name=${{ env.CONTAINER_REGISTRY }}/${{ env.BACKEND_IMAGE_NAME }},push-by-digest=true,name-canonical=true
-          cache-from: type=gha,scope=buildkit-arm64
-          cache-to: type=gha,mode=max,scope=buildkit-arm64
+          cache-from: type=registry,ref=${{ env.BACKEND_CACHE_IMAGE }}:arm64
+          cache-to: type=registry,ref=${{ env.BACKEND_CACHE_IMAGE }}:arm64,mode=max
 
   merge-backend-manifest:
     name: Merge backend multi-arch image
@@ -149,8 +151,8 @@ jobs:
           context: ./frontend
           file: ./frontend/Dockerfile
           outputs: type=image,name=${{ env.CONTAINER_REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }},push-by-digest=true,name-canonical=true
-          cache-from: type=gha,scope=frontend-buildkit-amd64
-          cache-to: type=gha,mode=max,scope=frontend-buildkit-amd64
+          cache-from: type=registry,ref=${{ env.FRONTEND_CACHE_IMAGE }}:amd64
+          cache-to: type=registry,ref=${{ env.FRONTEND_CACHE_IMAGE }}:amd64,mode=max
 
   build-frontend-arm64:
     name: Build frontend arm64 image
@@ -180,8 +182,8 @@ jobs:
           context: ./frontend
           file: ./frontend/Dockerfile
           outputs: type=image,name=${{ env.CONTAINER_REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }},push-by-digest=true,name-canonical=true
-          cache-from: type=gha,scope=frontend-buildkit-arm64
-          cache-to: type=gha,mode=max,scope=frontend-buildkit-arm64
+          cache-from: type=registry,ref=${{ env.FRONTEND_CACHE_IMAGE }}:arm64
+          cache-to: type=registry,ref=${{ env.FRONTEND_CACHE_IMAGE }}:arm64,mode=max
 
   merge-frontend-manifest:
     name: Merge frontend multi-arch image
