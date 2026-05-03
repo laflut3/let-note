@@ -1,9 +1,4 @@
-use axum::{
-  Json, Router,
-  http::StatusCode,
-  response::IntoResponse,
-  routing::post,
-};
+use axum::{Json, Router, http::StatusCode, response::IntoResponse, routing::post};
 use uuid::Uuid;
 
 use crate::domains::entities::auth::{LoginInfo, LoginResponse};

@@ -1,3 +1,4 @@
+pub mod auth;
 pub mod etu_promo;
 pub mod etudiant;
 pub mod mat_promo;
@@ -9,4 +10,3 @@ pub mod promotion;
 pub mod role;
 pub mod role_etu;
 pub mod ue;
-pub mod auth;
