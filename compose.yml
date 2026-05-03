@@ -1,0 +1,35 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: let-note-postgres
+    environment:
+      POSTGRES_DB: let_note_dev
+      POSTGRES_USER: let_note
+      POSTGRES_PASSWORD: LetNote-Dev-Pg-2026!
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U let_note -d let_note_dev"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  db-migrate:
+    image: postgres:16-alpine
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: LetNote-Dev-Pg-2026!
+    volumes:
+      - ./infrastructure/BDD/migration:/migrations:ro
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >
+        psql -h postgres -U let_note -d let_note_dev
+        -f /migrations/202605031228_init.up.sql
+
+volumes:
+  postgres_data:

@@ -31,6 +31,39 @@ Frontend disponible sur `http://127.0.0.1:5173`.
 cargo test --workspace
 ```
 
+## Base de donnees de dev (Docker Compose)
+
+Le fichier `compose.yml` a la racine lance un Postgres de dev et permet d'appliquer la migration initiale.
+
+### 1) Lancer Postgres
+
+```sh
+docker compose up -d postgres
+```
+
+### 2) Initialiser la BDD avec la migration
+
+```sh
+docker compose run --rm db-migrate
+```
+
+### 3) Lancer le backend connecte a la BDD
+
+```sh
+PS_BDD_SERVER=127.0.0.1 \
+PS_BDD_PORT=5432 \
+PS_BDD_DB=let_note_dev \
+PS_BDD_USER=let_note \
+PS_BDD_PASS=LetNote-Dev-Pg-2026! \
+cargo run -p let-note-backend
+```
+
+### 4) Arreter l'environnement BDD
+
+```sh
+docker compose down
+```
+
 ## Installer pre-commit
 
 ```sh
