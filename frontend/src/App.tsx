@@ -3,10 +3,15 @@ import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 
 const backgroundImageUrl = '/image/etudiant_login.jpg';
+const logoUrl = '/image/logo.png';
 
 export default function App() {
   const [mode, setMode] = useState('login');
   const [theme, setTheme] = useState('light');
+  const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
 
   const isLogin = mode === 'login';
   const toggleMode = () => setMode((prev) => (prev === 'login' ? 'register' : 'login'));
@@ -50,6 +55,11 @@ export default function App() {
             isLogin ? 'left-1/2 md:left-[75%]' : 'left-1/2 md:left-[25%]',
           ].join(' ')}
         >
+          <img
+            src={logoUrl}
+            alt="Let Note logo"
+            className="mx-auto mb-6 h-12 w-auto rounded-md bg-white/90 p-1.5 shadow-md"
+          />
           <h1 className="text-center text-5xl md:text-6xl tracking-[0.2em] uppercase">
             {isLogin ? 'Login' : 'Register'}
           </h1>
@@ -62,23 +72,31 @@ export default function App() {
               <input
                 type="text"
                 placeholder="Full name"
+                value={fullName}
+                onChange={(event) => setFullName(event.target.value)}
                 className="mx-auto block w-full max-w-[520px] h-12 md:h-14 px-4 rounded-none border-none bg-[var(--auth-input-bg)] text-[var(--auth-input-text)] placeholder:text-gray-500"
               />
             )}
             <input
               type="email"
               placeholder="Email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
               className="mx-auto block w-full max-w-[520px] h-12 md:h-14 px-4 rounded-none border-none bg-[var(--auth-input-bg)] text-[var(--auth-input-text)] placeholder:text-gray-500"
             />
             <input
               type="password"
               placeholder="Password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
               className="mx-auto block w-full max-w-[520px] h-12 md:h-14 px-4 rounded-none border-none bg-[var(--auth-input-bg)] text-[var(--auth-input-text)] placeholder:text-gray-500"
             />
             {!isLogin && (
               <input
                 type="password"
                 placeholder="Confirm password"
+                value={confirmPassword}
+                onChange={(event) => setConfirmPassword(event.target.value)}
                 className="mx-auto block w-full max-w-[520px] h-12 md:h-14 px-4 rounded-none border-none bg-[var(--auth-input-bg)] text-[var(--auth-input-text)] placeholder:text-gray-500"
               />
             )}
