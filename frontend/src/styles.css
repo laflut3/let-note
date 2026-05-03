@@ -5,6 +5,25 @@
 @layer base {
   :root {
     color-scheme: light;
+    --auth-overlay: rgba(246, 234, 214, 0.56);
+    --auth-split-panel: #8f116e;
+    --auth-card-bg: rgba(165, 35, 130, 0.72);
+    --auth-card-shadow: rgba(123, 0, 94, 0.44);
+    --auth-input-bg: #d6deec;
+    --auth-input-text: #111111;
+    --auth-button-bg: #ffffff;
+    --auth-button-text: #111111;
+  }
+
+  .dark {
+    --auth-overlay: rgba(27, 20, 30, 0.6);
+    --auth-split-panel: #4f0f45;
+    --auth-card-bg: rgba(66, 24, 74, 0.82);
+    --auth-card-shadow: rgba(0, 0, 0, 0.5);
+    --auth-input-bg: #312b3b;
+    --auth-input-text: #f3ecff;
+    --auth-button-bg: #efe4ff;
+    --auth-button-text: #1a1320;
   }
 
   * {

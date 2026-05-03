@@ -1,68 +1,92 @@
-import { useState } from 'react';
+import { Moon, Sun } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
+
+const backgroundImageUrl = '/image/etudiant_login.jpg';
 
 export default function App() {
   const [mode, setMode] = useState('login');
+  const [theme, setTheme] = useState('light');
 
   const isLogin = mode === 'login';
   const toggleMode = () => setMode((prev) => (prev === 'login' ? 'register' : 'login'));
+  const isDark = theme === 'dark';
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', isDark);
+  }, [isDark]);
 
   return (
-    <main className="min-h-screen grid place-items-center p-4 md:p-8">
-      <section className="relative w-full max-w-6xl h-[680px] md:h-[760px] overflow-hidden rounded-lg border border-border shadow-[0_24px_80px_rgba(120,0,90,0.2)]">
-        <div className="absolute inset-0 grid md:grid-cols-2">
-          <div className="hidden md:block bg-[#8f116e]" />
-          <div
-            className="bg-cover bg-center"
-            style={{
-              backgroundImage:
-                "url('https://images.unsplash.com/photo-1523050854058-8df90110c9f1?auto=format&fit=crop&w=1200&q=80')",
-            }}
-          />
-        </div>
+    <main
+      className="min-h-screen w-full bg-cover bg-center bg-no-repeat"
+      style={{
+        backgroundImage: `linear-gradient(var(--auth-overlay), var(--auth-overlay)), url(${backgroundImageUrl})`,
+      }}
+    >
+      <section className="relative min-h-screen w-full grid place-items-center">
+        <button
+          type="button"
+          onClick={() => setTheme((prev) => (prev === 'light' ? 'dark' : 'light'))}
+          className="absolute right-6 top-6 z-20 inline-flex items-center gap-2 rounded-full border border-white/40 bg-white/70 px-4 py-2 text-sm font-semibold text-[#5b1a56] shadow-md backdrop-blur-md transition hover:bg-white/90 dark:border-white/20 dark:bg-[#281d31]/80 dark:text-[#f4e9ff]"
+          aria-label="Switch theme"
+        >
+          {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+          {isDark ? 'Light' : 'Dark'}
+        </button>
 
         <div
           className={[
-            'absolute top-1/2 -translate-y-1/2 w-[88%] md:w-[46%] p-6 md:p-10 rounded-2xl',
-            'bg-[#a52382]/88 text-white backdrop-blur-[2px]',
+            'absolute inset-y-0 w-full md:w-1/2 bg-[var(--auth-split-panel)]',
             'transition-all duration-500 ease-in-out',
-            isLogin ? 'left-[6%] md:left-[52%]' : 'left-[6%] md:left-[2%]',
+            isLogin ? 'left-0' : 'left-0 md:left-1/2',
+          ].join(' ')}
+        />
+
+        <div
+          className={[
+            'absolute z-10 top-1/2 -translate-y-1/2 -translate-x-1/2 w-[92%] max-w-[760px] md:w-[46vw] md:max-w-[720px] p-8 md:p-14 rounded-2xl',
+            'bg-[var(--auth-card-bg)] text-white backdrop-blur-[2px] shadow-[0_26px_80px_var(--auth-card-shadow)]',
+            'transition-all duration-500 ease-in-out',
+            isLogin ? 'left-1/2 md:left-[75%]' : 'left-1/2 md:left-[25%]',
           ].join(' ')}
         >
-          <h1 className="text-center text-4xl md:text-5xl tracking-widest uppercase">
+          <h1 className="text-center text-5xl md:text-6xl tracking-[0.2em] uppercase">
             {isLogin ? 'Login' : 'Register'}
           </h1>
 
-          <form className="mt-8 space-y-4" onSubmit={(event) => event.preventDefault()}>
+          <form
+            className="mt-10 space-y-4 md:space-y-5"
+            onSubmit={(event) => event.preventDefault()}
+          >
             {!isLogin && (
               <input
                 type="text"
                 placeholder="Full name"
-                className="w-full h-12 px-4 rounded-none border-none bg-white text-black placeholder:text-gray-500"
+                className="mx-auto block w-full max-w-[520px] h-12 md:h-14 px-4 rounded-none border-none bg-[var(--auth-input-bg)] text-[var(--auth-input-text)] placeholder:text-gray-500"
               />
             )}
             <input
               type="email"
               placeholder="Email"
-              className="w-full h-12 px-4 rounded-none border-none bg-white text-black placeholder:text-gray-500"
+              className="mx-auto block w-full max-w-[520px] h-12 md:h-14 px-4 rounded-none border-none bg-[var(--auth-input-bg)] text-[var(--auth-input-text)] placeholder:text-gray-500"
             />
             <input
               type="password"
               placeholder="Password"
-              className="w-full h-12 px-4 rounded-none border-none bg-white text-black placeholder:text-gray-500"
+              className="mx-auto block w-full max-w-[520px] h-12 md:h-14 px-4 rounded-none border-none bg-[var(--auth-input-bg)] text-[var(--auth-input-text)] placeholder:text-gray-500"
             />
             {!isLogin && (
               <input
                 type="password"
                 placeholder="Confirm password"
-                className="w-full h-12 px-4 rounded-none border-none bg-white text-black placeholder:text-gray-500"
+                className="mx-auto block w-full max-w-[520px] h-12 md:h-14 px-4 rounded-none border-none bg-[var(--auth-input-bg)] text-[var(--auth-input-text)] placeholder:text-gray-500"
               />
             )}
 
             <Button
               type="submit"
               variant="secondary"
-              className="mx-auto mt-8 flex h-11 min-w-36 rounded-none bg-white text-black hover:bg-white/90"
+              className="mx-auto mt-8 flex h-12 min-w-40 rounded-none bg-[var(--auth-button-bg)] text-[var(--auth-button-text)] hover:opacity-90"
             >
               {isLogin ? 'login' : 'register'}
             </Button>
@@ -71,7 +95,7 @@ export default function App() {
           <button
             type="button"
             onClick={toggleMode}
-            className="mt-6 block w-full text-center text-sm underline underline-offset-4"
+            className="mt-7 block w-full text-center text-base underline underline-offset-4"
           >
             {isLogin ? 'Switch to register' : 'Switch to login'}
           </button>
