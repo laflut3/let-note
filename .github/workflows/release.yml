@@ -12,7 +12,8 @@ permissions:
 
 env:
   CONTAINER_REGISTRY: ghcr.io
-  IMAGE_NAME: laflut3/let-note-backend
+  BACKEND_IMAGE_NAME: laflut3/let-note-backend
+  FRONTEND_IMAGE_NAME: laflut3/let-note-frontend
 
 jobs:
   oci-image:
@@ -35,10 +36,15 @@ jobs:
 
           echo "✅ Tag '${RELEASE_TAG}' is valid SemVer"
 
-      - name: Check source image exists
+      - name: Check backend source image exists
         run: |
           docker buildx imagetools inspect \
-            ${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+            ${{ env.CONTAINER_REGISTRY }}/${{ env.BACKEND_IMAGE_NAME }}:${{ github.sha }}
+
+      - name: Check frontend source image exists
+        run: |
+          docker buildx imagetools inspect \
+            ${{ env.CONTAINER_REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}:${{ github.sha }}
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4
@@ -47,12 +53,19 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Tag and push existing image
+      - name: Tag and push backend release image
         run: |
           DOCKER_TAG="${RELEASE_TAG#v}"
           docker buildx imagetools create \
-            -t ${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${DOCKER_TAG} \
-            ${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+            -t ${{ env.CONTAINER_REGISTRY }}/${{ env.BACKEND_IMAGE_NAME }}:${DOCKER_TAG} \
+            ${{ env.CONTAINER_REGISTRY }}/${{ env.BACKEND_IMAGE_NAME }}:${{ github.sha }}
+
+      - name: Tag and push frontend release image
+        run: |
+          DOCKER_TAG="${RELEASE_TAG#v}"
+          docker buildx imagetools create \
+            -t ${{ env.CONTAINER_REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}:${DOCKER_TAG} \
+            ${{ env.CONTAINER_REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}:${{ github.sha }}
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3

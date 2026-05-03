@@ -9,6 +9,7 @@ repos:
       - id: check-toml
       - id: check-json
       - id: check-yaml
+        args: [--allow-multiple-documents]
       - id: mixed-line-ending # Normalizes/flags inconsistent line endings (LF/CRLF)
       - id: detect-private-key # Prevents committing private keys/secrets
       - id: end-of-file-fixer # Ensures files end with a single trailing newline
@@ -47,7 +48,7 @@ repos:
         language: node
         additional_dependencies:
           - eslint@9.30.0
-          
+
       - id: frontend-format
         name: Frontend format check
         entry: prettier
