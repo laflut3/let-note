@@ -9,3 +9,4 @@ pub mod promotion;
 pub mod role;
 pub mod role_etu;
 pub mod ue;
+pub mod auth;

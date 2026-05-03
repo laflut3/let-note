@@ -1,6 +1,8 @@
 use axum::{Json, Router, http::StatusCode, routing::get};
 use serde::Serialize;
 
+use crate::domains::routes::auth::auth_routes;
+
 #[derive(Serialize)]
 struct HealthResponse {
   status: &'static str,
@@ -10,6 +12,7 @@ pub fn create_router() -> Router {
   Router::new()
     .route("/_health", get(health_check))
     .route("/api/health", get(health_json))
+    .nest("/api/auth", auth_routes())
     .fallback(fallback)
 }
 
