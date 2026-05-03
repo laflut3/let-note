@@ -1,0 +1,60 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  CONTAINER_REGISTRY: ghcr.io
+  IMAGE_NAME: laflut3/let-note-backend
+
+jobs:
+  oci-image:
+    name: Build and push release OCI image
+    runs-on: ubuntu-24.04
+    env:
+      RELEASE_TAG: ${{ github.ref_name }}
+    steps:
+      - name: Check tag is SemVer
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          semver_re='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-((0|[1-9][0-9]*|[0-9]*[a-zA-Z-][0-9a-zA-Z-]*)(\.(0|[1-9][0-9]*|[0-9]*[a-zA-Z-][0-9a-zA-Z-]*))*))?(\+([0-9a-zA-Z-]+(\.[0-9a-zA-Z-]+)*))?$'
+
+          if [[ ! "${RELEASE_TAG}" =~ ${semver_re} ]]; then
+            echo "::error title=Invalid SemVer Tag::RELEASE FAILED: Tag '${RELEASE_TAG}' is not SemVer compliant. Expected format: vMAJOR.MINOR.PATCH[-PRERELEASE][+BUILD]. Examples: v1.0.0, v2.1.3-beta, v1.0.0+build.123"
+            exit 1
+          fi
+
+          echo "✅ Tag '${RELEASE_TAG}' is valid SemVer"
+
+      - name: Check source image exists
+        run: |
+          docker buildx imagetools inspect \
+            ${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4
+        with:
+          registry: ${{ env.CONTAINER_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Tag and push existing image
+        run: |
+          DOCKER_TAG="${RELEASE_TAG#v}"
+          docker buildx imagetools create \
+            -t ${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${DOCKER_TAG} \
+            ${{ env.CONTAINER_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3
+        with:
+          generate_release_notes: true

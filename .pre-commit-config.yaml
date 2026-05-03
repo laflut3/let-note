@@ -28,6 +28,7 @@ repos:
         pass_filenames: false
         types: [file, rust]
         language: system
+
       - id: rust-clippy
         name: Rust clippy
         entry: cargo clippy --workspace --all-targets --
@@ -35,6 +36,7 @@ repos:
         pass_filenames: false
         types: [file, rust]
         language: system
+
       - id: frontend-lint
         name: Frontend lint
         entry: eslint
@@ -45,6 +47,7 @@ repos:
         language: node
         additional_dependencies:
           - eslint@9.30.0
+          
       - id: frontend-format
         name: Frontend format check
         entry: prettier

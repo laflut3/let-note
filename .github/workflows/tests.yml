@@ -1,17 +1,27 @@
-name: Monolith Tests
+name: Rust Unit Tests
 
 on:
   pull_request:
     branches:
       - main
+    paths:
+      - backend/**
+      - Cargo.toml
+      - Cargo.lock
+      - .github/workflows/tests.yml
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
-  backend-tests:
-    name: Backend tests (Rust)
+  tests:
     runs-on: ubuntu-24.04
+
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -21,5 +31,5 @@ jobs:
         with:
           toolchain: 1.95
 
-      - name: Run backend tests
+      - name: Test
         run: cargo test --workspace
