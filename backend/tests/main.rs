@@ -94,7 +94,7 @@ async fn test_login_returns_token() {
   let token = payload["token"]
     .as_str()
     .expect("token field should be a string");
-  assert!(token.starts_with("dev-"));
+  assert!(!token.is_empty());
 }
 
 #[tokio::test]
@@ -120,11 +120,37 @@ async fn test_login_rejects_empty_fields() {
 async fn test_logout_returns_no_content() {
   let app = create_router();
 
+  let login_response = app
+    .clone()
+    .oneshot(
+      Request::builder()
+        .method("POST")
+        .uri("/api/auth/login")
+        .header("content-type", "application/json")
+        .body(Body::from(
+          r#"{"email":"john@doe.com","password":"secret"}"#,
+        ))
+        .expect("request build failed"),
+    )
+    .await
+    .expect("request execution failed");
+
+  let login_body = to_bytes(login_response.into_body(), usize::MAX)
+    .await
+    .expect("unable to read login response");
+  let login_payload: serde_json::Value =
+    serde_json::from_slice(&login_body).expect("invalid login JSON");
+  let token = login_payload["token"]
+    .as_str()
+    .expect("token should be present")
+    .to_string();
+
   let response = app
     .oneshot(
       Request::builder()
         .method("POST")
         .uri("/api/auth/logout")
+        .header("authorization", format!("Bearer {token}"))
         .body(Body::empty())
         .expect("request build failed"),
     )
