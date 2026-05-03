@@ -29,12 +29,4 @@
   * {
     @apply border-border;
   }
-
-  body {
-    @apply bg-background text-foreground font-sans m-0;
-    background-image:
-      radial-gradient(circle at 10% 15%, rgba(255, 196, 110, 0.35), transparent 32%),
-      radial-gradient(circle at 90% 0%, rgba(252, 146, 71, 0.22), transparent 24%);
-    min-height: 100vh;
-  }
 }
