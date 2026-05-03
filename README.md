@@ -15,14 +15,6 @@ cargo run -p let-note-backend
 
 Backend disponible sur `http://127.0.0.1:8080`.
 
-Endpoints:
-- `GET /_health` retourne `204 No Content`
-- `GET /api/health` retourne `{"status":"ok"}`
-
-Variables d'environnement backend:
-- `APP_HOST` (défaut `127.0.0.1`)
-- `APP_PORT` (défaut `8080`)
-
 ## Lancer le frontend
 
 ```sh
@@ -37,4 +29,39 @@ Frontend disponible sur `http://127.0.0.1:5173`.
 
 ```sh
 cargo test --workspace
+```
+
+## Installer pre-commit
+
+```sh
+python3 -m pip install --user pre-commit
+pre-commit install
+pre-commit run --all-files
+```
+
+## Deploiement des ressources Kubernetes
+
+Prerequis:
+- `kubectl` configure sur le cluster cible
+- support Kustomize (integre a `kubectl`)
+
+Depuis la racine du projet:
+
+```sh
+# 1) Namespaces + quotas/limites
+kubectl apply -f infrastructure/deployment/cluster/namespaces.yaml
+kubectl apply -f infrastructure/deployment/cluster/quotas-limits.yaml
+
+# 2) Deploiement applicatif
+kubectl apply -k infrastructure/deployment/environments/dev
+kubectl apply -k infrastructure/deployment/environments/staging
+kubectl apply -k infrastructure/deployment/environments/prod
+```
+
+Verification rapide:
+
+```sh
+kubectl get pods -n dev
+kubectl get pods -n staging
+kubectl get pods -n prod
 ```
