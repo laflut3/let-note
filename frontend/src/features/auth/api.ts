@@ -1,6 +1,6 @@
 import type { AuthFields } from '@/features/auth/types';
 
-const API_BASE_URL = 'http://127.0.0.1:8080/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8080/api';
 
 export async function loginRequest(email: string, password: string): Promise<Response> {
   return fetch(`${API_BASE_URL}/auth/login`, {
@@ -8,7 +8,22 @@ export async function loginRequest(email: string, password: string): Promise<Res
     headers: {
       'Content-Type': 'application/json',
     },
+    credentials: 'include',
     body: JSON.stringify({ email, password }),
+  });
+}
+
+export async function logoutRequest(): Promise<Response> {
+  return fetch(`${API_BASE_URL}/auth/logout`, {
+    method: 'POST',
+    credentials: 'include',
+  });
+}
+
+export async function authMeRequest(): Promise<Response> {
+  return fetch(`${API_BASE_URL}/auth/me`, {
+    method: 'GET',
+    credentials: 'include',
   });
 }
 
@@ -21,6 +36,7 @@ export async function registerRequest(fields: AuthFields): Promise<Response> {
     headers: {
       'Content-Type': 'application/json',
     },
+    credentials: 'include',
     body: JSON.stringify({
       nom,
       prenom,

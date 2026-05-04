@@ -3,6 +3,10 @@ import { loginRequest, registerRequest } from '@/features/auth/api';
 import type { AuthFields, AuthMode, SubmitState } from '@/features/auth/types';
 import { emptySubmitState } from '@/features/auth/types';
 
+type UseAuthFormOptions = {
+  onLoginSuccess?: () => void;
+};
+
 type UseAuthFormReturn = {
   fields: AuthFields;
   setField: (field: keyof AuthFields, value: string) => void;
@@ -19,7 +23,8 @@ const initialFields: AuthFields = {
   birthDate: '',
 };
 
-export function useAuthForm(): UseAuthFormReturn {
+export function useAuthForm(options: UseAuthFormOptions = {}): UseAuthFormReturn {
+  const { onLoginSuccess } = options;
   const [fields, setFields] = useState<AuthFields>(initialFields);
   const [submitState, setSubmitState] = useState<SubmitState>(emptySubmitState);
 
@@ -32,53 +37,58 @@ export function useAuthForm(): UseAuthFormReturn {
   };
 
   const submit = async (mode: AuthMode): Promise<void> => {
-    if (mode === 'login') {
-      if (!fields.email.trim() || !fields.password.trim()) {
-        setSubmitState({ type: 'error', message: 'Email et mot de passe requis.' });
+    try {
+      if (mode === 'login') {
+        if (!fields.email.trim() || !fields.password.trim()) {
+          setSubmitState({ type: 'error', message: 'Email et mot de passe requis.' });
+          return;
+        }
+
+        const response = await loginRequest(fields.email, fields.password);
+        if (!response.ok) {
+          const errorText = await response.text();
+          setSubmitState({
+            type: 'error',
+            message: `Connexion impossible: ${errorText || response.statusText}`,
+          });
+          return;
+        }
+
+        setSubmitState({ type: 'success', message: 'Connexion reussie.' });
+        onLoginSuccess?.();
         return;
       }
 
-      const response = await loginRequest(fields.email, fields.password);
+      if (
+        !fields.fullName.trim() ||
+        !fields.email.trim() ||
+        !fields.password.trim() ||
+        !fields.confirmPassword.trim() ||
+        !fields.birthDate
+      ) {
+        setSubmitState({ type: 'error', message: 'Tous les champs sont requis.' });
+        return;
+      }
+
+      if (fields.password !== fields.confirmPassword) {
+        setSubmitState({ type: 'error', message: 'Les mots de passe ne correspondent pas.' });
+        return;
+      }
+
+      const response = await registerRequest(fields);
       if (!response.ok) {
         const errorText = await response.text();
         setSubmitState({
           type: 'error',
-          message: `Connexion impossible: ${errorText || response.statusText}`,
+          message: `Creation impossible: ${errorText || response.statusText}`,
         });
         return;
       }
 
-      setSubmitState({ type: 'success', message: 'Connexion reussie.' });
-      return;
+      setSubmitState({ type: 'success', message: 'Compte etudiant cree avec succes.' });
+    } catch {
+      setSubmitState({ type: 'error', message: 'Erreur reseau. Reessayez dans un instant.' });
     }
-
-    if (
-      !fields.fullName.trim() ||
-      !fields.email.trim() ||
-      !fields.password.trim() ||
-      !fields.confirmPassword.trim() ||
-      !fields.birthDate
-    ) {
-      setSubmitState({ type: 'error', message: 'Tous les champs sont requis.' });
-      return;
-    }
-
-    if (fields.password !== fields.confirmPassword) {
-      setSubmitState({ type: 'error', message: 'Les mots de passe ne correspondent pas.' });
-      return;
-    }
-
-    const response = await registerRequest(fields);
-    if (!response.ok) {
-      const errorText = await response.text();
-      setSubmitState({
-        type: 'error',
-        message: `Creation impossible: ${errorText || response.statusText}`,
-      });
-      return;
-    }
-
-    setSubmitState({ type: 'success', message: 'Compte etudiant cree avec succes.' });
   };
 
   return {

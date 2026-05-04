@@ -1,11 +1,11 @@
 use axum::{
   Json, Router,
-  http::{Method, StatusCode},
+  http::{Method, StatusCode, header},
   routing::get,
 };
 use serde::Serialize;
 use sqlx::PgPool;
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::cors::CorsLayer;
 
 use crate::domains::routes::{auth::auth_routes, etudiant::etudiant_routes};
 
@@ -21,7 +21,8 @@ pub fn create_router() -> Router<PgPool> {
       "http://127.0.0.1:5173".parse().expect("invalid origin"),
     ])
     .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
-    .allow_headers(Any);
+    .allow_headers([header::CONTENT_TYPE, header::ACCEPT])
+    .allow_credentials(true);
 
   Router::<PgPool>::new()
     .route("/_health", get(health_check))

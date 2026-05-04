@@ -7,8 +7,13 @@ pub struct LoginInfo {
 }
 
 #[derive(Debug, Serialize)]
-pub struct LoginResponse {
-  pub token: String,
+pub struct AuthMessage {
+  pub message: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct AuthUser {
+  pub email: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

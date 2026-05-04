@@ -1,20 +1,71 @@
 services:
   postgres:
-    image: postgres:16-alpine
-    container_name: let-note-postgres
+    image: postgres:17
+    restart: unless-stopped
     environment:
-      POSTGRES_DB: let_note_dev
-      POSTGRES_USER: let_note
-      POSTGRES_PASSWORD: LetNote-Dev-Pg-2026!
+      POSTGRES_DB: ${PS_BDD_DB:-let_note_dev}
+      POSTGRES_USER: ${PS_BDD_USER:-let_note}
+      POSTGRES_PASSWORD: ${PS_BDD_PASS:?PS_BDD_PASS is required}
     ports:
-      - "5432:5432"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U let_note -d let_note_dev"]
-      interval: 5s
-      timeout: 3s
-      retries: 20
+      - "${PS_BDD_PORT:-5432}:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - db_data:/var/lib/postgresql/data
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    environment:
+      APP_HOST: 0.0.0.0
+      APP_PORT: 8080
+      PS_BDD_SERVER: postgres
+      PS_BDD_PORT: 5432
+      PS_BDD_DB: ${PS_BDD_DB:-let_note_dev}
+      PS_BDD_USER: ${PS_BDD_USER:-let_note}
+      PS_BDD_PASS: ${PS_BDD_PASS:?PS_BDD_PASS is required}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+    ports:
+      - "${BACKEND_PORT:-8081}:8080"
+    depends_on:
+      - postgres
+
+  vault:
+    image: hashicorp/vault:1.18
+    restart: unless-stopped
+    cap_add:
+      - IPC_LOCK
+    ports:
+      - "${VAULT_PORT:-8200}:8200"
+    environment:
+      VAULT_DEV_ROOT_TOKEN_ID: ${VAULT_DEV_ROOT_TOKEN_ID:-root}
+      VAULT_DEV_LISTEN_ADDRESS: 0.0.0.0:8200
+    command: server -dev
+
+  vault-init:
+    image: hashicorp/vault:1.18
+    depends_on:
+      - vault
+    restart: "no"
+    environment:
+      VAULT_ADDR: http://vault:8200
+      VAULT_TOKEN: ${VAULT_DEV_ROOT_TOKEN_ID:-root}
+      PS_BDD_DB: ${PS_BDD_DB:-let_note_dev}
+      PS_BDD_USER: ${PS_BDD_USER:-let_note}
+      PS_BDD_PASS: ${PS_BDD_PASS:?PS_BDD_PASS is required}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -eu
+        vault status >/dev/null 2>&1 || true
+        vault kv put secret/let-note \
+          PS_BDD_DB="$${PS_BDD_DB}" \
+          PS_BDD_USER="$${PS_BDD_USER}" \
+          PS_BDD_PASS="$${PS_BDD_PASS}" \
+          JWT_SECRET="$${JWT_SECRET}" \
+          COOKIE_SECURE="$${COOKIE_SECURE}"
+        echo "Vault secret written at secret/let-note"
 
 volumes:
-  postgres_data:
+  db_data:

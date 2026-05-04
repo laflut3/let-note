@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -5,28 +7,43 @@
 @layer base {
   :root {
     color-scheme: light;
-    --auth-overlay: rgba(246, 234, 214, 0.56);
-    --auth-split-panel: #8f116e;
-    --auth-card-bg: rgba(165, 35, 130, 0.72);
-    --auth-card-shadow: rgba(123, 0, 94, 0.44);
-    --auth-input-bg: #d6deec;
-    --auth-input-text: #111111;
-    --auth-button-bg: #ffffff;
-    --auth-button-text: #111111;
+    --auth-overlay: rgba(18, 8, 19, 0.46);
+    --auth-split-panel: #963f2f;
+    --auth-card-bg: rgba(80, 23, 48, 0.75);
+    --auth-card-border: rgba(255, 255, 255, 0.26);
+    --auth-card-shadow: rgba(31, 8, 22, 0.45);
+    --auth-input-bg: rgba(255, 248, 243, 0.92);
+    --auth-input-text: #2e1925;
+    --auth-input-placeholder: #866b79;
+    --auth-input-ring: #ffd4be;
+    --auth-button-bg: #fff0e9;
+    --auth-button-text: #2b151f;
+    --auth-button-shadow: rgba(36, 14, 30, 0.3);
+    --auth-muted-text: rgba(255, 241, 247, 0.88);
   }
 
   .dark {
-    --auth-overlay: rgba(27, 20, 30, 0.6);
-    --auth-split-panel: #4f0f45;
-    --auth-card-bg: rgba(66, 24, 74, 0.82);
-    --auth-card-shadow: rgba(0, 0, 0, 0.5);
-    --auth-input-bg: #312b3b;
-    --auth-input-text: #f3ecff;
-    --auth-button-bg: #efe4ff;
-    --auth-button-text: #1a1320;
+    --auth-overlay: rgba(11, 10, 15, 0.72);
+    --auth-split-panel: #5a2346;
+    --auth-card-bg: rgba(26, 20, 36, 0.84);
+    --auth-card-border: rgba(253, 227, 255, 0.2);
+    --auth-card-shadow: rgba(0, 0, 0, 0.64);
+    --auth-input-bg: rgba(53, 46, 64, 0.84);
+    --auth-input-text: #f8effe;
+    --auth-input-placeholder: #bda9cc;
+    --auth-input-ring: #f0c2ff;
+    --auth-button-bg: #ffe2d5;
+    --auth-button-text: #291f2f;
+    --auth-button-shadow: rgba(0, 0, 0, 0.42);
+    --auth-muted-text: rgba(246, 237, 255, 0.9);
   }
 
   * {
     @apply border-border;
+  }
+
+  body {
+    @apply antialiased;
+    font-family: 'Sora', sans-serif;
   }
 }

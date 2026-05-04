@@ -7,8 +7,11 @@ use sqlx::postgres::PgPoolOptions;
 use tower::ServiceExt;
 
 fn test_router() -> axum::Router {
+  let database_url = std::env::var("DATABASE_URL_TEST")
+    .unwrap_or_else(|_| "postgres://127.0.0.1:5432/let_note_dev".to_string());
+
   let pool = PgPoolOptions::new()
-    .connect_lazy("postgres://let_note:LetNote-Dev-Pg-2026!@127.0.0.1:5432/let_note_dev")
+    .connect_lazy(&database_url)
     .expect("failed to create lazy pool");
   create_router().with_state(pool)
 }
@@ -76,7 +79,7 @@ async fn test_unknown_route_returns_not_found() {
 }
 
 #[tokio::test]
-async fn test_login_returns_token() {
+async fn test_login_sets_cookie() {
   let app = test_router();
 
   let response = app
@@ -94,15 +97,15 @@ async fn test_login_returns_token() {
     .expect("request execution failed");
 
   assert_eq!(response.status(), StatusCode::OK);
-  let bytes = to_bytes(response.into_body(), usize::MAX)
-    .await
-    .expect("unable to read response body");
-  let payload: serde_json::Value =
-    serde_json::from_slice(&bytes).expect("response body is not valid JSON");
-  let token = payload["token"]
-    .as_str()
-    .expect("token field should be a string");
-  assert!(!token.is_empty());
+  let set_cookie = response
+    .headers()
+    .get("set-cookie")
+    .expect("set-cookie should exist")
+    .to_str()
+    .expect("set-cookie should be valid utf-8");
+
+  assert!(set_cookie.contains("let_note_auth="));
+  assert!(set_cookie.contains("HttpOnly"));
 }
 
 #[tokio::test]
@@ -125,40 +128,32 @@ async fn test_login_rejects_empty_fields() {
 }
 
 #[tokio::test]
-async fn test_logout_returns_no_content() {
+async fn test_me_requires_cookie() {
   let app = test_router();
 
-  let login_response = app
-    .clone()
+  let response = app
     .oneshot(
       Request::builder()
-        .method("POST")
-        .uri("/api/auth/login")
-        .header("content-type", "application/json")
-        .body(Body::from(
-          r#"{"email":"john@doe.com","password":"secret"}"#,
-        ))
+        .method("GET")
+        .uri("/api/auth/me")
+        .body(Body::empty())
         .expect("request build failed"),
     )
     .await
     .expect("request execution failed");
 
-  let login_body = to_bytes(login_response.into_body(), usize::MAX)
-    .await
-    .expect("unable to read login response");
-  let login_payload: serde_json::Value =
-    serde_json::from_slice(&login_body).expect("invalid login JSON");
-  let token = login_payload["token"]
-    .as_str()
-    .expect("token should be present")
-    .to_string();
+  assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn test_logout_clears_cookie() {
+  let app = test_router();
 
   let response = app
     .oneshot(
       Request::builder()
         .method("POST")
         .uri("/api/auth/logout")
-        .header("authorization", format!("Bearer {token}"))
         .body(Body::empty())
         .expect("request build failed"),
     )
@@ -166,4 +161,13 @@ async fn test_logout_returns_no_content() {
     .expect("request execution failed");
 
   assert_eq!(response.status(), StatusCode::NO_CONTENT);
+  let set_cookie = response
+    .headers()
+    .get("set-cookie")
+    .expect("set-cookie should exist")
+    .to_str()
+    .expect("set-cookie should be valid utf-8");
+
+  assert!(set_cookie.contains("let_note_auth="));
+  assert!(set_cookie.contains("Max-Age=0"));
 }
