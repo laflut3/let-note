@@ -5,10 +5,11 @@ use axum::{
   routing::post,
 };
 use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, encode};
+use sqlx::PgPool;
 
 use crate::domains::entities::auth::{Claims, LoginInfo, LoginResponse};
 
-pub fn auth_routes() -> Router {
+pub fn auth_routes() -> Router<PgPool> {
   Router::new()
     .route("/login", post(login))
     .route("/logout", post(logout))

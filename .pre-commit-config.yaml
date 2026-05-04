@@ -41,13 +41,15 @@ repos:
       - id: frontend-lint
         name: Frontend lint
         entry: eslint
-        args: [--config, frontend/eslint.config.js, frontend]
-        # Runs ESLint in pre-commit's isolated node env (no local npm required)
+        args: [--config, frontend/eslint.config.cjs, frontend]
+        # Runs ESLint in pre-commit's isolated Node env using the standard project config
         pass_filenames: false
         files: ^frontend/
         language: node
         additional_dependencies:
           - eslint@9.30.0
+          - "@typescript-eslint/parser@8.46.2"
+          - "@typescript-eslint/eslint-plugin@8.46.2"
 
       - id: frontend-format
         name: Frontend format check

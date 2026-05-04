@@ -1,6 +1,7 @@
 use std::net::SocketAddr;
 
 use clap::Parser;
+use sqlx::postgres::PgPoolOptions;
 
 use crate::app::create_router;
 
@@ -26,7 +27,12 @@ struct Args {
 async fn main() -> anyhow::Result<()> {
   let args = Args::parse();
 
-  let app = create_router();
+  let database_url = build_database_url();
+  let db_pool = PgPoolOptions::new()
+    .max_connections(5)
+    .connect(&database_url)
+    .await?;
+  let app = create_router().with_state(db_pool);
 
   let socket_addr = format!("{}:{}", args.host, args.port)
     .parse::<SocketAddr>()
@@ -38,6 +44,20 @@ async fn main() -> anyhow::Result<()> {
     .await?;
 
   Ok(())
+}
+
+fn build_database_url() -> String {
+  if let Ok(url) = std::env::var("DATABASE_URL") {
+    return url;
+  }
+
+  let host = std::env::var("PS_BDD_SERVER").unwrap_or_else(|_| "127.0.0.1".to_string());
+  let port = std::env::var("PS_BDD_PORT").unwrap_or_else(|_| "5432".to_string());
+  let db = std::env::var("PS_BDD_DB").unwrap_or_else(|_| "let_note_dev".to_string());
+  let user = std::env::var("PS_BDD_USER").unwrap_or_else(|_| "let_note".to_string());
+  let pass = std::env::var("PS_BDD_PASS").unwrap_or_else(|_| "LetNote-Dev-Pg-2026!".to_string());
+
+  format!("postgres://{user}:{pass}@{host}:{port}/{db}")
 }
 
 pub async fn shutdown_signal() {

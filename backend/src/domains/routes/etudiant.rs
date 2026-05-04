@@ -1,10 +1,4 @@
-use axum::{
-  Json, Router,
-  extract::State,
-  http::StatusCode,
-  response::IntoResponse,
-  routing::{get, post},
-};
+use axum::{Json, Router, extract::State, http::StatusCode, response::IntoResponse, routing::post};
 use sqlx::PgPool;
 
 use crate::domains::entities::etudiant::{CreateEtudiant, GetEtudiant};
@@ -19,8 +13,8 @@ async fn create_etudiant(
 ) -> impl IntoResponse {
   match sqlx::query_as::<_, GetEtudiant>(
     r#"
-    INSERT INTO etudiant (nom, prenom, email, date_naissance)
-    VALUES ($1, $2, $3, $4)
+    INSERT INTO etudiant (nom, prenom, email, date_naissance, mot_de_passe)
+    VALUES ($1, $2, $3, $4, $5)
     RETURNING id, nom, prenom, email, date_naissance
     "#,
   )
@@ -28,6 +22,7 @@ async fn create_etudiant(
   .bind(&etudiant.prenom)
   .bind(&etudiant.email)
   .bind(etudiant.date_naissance)
+  .bind(&etudiant.mot_de_passe)
   .fetch_one(&db)
   .await
   {

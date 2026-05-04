@@ -3,11 +3,19 @@ use axum::{
   http::{Request, StatusCode},
 };
 use let_note_backend::app::create_router;
+use sqlx::postgres::PgPoolOptions;
 use tower::ServiceExt;
+
+fn test_router() -> axum::Router {
+  let pool = PgPoolOptions::new()
+    .connect_lazy("postgres://let_note:LetNote-Dev-Pg-2026!@127.0.0.1:5432/let_note_dev")
+    .expect("failed to create lazy pool");
+  create_router().with_state(pool)
+}
 
 #[tokio::test]
 async fn test_healthcheck_is_ok_when_server_is_launched() {
-  let app = create_router();
+  let app = test_router();
 
   let response = app
     .oneshot(
@@ -24,7 +32,7 @@ async fn test_healthcheck_is_ok_when_server_is_launched() {
 
 #[tokio::test]
 async fn test_api_health_returns_ok_payload() {
-  let app = create_router();
+  let app = test_router();
 
   let response = app
     .oneshot(
@@ -47,7 +55,7 @@ async fn test_api_health_returns_ok_payload() {
 
 #[tokio::test]
 async fn test_unknown_route_returns_not_found() {
-  let app = create_router();
+  let app = test_router();
 
   let response = app
     .oneshot(
@@ -69,7 +77,7 @@ async fn test_unknown_route_returns_not_found() {
 
 #[tokio::test]
 async fn test_login_returns_token() {
-  let app = create_router();
+  let app = test_router();
 
   let response = app
     .oneshot(
@@ -99,7 +107,7 @@ async fn test_login_returns_token() {
 
 #[tokio::test]
 async fn test_login_rejects_empty_fields() {
-  let app = create_router();
+  let app = test_router();
 
   let response = app
     .oneshot(
@@ -118,7 +126,7 @@ async fn test_login_rejects_empty_fields() {
 
 #[tokio::test]
 async fn test_logout_returns_no_content() {
-  let app = create_router();
+  let app = test_router();
 
   let login_response = app
     .clone()

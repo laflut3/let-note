@@ -33,7 +33,7 @@ cargo test --workspace
 
 ## Base de donnees de dev (Docker Compose)
 
-Le fichier `compose.yml` a la racine lance un Postgres de dev et permet d'appliquer la migration initiale.
+Le fichier `compose.yml` a la racine lance un Postgres de dev.
 
 ### 1) Lancer Postgres
 
@@ -41,10 +41,10 @@ Le fichier `compose.yml` a la racine lance un Postgres de dev et permet d'appliq
 docker compose up -d postgres
 ```
 
-### 2) Initialiser la BDD avec la migration
+### 2) Initialiser la BDD avec `sqlx migrate run`
 
 ```sh
-docker compose run --rm db-migrate
+DATABASE_URL=postgres://postgres:password@localhost:5432/let-note sqlx migrate run --source infrastructure/BDD/migration
 ```
 
 ### 3) Lancer le backend connecte a la BDD
@@ -52,9 +52,9 @@ docker compose run --rm db-migrate
 ```sh
 PS_BDD_SERVER=127.0.0.1 \
 PS_BDD_PORT=5432 \
-PS_BDD_DB=let_note_dev \
-PS_BDD_USER=let_note \
-PS_BDD_PASS=LetNote-Dev-Pg-2026! \
+PS_BDD_DB=let-note \
+PS_BDD_USER=postgres \
+PS_BDD_PASS=password \
 cargo run -p let-note-backend
 ```
 
