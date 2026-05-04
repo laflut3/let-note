@@ -5,7 +5,7 @@ services:
     environment:
       POSTGRES_DB: ${PS_BDD_DB:-let_note_dev}
       POSTGRES_USER: ${PS_BDD_USER:-let_note}
-      POSTGRES_PASSWORD: ${PS_BDD_PASS:?PS_BDD_PASS is required}
+      POSTGRES_PASSWORD: ${PS_BDD_PASS:-let_note_dev_password_change_me}
     ports:
       - "${PS_BDD_PORT:-5432}:5432"
     volumes:
@@ -21,8 +21,8 @@ services:
       PS_BDD_PORT: 5432
       PS_BDD_DB: ${PS_BDD_DB:-let_note_dev}
       PS_BDD_USER: ${PS_BDD_USER:-let_note}
-      PS_BDD_PASS: ${PS_BDD_PASS:?PS_BDD_PASS is required}
-      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      PS_BDD_PASS: ${PS_BDD_PASS:-let_note_dev_password_change_me}
+      JWT_SECRET: ${JWT_SECRET:-let_note_dev_jwt_secret_change_me}
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
     ports:
       - "${BACKEND_PORT:-8081}:8080"
@@ -51,14 +51,16 @@ services:
       VAULT_TOKEN: ${VAULT_DEV_ROOT_TOKEN_ID:-root}
       PS_BDD_DB: ${PS_BDD_DB:-let_note_dev}
       PS_BDD_USER: ${PS_BDD_USER:-let_note}
-      PS_BDD_PASS: ${PS_BDD_PASS:?PS_BDD_PASS is required}
-      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      PS_BDD_PASS: ${PS_BDD_PASS:-let_note_dev_password_change_me}
+      JWT_SECRET: ${JWT_SECRET:-let_note_dev_jwt_secret_change_me}
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
         set -eu
-        vault status >/dev/null 2>&1 || true
+        until vault status >/dev/null 2>&1; do
+          sleep 1
+        done
         vault kv put secret/let-note \
           PS_BDD_DB="$${PS_BDD_DB}" \
           PS_BDD_USER="$${PS_BDD_USER}" \
