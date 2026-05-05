@@ -1,4 +1,4 @@
-# Deploiement Vault (rapide)
+# Deploiement Vault Helm (rapide)
 
 Ce dossier est pilote par scripts.
 
@@ -11,7 +11,7 @@ Depuis la racine du repo:
 ```
 
 Le script:
-- deploye Vault (`overlays/shared`)
+- deploye Vault via la chart Helm officielle `hashicorp/vault`
 - initialise Vault si necessaire
 - demande 3 unseal keys
 - demande le root token
@@ -48,7 +48,12 @@ export VAULT_APP_TOKEN='<token-affiche-par-le-script>'
 ## Commandes brutes (manuel, minimum)
 
 ```bash
-kubectl apply -k infrastructure/deploiement-vault/overlays/shared
-kubectl -n vault rollout restart statefulset vault
+helm repo add hashicorp https://helm.releases.hashicorp.com
+helm repo update hashicorp
+helm upgrade --install vault hashicorp/vault \
+  --namespace vault \
+  --create-namespace \
+  -f infrastructure/deploiement-vault/helm/values.yaml
+
 kubectl -n vault get pods,svc,ingress,networkpolicy
 ```

@@ -3,9 +3,11 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-OVERLAY_PATH="${SCRIPT_DIR}/overlays/shared"
+HELM_VALUES_PATH="${SCRIPT_DIR}/helm/values.yaml"
 NAMESPACE="${VAULT_NAMESPACE:-vault}"
 STATEFULSET="${VAULT_STATEFULSET:-vault}"
+HELM_RELEASE_NAME="${HELM_RELEASE_NAME:-vault}"
+HELM_CHART_REF="${HELM_CHART_REF:-hashicorp/vault}"
 VAULT_ADDR_IN_POD="${VAULT_ADDR_IN_POD:-http://127.0.0.1:18200}"
 KV_MOUNT="${KV_MOUNT:-secret}"
 PROJECT_NAME="${PROJECT_NAME:-let-note}"
@@ -18,8 +20,13 @@ if ! command -v kubectl >/dev/null 2>&1; then
   exit 1
 fi
 
-if [ ! -d "${OVERLAY_PATH}" ]; then
-  echo "Erreur: overlay introuvable: ${OVERLAY_PATH}"
+if ! command -v helm >/dev/null 2>&1; then
+  echo "Erreur: helm est requis."
+  exit 1
+fi
+
+if [ ! -f "${HELM_VALUES_PATH}" ]; then
+  echo "Erreur: fichier values introuvable: ${HELM_VALUES_PATH}"
   exit 1
 fi
 
@@ -63,8 +70,13 @@ unseal_once() {
   vault_exec "vault operator unseal \"${key}\""
 }
 
-echo "==> Deployment Vault via Kustomize"
-kubectl apply -k "${OVERLAY_PATH}"
+echo "==> Deployment Vault via Helm"
+helm repo add hashicorp https://helm.releases.hashicorp.com >/dev/null 2>&1 || true
+helm repo update hashicorp >/dev/null
+helm upgrade --install "${HELM_RELEASE_NAME}" "${HELM_CHART_REF}" \
+  --namespace "${NAMESPACE}" \
+  --create-namespace \
+  -f "${HELM_VALUES_PATH}"
 wait_for_vault_pod
 kubectl -n "${NAMESPACE}" get ingress vault >/dev/null 2>&1 || true
 
