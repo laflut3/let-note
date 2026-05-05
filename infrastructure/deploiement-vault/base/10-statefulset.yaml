@@ -16,6 +16,10 @@ spec:
       securityContext:
         seccompProfile:
           type: RuntimeDefault
+        runAsNonRoot: true
+        runAsUser: 100
+        runAsGroup: 1000
+        fsGroup: 1000
       containers:
         - name: vault
           image: hashicorp/vault:1.18
@@ -27,6 +31,10 @@ spec:
                 configMapKeyRef:
                   name: vault-config
                   key: VAULT_LOCAL_CONFIG
+            - name: SKIP_CHOWN
+              value: "true"
+            - name: SKIP_SETCAP
+              value: "true"
           ports:
             - containerPort: 8200
               name: http
@@ -38,6 +46,8 @@ spec:
               drop:
                 - ALL
           volumeMounts:
+            - name: vault-config-runtime
+              mountPath: /vault/config
             - name: vault-data
               mountPath: /vault/data
           readinessProbe:
@@ -48,7 +58,7 @@ spec:
             periodSeconds: 10
           livenessProbe:
             httpGet:
-              path: /v1/sys/health?standbyok=true
+              path: /v1/sys/health?standbyok=true&sealedcode=204&uninitcode=204
               port: 8200
             initialDelaySeconds: 20
             periodSeconds: 20
@@ -60,6 +70,8 @@ spec:
               cpu: 500m
               memory: 1Gi
       volumes:
+        - name: vault-config-runtime
+          emptyDir: {}
         - name: vault-data
           persistentVolumeClaim:
             claimName: vault-pvc

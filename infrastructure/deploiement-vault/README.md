@@ -28,6 +28,44 @@ Arborescence de secrets recommandee dans Vault:
 kubectl apply -k infrastructure/deploiement-vault/overlays/shared
 ```
 
+## Script d'installation + setup
+
+Script fourni: [install-and-setup-vault.sh](/home/ltorres/perso/let-note/infrastructure/deploiement-vault/install-and-setup-vault.sh)
+
+Depuis la racine du repo:
+
+```bash
+chmod +x infrastructure/deploiement-vault/install-and-setup-vault.sh
+./infrastructure/deploiement-vault/install-and-setup-vault.sh
+```
+
+Variables optionnelles:
+
+```bash
+PROJECT_NAME=let-note KV_MOUNT=secret APP_TOKEN_TTL=720h ./infrastructure/deploiement-vault/install-and-setup-vault.sh
+```
+
+## Setup Let-Note via fichier .env
+
+Fichier de configuration: [\.env](/home/ltorres/perso/let-note/infrastructure/deploiement-vault/.env)
+
+1. Editer les valeurs dans `infrastructure/deploiement-vault/.env`.
+2. Charger les variables puis lancer le setup applicatif Vault:
+
+```bash
+set -a
+source infrastructure/deploiement-vault/.env
+set +a
+
+./infrastructure/deploiement-vault/setup-let-note-vault.sh
+```
+
+Le script:
+- active `kv-v2` sur `secret/` si necessaire
+- ecrit `secret/let-note/dev|staging|prod`
+- cree la policy `let-note-read`
+- cree un token applicatif (`VAULT_APP_TOKEN`)
+
 Verification rapide:
 
 ```bash
@@ -39,7 +77,7 @@ kubectl -n vault get ns,pods,svc,pvc
 1. Initialiser Vault (premier demarrage)
 
 ```bash
-kubectl -n vault exec -it statefulset/vault -- vault operator init
+kubectl -n vault exec -it statefulset/vault -- sh -c 'export VAULT_ADDR=http://127.0.0.1:8200 && vault operator init'
 ```
 
 2. Sauvegarder les unseal keys + root token hors Git.
@@ -47,21 +85,23 @@ kubectl -n vault exec -it statefulset/vault -- vault operator init
 3. Unseal Vault
 
 ```bash
-kubectl -n vault exec -it statefulset/vault -- vault operator unseal <KEY_1>
-kubectl -n vault exec -it statefulset/vault -- vault operator unseal <KEY_2>
-kubectl -n vault exec -it statefulset/vault -- vault operator unseal <KEY_3>
+kubectl -n vault exec -it statefulset/vault -- sh -c 'export VAULT_ADDR=http://127.0.0.1:8200 && vault operator unseal "KEY_1"'
+kubectl -n vault exec -it statefulset/vault -- sh -c 'export VAULT_ADDR=http://127.0.0.1:8200 && vault operator unseal "KEY_2"'
+kubectl -n vault exec -it statefulset/vault -- sh -c 'export VAULT_ADDR=http://127.0.0.1:8200 && vault operator unseal "KEY_3"'
 ```
+
+Note: ne pas utiliser de chevrons `< >` autour des cles dans les commandes shell.
 
 4. Login
 
 ```bash
-kubectl -n vault exec -it statefulset/vault -- vault login <ROOT_TOKEN>
+kubectl -n vault exec -it statefulset/vault -- sh -c 'export VAULT_ADDR=http://127.0.0.1:8200 && vault login "ROOT_TOKEN"'
 ```
 
 5. Activer KV v2 si necessaire
 
 ```bash
-kubectl -n vault exec -it statefulset/vault -- vault secrets enable -path=secret kv-v2
+kubectl -n vault exec -it statefulset/vault -- sh -c 'export VAULT_ADDR=http://127.0.0.1:8200 && vault secrets enable -path=secret kv-v2'
 ```
 
 ## Preparation pour Let-Note
@@ -131,6 +171,12 @@ kubectl -n vault exec -it statefulset/vault -- vault token create -policy=let-no
 
 Ce token doit etre injecte dans le deploiement Let-Note via `VAULT_APP_TOKEN`.
 
+## Depannage
+
+- Si `vault operator init` retourne `HTTP response to HTTPS client`, forcer:
+  - `VAULT_ADDR=http://127.0.0.1:8200`
+- Si `kubectl` retourne `permission denied` sur `/etc/rancher/k3s/k3s.yaml`, corriger l'acces kubeconfig (sudo/chmod/copie dans `~/.kube/config`).
+
 ## Securite recommandee
 
 - En prod: TLS obligatoire + certificat valide.
@@ -138,3 +184,4 @@ Ce token doit etre injecte dans le deploiement Let-Note via `VAULT_APP_TOKEN`.
 - Ne jamais utiliser le root token dans une app.
 - Activer audit logs Vault.
 - Rotation periodique des tokens et secrets.
+- Si des cles d'unseal ou le root token sont exposes, les considerer compromis et les regenerer (rekey + nouveaux tokens).
