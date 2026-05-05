@@ -38,63 +38,30 @@ services:
         done
         echo "Migrations applied"
 
-  vault:
-    image: hashicorp/vault:1.18
-    restart: unless-stopped
-    cap_add:
-      - IPC_LOCK
-    ports:
-      - "${VAULT_PORT:-8200}:8200"
-    environment:
-      VAULT_DEV_ROOT_TOKEN_ID: ${VAULT_DEV_ROOT_TOKEN_ID:-root}
-      VAULT_DEV_LISTEN_ADDRESS: 0.0.0.0:8200
-    command: server -dev
-
-  vault-init:
-    image: hashicorp/vault:1.18
-    depends_on:
-      - vault
-    restart: "no"
-    environment:
-      VAULT_ADDR: http://vault:8200
-      VAULT_TOKEN: ${VAULT_DEV_ROOT_TOKEN_ID:-root}
-      PS_BDD_DB: ${PS_BDD_DB:-let_note_dev}
-      PS_BDD_USER: ${PS_BDD_USER:-let_note}
-      PS_BDD_PASS: ${PS_BDD_PASS:-let_note_dev_password_change_me}
-      JWT_SECRET: ${JWT_SECRET:-let_note_dev_jwt_secret_change_me}
-      COOKIE_SECURE: ${COOKIE_SECURE:-false}
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - |
-        set -eu
-        until vault status >/dev/null 2>&1; do
-          sleep 1
-        done
-        vault kv put secret/let-note/dev \
-          PS_BDD_DB="$${PS_BDD_DB}" \
-          PS_BDD_USER="$${PS_BDD_USER}" \
-          PS_BDD_PASS="$${PS_BDD_PASS}" \
-          JWT_SECRET="$${JWT_SECRET}" \
-          COOKIE_SECURE="$${COOKIE_SECURE}"
-        echo "Vault secret written at secret/let-note/dev"
-
   backend:
     build: ../../backend
     restart: unless-stopped
+    develop:
+      watch:
+        - path: ../../backend
+          action: rebuild
+          ignore:
+            - target/
+            - .git/
+        - path: ../../backend/Dockerfile
+          action: rebuild
     depends_on:
       db-migrate:
-        condition: service_completed_successfully
-      vault-init:
         condition: service_completed_successfully
     environment:
       APP_HOST: 0.0.0.0
       APP_PORT: 8080
       PS_BDD_SERVER: postgres
       PS_BDD_PORT: 5432
-      VAULT_ADDR: http://vault:8200
-      VAULT_TOKEN: ${VAULT_DEV_ROOT_TOKEN_ID:-root}
-      VAULT_KV_MOUNT: secret
-      VAULT_SECRET_PATH: let-note/dev
+      VAULT_ADDR: ${VAULT_ADDR}
+      VAULT_TOKEN: ${VAULT_TOKEN}
+      VAULT_KV_MOUNT: ${VAULT_KV_MOUNT:-secret}
+      VAULT_SECRET_PATH: ${VAULT_SECRET_PATH:-let-note/dev}
     ports:
       - "${BACKEND_PORT:-8081}:8080"
 
@@ -104,6 +71,16 @@ services:
       args:
         VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://127.0.0.1:8081/api}
     restart: unless-stopped
+    develop:
+      watch:
+        - path: ../../frontend
+          action: rebuild
+          ignore:
+            - node_modules/
+            - dist/
+            - .git/
+        - path: ../../frontend/Dockerfile
+          action: rebuild
     ports:
       - "${FRONTEND_PORT:-5173}:80"
     depends_on:

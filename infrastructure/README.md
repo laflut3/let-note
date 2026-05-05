@@ -3,8 +3,8 @@
 ## Dossiers
 
 - `BDD/`: scripts SQL de migration
-- `deploiement-local/`: deploiement local Docker Compose (Vault + BDD + Back + Front)
-- `deploiement-vault/`: deploiement Kubernetes Vault mutualise
+- `deploiement-local/`: deploiement local Docker Compose (BDD + Back + Front, Vault externe)
+- `deploiement-vault/`: deploiement Kubernetes Vault mutualise (1 Vault commun)
 - `deployment/`: deploiement Kubernetes de l'application Let-Note (3 env)
 
 ## Guides

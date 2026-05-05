@@ -15,15 +15,17 @@ Exemple de convention recommandee:
 ## Structure
 
 - `base/`: ressources communes Vault
-- `overlays/dev`
-- `overlays/staging`
-- `overlays/prod`
+- `overlays/shared`: 1 Vault unique partage par tous les environnements
+
+Arborescence de secrets recommandee dans Vault:
+- `secret/<projet>/dev`
+- `secret/<projet>/staging`
+- `secret/<projet>/prod`
 
 ## Deployer Vault
 
 ```bash
-kubectl apply -k infrastructure/deploiement-vault/overlays/dev
-# ou staging / prod
+kubectl apply -k infrastructure/deploiement-vault/overlays/shared
 ```
 
 ## Configuration obligatoire apres deploiement
@@ -58,7 +60,7 @@ kubectl -n vault exec -it statefulset/vault -- vault secrets enable -path=secret
 
 ## Preparation pour Let-Note
 
-Creer les secrets Let-Note par env:
+Creer les "dossiers" (chemins) Let-Note par projet puis par env:
 
 ```bash
 kubectl -n vault exec -it statefulset/vault -- vault kv put secret/let-note/dev \
