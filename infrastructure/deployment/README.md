@@ -62,7 +62,7 @@ kubectl get deploy,pods,svc,ingress -n prod
 ## Notes
 
 - Le backend lit Vault via:
-  - `VAULT_ADDR=http://vault.vault.svc.cluster.local:8200`
+  - `VAULT_ADDR=http://vault.vault.svc.cluster.local:18200`
   - `VAULT_KV_MOUNT=secret`
   - `VAULT_SECRET_PATH=let-note/<env>`
 - Les overlays `staging` et `prod` remplacent `VAULT_SECRET_PATH` automatiquement.

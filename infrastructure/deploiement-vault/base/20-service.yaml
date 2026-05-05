@@ -7,5 +7,5 @@ spec:
     app: vault
   ports:
     - name: http
-      port: 8200
-      targetPort: 8200
+      port: 18200
+      targetPort: 18200

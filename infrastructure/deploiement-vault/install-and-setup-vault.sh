@@ -6,12 +6,12 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OVERLAY_PATH="${SCRIPT_DIR}/overlays/shared"
 NAMESPACE="${VAULT_NAMESPACE:-vault}"
 STATEFULSET="${VAULT_STATEFULSET:-vault}"
-VAULT_ADDR_IN_POD="${VAULT_ADDR_IN_POD:-http://127.0.0.1:8200}"
+VAULT_ADDR_IN_POD="${VAULT_ADDR_IN_POD:-http://127.0.0.1:18200}"
 KV_MOUNT="${KV_MOUNT:-secret}"
 PROJECT_NAME="${PROJECT_NAME:-let-note}"
 APP_POLICY_NAME="${APP_POLICY_NAME:-${PROJECT_NAME}-read}"
 APP_TOKEN_TTL="${APP_TOKEN_TTL:-720h}"
-VAULT_PUBLIC_URL="${VAULT_PUBLIC_URL:-http://vault.127.0.0.1.nip.io}"
+VAULT_PUBLIC_URL="${VAULT_PUBLIC_URL:-https://vault.127.0.0.1.nip.io}"
 
 if ! command -v kubectl >/dev/null 2>&1; then
   echo "Erreur: kubectl est requis."
@@ -26,6 +26,11 @@ fi
 vault_exec() {
   local cmd="$1"
   kubectl -n "${NAMESPACE}" exec "statefulset/${STATEFULSET}" -- sh -c "export VAULT_ADDR=${VAULT_ADDR_IN_POD} && ${cmd}"
+}
+
+vault_exec_auth() {
+  local cmd="$1"
+  kubectl -n "${NAMESPACE}" exec "statefulset/${STATEFULSET}" -- sh -c "export VAULT_ADDR=${VAULT_ADDR_IN_POD} VAULT_TOKEN=${AUTH_TOKEN} && ${cmd}"
 }
 
 wait_for_vault_pod() {
@@ -105,6 +110,7 @@ fi
 echo "==> Vault unsealed"
 
 echo "==> Verification login"
+AUTH_TOKEN=""
 for attempt in 1 2 3; do
   read -r -s -p "Root token Vault (tentative ${attempt}/3): " root_token
   echo
@@ -112,7 +118,8 @@ for attempt in 1 2 3; do
     echo "Token vide."
     continue
   fi
-  if vault_exec "vault login \"${root_token}\" >/dev/null"; then
+  if vault_exec "VAULT_TOKEN=\"${root_token}\" vault token lookup >/dev/null"; then
+    AUTH_TOKEN="${root_token}"
     break
   fi
   if [ "${attempt}" -eq 3 ]; then
@@ -121,15 +128,27 @@ for attempt in 1 2 3; do
   fi
 done
 
-if ! vault_exec "vault secrets list -format=json" | grep -q "\"${KV_MOUNT}/\""; then
+if [ -z "${AUTH_TOKEN}" ]; then
+  echo "Erreur: impossible de valider un token root."
+  exit 1
+fi
+
+if ! vault_exec_auth "vault secrets list -format=json" | grep -q "\"${KV_MOUNT}/\""; then
   echo "==> Activation KV v2 sur '${KV_MOUNT}/'"
-  vault_exec "vault secrets enable -path=${KV_MOUNT} kv-v2"
+  vault_exec_auth "vault secrets enable -path=${KV_MOUNT} kv-v2"
 else
   echo "==> KV '${KV_MOUNT}/' deja actif"
 fi
 
+if ! vault_exec_auth "vault audit list -format=json" | grep -q "\"stdout/\""; then
+  echo "==> Activation audit logs (stdout)"
+  vault_exec_auth "vault audit enable file file_path=stdout"
+else
+  echo "==> Audit stdout deja actif"
+fi
+
 echo "==> Creation policy '${APP_POLICY_NAME}' pour projet '${PROJECT_NAME}'"
-vault_exec "cat > /tmp/${APP_POLICY_NAME}.hcl <<'HCL'
+vault_exec_auth "cat > /tmp/${APP_POLICY_NAME}.hcl <<'HCL'
 path \"${KV_MOUNT}/data/${PROJECT_NAME}/*\" {
   capabilities = [\"read\"]
 }
@@ -141,7 +160,7 @@ vault policy write ${APP_POLICY_NAME} /tmp/${APP_POLICY_NAME}.hcl
 rm -f /tmp/${APP_POLICY_NAME}.hcl"
 
 echo "==> Creation token applicatif (ttl=${APP_TOKEN_TTL})"
-app_token="$(vault_exec "vault token create -policy=${APP_POLICY_NAME} -ttl=${APP_TOKEN_TTL} -field=token")"
+app_token="$(vault_exec_auth "vault token create -policy=${APP_POLICY_NAME} -ttl=${APP_TOKEN_TTL} -field=token")"
 
 echo
 echo "Setup termine."

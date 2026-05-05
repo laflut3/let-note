@@ -36,13 +36,12 @@ spec:
             - name: SKIP_SETCAP
               value: "true"
           ports:
-            - containerPort: 8200
+            - containerPort: 18200
               name: http
           securityContext:
             allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
             capabilities:
-              add:
-                - IPC_LOCK
               drop:
                 - ALL
           volumeMounts:
@@ -50,16 +49,18 @@ spec:
               mountPath: /vault/config
             - name: vault-data
               mountPath: /vault/data
+            - name: vault-tmp
+              mountPath: /tmp
           readinessProbe:
             httpGet:
               path: /v1/sys/health?standbyok=true&sealedcode=204&uninitcode=204
-              port: 8200
+              port: 18200
             initialDelaySeconds: 10
             periodSeconds: 10
           livenessProbe:
             httpGet:
               path: /v1/sys/health?standbyok=true&sealedcode=204&uninitcode=204
-              port: 8200
+              port: 18200
             initialDelaySeconds: 20
             periodSeconds: 20
           resources:
@@ -71,6 +72,8 @@ spec:
               memory: 1Gi
       volumes:
         - name: vault-config-runtime
+          emptyDir: {}
+        - name: vault-tmp
           emptyDir: {}
         - name: vault-data
           persistentVolumeClaim:

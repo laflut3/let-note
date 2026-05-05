@@ -8,7 +8,7 @@ ENV_EXAMPLE_FILE="${SCRIPT_DIR}/.env.example"
 
 NAMESPACE="${VAULT_NAMESPACE:-vault}"
 POD="${VAULT_POD:-vault-0}"
-VAULT_ADDR_IN_POD="${VAULT_ADDR_IN_POD:-http://127.0.0.1:8200}"
+VAULT_ADDR_IN_POD="${VAULT_ADDR_IN_POD:-http://127.0.0.1:18200}"
 KV_MOUNT="${KV_MOUNT:-secret}"
 PROJECT="${PROJECT:-let-note}"
 POLICY_NAME="${POLICY_NAME:-let-note-read}"
@@ -17,6 +17,11 @@ TOKEN_TTL="${TOKEN_TTL:-720h}"
 vault_exec() {
   local cmd="$1"
   kubectl -n "${NAMESPACE}" exec -i "${POD}" -- sh -c "export VAULT_ADDR=${VAULT_ADDR_IN_POD} && ${cmd}"
+}
+
+vault_exec_auth() {
+  local cmd="$1"
+  kubectl -n "${NAMESPACE}" exec -i "${POD}" -- sh -c "export VAULT_ADDR=${VAULT_ADDR_IN_POD} VAULT_TOKEN=${VAULT_ROOT_TOKEN} && ${cmd}"
 }
 
 require_var() {
@@ -57,11 +62,11 @@ if [ -z "${VAULT_ROOT_TOKEN}" ]; then
 fi
 
 echo "==> Verification login root"
-vault_exec "vault login \"${VAULT_ROOT_TOKEN}\" >/dev/null"
+vault_exec "VAULT_TOKEN=\"${VAULT_ROOT_TOKEN}\" vault token lookup >/dev/null"
 
-if ! vault_exec "vault secrets list -format=json" | grep -q "\"${KV_MOUNT}/\""; then
+if ! vault_exec_auth "vault secrets list -format=json" | grep -q "\"${KV_MOUNT}/\""; then
   echo "==> Activation KV v2 (${KV_MOUNT}/)"
-  vault_exec "vault secrets enable -path=${KV_MOUNT} kv-v2"
+  vault_exec_auth "vault secrets enable -path=${KV_MOUNT} kv-v2"
 else
   echo "==> KV ${KV_MOUNT}/ deja actif"
 fi
@@ -78,7 +83,7 @@ for env in DEV STAGING PROD; do
 done
 
 echo "==> Ecriture secrets ${PROJECT}/dev"
-vault_exec "vault kv put ${KV_MOUNT}/${PROJECT}/dev \
+vault_exec_auth "vault kv put ${KV_MOUNT}/${PROJECT}/dev \
 PS_BDD_SERVER='${DEV_PS_BDD_SERVER}' \
 PS_BDD_PORT='${DEV_PS_BDD_PORT}' \
 PS_BDD_DB='${DEV_PS_BDD_DB}' \
@@ -88,7 +93,7 @@ JWT_SECRET='${DEV_JWT_SECRET}' \
 COOKIE_SECURE='${DEV_COOKIE_SECURE}'"
 
 echo "==> Ecriture secrets ${PROJECT}/staging"
-vault_exec "vault kv put ${KV_MOUNT}/${PROJECT}/staging \
+vault_exec_auth "vault kv put ${KV_MOUNT}/${PROJECT}/staging \
 PS_BDD_SERVER='${STAGING_PS_BDD_SERVER}' \
 PS_BDD_PORT='${STAGING_PS_BDD_PORT}' \
 PS_BDD_DB='${STAGING_PS_BDD_DB}' \
@@ -98,7 +103,7 @@ JWT_SECRET='${STAGING_JWT_SECRET}' \
 COOKIE_SECURE='${STAGING_COOKIE_SECURE}'"
 
 echo "==> Ecriture secrets ${PROJECT}/prod"
-vault_exec "vault kv put ${KV_MOUNT}/${PROJECT}/prod \
+vault_exec_auth "vault kv put ${KV_MOUNT}/${PROJECT}/prod \
 PS_BDD_SERVER='${PROD_PS_BDD_SERVER}' \
 PS_BDD_PORT='${PROD_PS_BDD_PORT}' \
 PS_BDD_DB='${PROD_PS_BDD_DB}' \
@@ -108,7 +113,7 @@ JWT_SECRET='${PROD_JWT_SECRET}' \
 COOKIE_SECURE='${PROD_COOKIE_SECURE}'"
 
 echo "==> Creation policy ${POLICY_NAME}"
-vault_exec "cat > /tmp/${POLICY_NAME}.hcl <<'HCL'
+vault_exec_auth "cat > /tmp/${POLICY_NAME}.hcl <<'HCL'
 path \"${KV_MOUNT}/data/${PROJECT}/*\" {
   capabilities = [\"read\"]
 }
@@ -120,7 +125,7 @@ vault policy write ${POLICY_NAME} /tmp/${POLICY_NAME}.hcl
 rm -f /tmp/${POLICY_NAME}.hcl"
 
 echo "==> Creation token applicatif"
-APP_TOKEN="$(vault_exec "vault token create -policy=${POLICY_NAME} -ttl=${TOKEN_TTL} -field=token")"
+APP_TOKEN="$(vault_exec_auth "vault token create -policy=${POLICY_NAME} -ttl=${TOKEN_TTL} -field=token")"
 
 echo
 echo "Setup termine."

@@ -7,3 +7,4 @@ resources:
   - 02-pvc.yaml
   - 10-statefulset.yaml
   - 20-service.yaml
+  - 30-networkpolicy.yaml

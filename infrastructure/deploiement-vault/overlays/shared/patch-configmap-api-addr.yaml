@@ -9,7 +9,7 @@ data:
     disable_mlock = true
 
     listener "tcp" {
-      address = "0.0.0.0:8200"
+      address = "0.0.0.0:18200"
       tls_disable = 1
     }
 
@@ -17,5 +17,5 @@ data:
       path = "/vault/data"
     }
 
-    api_addr = "http://vault.127.0.0.1.nip.io"
-    cluster_addr = "http://vault.vault.svc.cluster.local:8201"
+    api_addr = "https://vault.127.0.0.1.nip.io"
+    cluster_addr = "http://vault.vault.svc.cluster.local:18201"
