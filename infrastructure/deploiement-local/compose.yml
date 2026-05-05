@@ -1,0 +1,113 @@
+services:
+  postgres:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${PS_BDD_DB:-let_note_dev}
+      POSTGRES_USER: ${PS_BDD_USER:-let_note}
+      POSTGRES_PASSWORD: ${PS_BDD_PASS:-let_note_dev_password_change_me}
+    ports:
+      - "${PS_BDD_PORT:-5432}:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PS_BDD_USER:-let_note} -d ${PS_BDD_DB:-let_note_dev}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  db-migrate:
+    image: postgres:17
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: ${PS_BDD_PASS:-let_note_dev_password_change_me}
+      PS_BDD_DB: ${PS_BDD_DB:-let_note_dev}
+      PS_BDD_USER: ${PS_BDD_USER:-let_note}
+    volumes:
+      - ../BDD/migration:/migrations:ro
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -eu
+        for f in $(ls /migrations/*_*.up.sql | sort); do
+          echo "Applying migration: $f"
+          psql -h postgres -U "$${PS_BDD_USER}" -d "$${PS_BDD_DB}" -v ON_ERROR_STOP=1 -f "$${f}"
+        done
+        echo "Migrations applied"
+
+  vault:
+    image: hashicorp/vault:1.18
+    restart: unless-stopped
+    cap_add:
+      - IPC_LOCK
+    ports:
+      - "${VAULT_PORT:-8200}:8200"
+    environment:
+      VAULT_DEV_ROOT_TOKEN_ID: ${VAULT_DEV_ROOT_TOKEN_ID:-root}
+      VAULT_DEV_LISTEN_ADDRESS: 0.0.0.0:8200
+    command: server -dev
+
+  vault-init:
+    image: hashicorp/vault:1.18
+    depends_on:
+      - vault
+    restart: "no"
+    environment:
+      VAULT_ADDR: http://vault:8200
+      VAULT_TOKEN: ${VAULT_DEV_ROOT_TOKEN_ID:-root}
+      PS_BDD_DB: ${PS_BDD_DB:-let_note_dev}
+      PS_BDD_USER: ${PS_BDD_USER:-let_note}
+      PS_BDD_PASS: ${PS_BDD_PASS:-let_note_dev_password_change_me}
+      JWT_SECRET: ${JWT_SECRET:-let_note_dev_jwt_secret_change_me}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -eu
+        until vault status >/dev/null 2>&1; do
+          sleep 1
+        done
+        vault kv put secret/let-note/dev \
+          PS_BDD_DB="$${PS_BDD_DB}" \
+          PS_BDD_USER="$${PS_BDD_USER}" \
+          PS_BDD_PASS="$${PS_BDD_PASS}" \
+          JWT_SECRET="$${JWT_SECRET}" \
+          COOKIE_SECURE="$${COOKIE_SECURE}"
+        echo "Vault secret written at secret/let-note/dev"
+
+  backend:
+    build: ../../backend
+    restart: unless-stopped
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+      vault-init:
+        condition: service_completed_successfully
+    environment:
+      APP_HOST: 0.0.0.0
+      APP_PORT: 8080
+      PS_BDD_SERVER: postgres
+      PS_BDD_PORT: 5432
+      VAULT_ADDR: http://vault:8200
+      VAULT_TOKEN: ${VAULT_DEV_ROOT_TOKEN_ID:-root}
+      VAULT_KV_MOUNT: secret
+      VAULT_SECRET_PATH: let-note/dev
+    ports:
+      - "${BACKEND_PORT:-8081}:8080"
+
+  frontend:
+    build:
+      context: ../../frontend
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://127.0.0.1:8081/api}
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-5173}:80"
+    depends_on:
+      - backend
+
+volumes:
+  db_data:

@@ -3,10 +3,8 @@ kind: ConfigMap
 metadata:
   name: backend-config
 data:
-  PS_BDD_SERVER: postgres
+  PS_BDD_SERVER: postgres.database.svc.cluster.local
   PS_BDD_PORT: "5432"
-  PS_BDD_DB: let_note_dev
-  PS_BDD_USER: let_note
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -40,11 +38,3 @@ data:
         - http://localhost:5173
         - http://127.0.0.1:5173
         - http://dev.app.local
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: postgres-config
-data:
-  POSTGRES_DB: let_note_dev
-  POSTGRES_USER: let_note

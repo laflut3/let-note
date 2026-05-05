@@ -36,11 +36,20 @@ spec:
         envFrom:
         - configMapRef:
             name: backend-config
-        - secretRef:
-            name: postgres-secret
         env:
         - name: APP_CONFIG_PATH
           value: /etc/let-note/app-config.yaml
+        - name: VAULT_ADDR
+          value: http://vault.vault.svc.cluster.local:8200
+        - name: VAULT_KV_MOUNT
+          value: secret
+        - name: VAULT_SECRET_PATH
+          value: let-note/dev
+        - name: VAULT_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: vault-app-auth
+              key: token
         volumeMounts:
         - name: app-config-volume
           mountPath: /etc/let-note

@@ -1,0 +1,68 @@
+# Deploiement Let-Note (Kubernetes)
+
+Ce dossier deploie **uniquement l'application Let-Note** (frontend + backend) sur 3 environnements:
+- dev
+- staging
+- prod
+
+Le Vault est deploie separement via `infrastructure/deploiement-vault`.
+
+## Prerequis
+
+1. Vault deploie et configure.
+2. Secrets presents dans Vault:
+   - `secret/let-note/dev`
+   - `secret/let-note/staging`
+   - `secret/let-note/prod`
+3. Token Vault applicatif cree avec policy read sur `secret/data/let-note/*`.
+4. `VAULT_APP_TOKEN` exporte dans votre shell.
+
+## Variables Vault attendues pour chaque env
+
+- `PS_BDD_SERVER`
+- `PS_BDD_PORT`
+- `PS_BDD_DB`
+- `PS_BDD_USER`
+- `PS_BDD_PASS`
+- `JWT_SECRET`
+- `COOKIE_SECURE`
+
+## Deploy
+
+Depuis la racine du repo:
+
+```bash
+# 1) Namespaces / quotas
+kubectl apply -f infrastructure/deployment/cluster/namespaces.yaml
+kubectl apply -f infrastructure/deployment/cluster/quotas-limits.yaml
+
+# 2) Export du token Vault applicatif
+export VAULT_APP_TOKEN='<token-let-note-read>'
+
+# 3) Deploy app par environnement
+kubectl apply -k infrastructure/deployment/environments/dev
+kubectl apply -k infrastructure/deployment/environments/staging
+kubectl apply -k infrastructure/deployment/environments/prod
+```
+
+## Scaling par environnement
+
+- `dev`: 1 replica backend, 1 replica frontend
+- `staging`: 2 replicas backend, 2 replicas frontend
+- `prod`: 3 replicas backend, 3 replicas frontend
+
+## Verification
+
+```bash
+kubectl get deploy,pods,svc,ingress -n dev
+kubectl get deploy,pods,svc,ingress -n staging
+kubectl get deploy,pods,svc,ingress -n prod
+```
+
+## Notes
+
+- Le backend lit Vault via:
+  - `VAULT_ADDR=http://vault.vault.svc.cluster.local:8200`
+  - `VAULT_KV_MOUNT=secret`
+  - `VAULT_SECRET_PATH=let-note/<env>`
+- Les overlays `staging` et `prod` remplacent `VAULT_SECRET_PATH` automatiquement.

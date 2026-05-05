@@ -5,7 +5,6 @@ resources:
 - ../../base
 patches:
 - path: patch-configmaps.yaml
-- path: patch-secrets.yaml
-- path: patch-pvc.yaml
+- path: patch-backend-vault.yaml
 - path: patch-resources.yaml
 - path: patch-ingress.yaml
