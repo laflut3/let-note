@@ -28,6 +28,12 @@ Arborescence de secrets recommandee dans Vault:
 kubectl apply -k infrastructure/deploiement-vault/overlays/shared
 ```
 
+Verification rapide:
+
+```bash
+kubectl -n vault get ns,pods,svc,pvc
+```
+
 ## Configuration obligatoire apres deploiement
 
 1. Initialiser Vault (premier demarrage)
@@ -60,7 +66,7 @@ kubectl -n vault exec -it statefulset/vault -- vault secrets enable -path=secret
 
 ## Preparation pour Let-Note
 
-Creer les "dossiers" (chemins) Let-Note par projet puis par env:
+Creer les chemins Let-Note par projet puis par env:
 
 ```bash
 kubectl -n vault exec -it statefulset/vault -- vault kv put secret/let-note/dev \
