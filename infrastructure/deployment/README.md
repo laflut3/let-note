@@ -66,3 +66,17 @@ kubectl get deploy,pods,svc,ingress -n prod
   - `VAULT_KV_MOUNT=secret`
   - `VAULT_SECRET_PATH=let-note/<env>`
 - Les overlays `staging` et `prod` remplacent `VAULT_SECRET_PATH` automatiquement.
+
+## Script de deploiement rapide
+
+Script: [deploy-app.sh](/home/ltorres/perso/let-note/infrastructure/deployment/deploy-app.sh)
+
+```bash
+export VAULT_APP_TOKEN='<token-let-note-read>'
+
+./infrastructure/deployment/deploy-app.sh all
+# ou un seul environnement
+./infrastructure/deployment/deploy-app.sh dev
+./infrastructure/deployment/deploy-app.sh staging
+./infrastructure/deployment/deploy-app.sh prod
+```
