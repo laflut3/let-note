@@ -44,5 +44,5 @@ curl http://127.0.0.1:8081/api/health
 
 ## Notes
 
-- Le backend lit les secrets sensibles depuis Vault (`secret/let-note/dev`).
-- Vault n'est pas deploie localement ici. Renseigner `VAULT_ADDR` et `VAULT_TOKEN` dans `.env`.
+- Le deploiement local n'injecte pas de configuration Vault.
+- Le backend utilise ses valeurs locales par defaut sauf si des variables Vault sont injectees par votre environnement/infrastructure Kubernetes.

@@ -58,10 +58,6 @@ services:
       APP_PORT: 8080
       PS_BDD_SERVER: postgres
       PS_BDD_PORT: 5432
-      VAULT_ADDR: ${VAULT_ADDR}
-      VAULT_TOKEN: ${VAULT_TOKEN}
-      VAULT_KV_MOUNT: ${VAULT_KV_MOUNT:-secret}
-      VAULT_SECRET_PATH: ${VAULT_SECRET_PATH:-let-note/dev}
     ports:
       - "${BACKEND_PORT:-8081}:8080"
 
