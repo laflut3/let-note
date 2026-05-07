@@ -13,9 +13,6 @@ use tokio::time::{Duration, sleep};
 use crate::domains::entities::auth::{AuthMessage, AuthUser, Claims, LoginInfo};
 
 const AUTH_COOKIE_NAME: &str = "let_note_auth";
-// Pre-computed valid Argon2id hash for password "dummy-password".
-// Used to keep timing similar when user does not exist.
-const DUMMY_PASSWORD_HASH: &str = "$argon2id$v=19$m=19456,t=2,p=1$uQpQ4N4fEm+7U3x7PbE6SA$Wj6s2sbg6x2nG3s5aY0b1Q4ndz9dRYwU2xU3M5cM2iE";
 
 pub fn auth_routes() -> Router<PgPool> {
   Router::new()
@@ -44,7 +41,6 @@ async fn login(State(db): State<PgPool>, Json(login_info): Json<LoginInfo>) -> i
     Ok(Some((hash,))) => hash,
     Ok(None) => {
       // Keep response timing similar for unknown users.
-      let _ = verify_password(&login_info.password, DUMMY_PASSWORD_HASH);
       sleep(Duration::from_millis(200)).await;
       return (
         StatusCode::UNAUTHORIZED,
