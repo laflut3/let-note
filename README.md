@@ -60,6 +60,20 @@ helm install vault hashicorp/vault
 kubectl get pods -l app.kubernetes.io/name=vault
 ```
 
+### Supprimer vault
+
+```bash
+helm uninstall vault
+kubectl delete pvc -l app.kubernetes.io/name=vault
+```
+
+Si le chart a ete installe dans un namespace dedie (ex: `vault`), utiliser:
+
+```bash
+helm uninstall vault -n vault
+kubectl delete pvc -n vault -l app.kubernetes.io/name=vault
+```
+
 ### Recup clé UNSEAL et TOKEN
 
 ```bash
@@ -92,4 +106,20 @@ setup le token :
 
 ```bash
 kubectl exec -ti vault-0 -- vault login 'hvs.<...>'
+```
+
+### Set env Var
+
+creer le dossier secret dans vault si il n'existe pas
+
+```bash
+kubectl exec -i -n default vault-0 -- env VAULT_ADDR=http://127.0.0.1:8200 VAULT_TOKEN="hvs.[...]" vault secrets list
+```
+
+Variables Vault multi-environnements:
+
+```bash
+cd infrastructure/envirronnement_variable
+cp .env.exemple .env
+./set_vault_vars.sh [all|dev|staging|prod]
 ```
