@@ -8,10 +8,14 @@ use axum::{
 };
 use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, encode};
 use sqlx::PgPool;
+use tokio::time::{Duration, sleep};
 
 use crate::domains::entities::auth::{AuthMessage, AuthUser, Claims, LoginInfo};
 
 const AUTH_COOKIE_NAME: &str = "let_note_auth";
+// Pre-computed valid Argon2id hash for password "dummy-password".
+// Used to keep timing similar when user does not exist.
+const DUMMY_PASSWORD_HASH: &str = "$argon2id$v=19$m=19456,t=2,p=1$uQpQ4N4fEm+7U3x7PbE6SA$Wj6s2sbg6x2nG3s5aY0b1Q4ndz9dRYwU2xU3M5cM2iE";
 
 pub fn auth_routes() -> Router<PgPool> {
   Router::new()
@@ -39,6 +43,9 @@ async fn login(State(db): State<PgPool>, Json(login_info): Json<LoginInfo>) -> i
   let stored_hash = match row {
     Ok(Some((hash,))) => hash,
     Ok(None) => {
+      // Keep response timing similar for unknown users.
+      let _ = verify_password(&login_info.password, DUMMY_PASSWORD_HASH);
+      sleep(Duration::from_millis(200)).await;
       return (
         StatusCode::UNAUTHORIZED,
         Json(AuthMessage {
@@ -59,6 +66,7 @@ async fn login(State(db): State<PgPool>, Json(login_info): Json<LoginInfo>) -> i
   };
 
   if !verify_password(&login_info.password, &stored_hash) {
+    sleep(Duration::from_millis(200)).await;
     return (
       StatusCode::UNAUTHORIZED,
       Json(AuthMessage {
@@ -68,7 +76,18 @@ async fn login(State(db): State<PgPool>, Json(login_info): Json<LoginInfo>) -> i
       .into_response();
   }
 
-  let secret = std::env::var("JWT_SECRET").expect("JWT_SECRET must be set");
+  let secret = match std::env::var("JWT_SECRET") {
+    Ok(value) => value,
+    Err(_) => {
+      return (
+        StatusCode::INTERNAL_SERVER_ERROR,
+        Json(AuthMessage {
+          message: "authentication service unavailable".to_string(),
+        }),
+      )
+        .into_response();
+    }
+  };
   let now = std::time::SystemTime::now()
     .duration_since(std::time::UNIX_EPOCH)
     .map(|d| d.as_secs() as usize)
@@ -126,7 +145,10 @@ async fn me(headers: HeaderMap) -> impl IntoResponse {
     return StatusCode::UNAUTHORIZED.into_response();
   };
 
-  let secret = std::env::var("JWT_SECRET").expect("JWT_SECRET must be set");
+  let secret = match std::env::var("JWT_SECRET") {
+    Ok(value) => value,
+    Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+  };
   match decode::<Claims>(
     &token,
     &DecodingKey::from_secret(secret.as_bytes()),
@@ -144,13 +166,14 @@ async fn me(headers: HeaderMap) -> impl IntoResponse {
 }
 
 fn build_auth_cookie(token: &str, expire_immediately: bool) -> String {
-  let mut cookie = format!("{AUTH_COOKIE_NAME}={token}; Path=/; HttpOnly; SameSite=Lax");
+  let mut cookie = format!("{AUTH_COOKIE_NAME}={token}; Path=/; HttpOnly; SameSite=Strict");
 
+  // Secure by default; can be disabled explicitly for local HTTP-only dev.
   if std::env::var("COOKIE_SECURE")
     .ok()
     .as_deref()
-    .unwrap_or("false")
-    == "true"
+    .unwrap_or("true")
+    != "false"
   {
     cookie.push_str("; Secure");
   }

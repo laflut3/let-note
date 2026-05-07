@@ -1,3 +1,7 @@
+use argon2::{
+  Argon2,
+  password_hash::{PasswordHasher, SaltString, rand_core::OsRng},
+};
 use axum::{
   body::{Body, to_bytes},
   http::{Request, StatusCode},
@@ -80,6 +84,50 @@ async fn test_unknown_route_returns_not_found() {
 
 #[tokio::test]
 async fn test_login_sets_cookie() {
+  let database_url = std::env::var("DATABASE_URL_TEST")
+    .unwrap_or_else(|_| "postgres://127.0.0.1:5432/let_note_dev".to_string());
+  let pool = PgPoolOptions::new()
+    .connect(&database_url)
+    .await
+    .expect("failed to connect to test database");
+
+  sqlx::query(
+    r#"
+    CREATE TABLE IF NOT EXISTS etudiant (
+      email TEXT PRIMARY KEY,
+      mot_de_passe TEXT NOT NULL
+    )
+    "#,
+  )
+  .execute(&pool)
+  .await
+  .expect("failed to ensure etudiant table exists");
+
+  let salt = SaltString::generate(&mut OsRng);
+  let password_hash = Argon2::default()
+    .hash_password("secret".as_bytes(), &salt)
+    .expect("failed to hash test password")
+    .to_string();
+
+  sqlx::query(
+    r#"
+    INSERT INTO etudiant (email, mot_de_passe)
+    VALUES ($1, $2)
+    ON CONFLICT (email) DO UPDATE SET mot_de_passe = EXCLUDED.mot_de_passe
+    "#,
+  )
+  .bind("john@doe.com")
+  .bind(password_hash)
+  .execute(&pool)
+  .await
+  .expect("failed to seed test user");
+
+  // Ensure auth route can sign JWT in CI/local test runs.
+  // SAFETY: set during test setup before request handling.
+  unsafe {
+    std::env::set_var("JWT_SECRET", "test-jwt-secret");
+  }
+
   let app = test_router();
 
   let response = app
