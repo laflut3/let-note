@@ -3,8 +3,12 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+CONFIG_FILE="${REPO_ROOT}/config-let-note.toml"
 TARGET="${1:-all}"
 WAIT_TIMEOUT="${WAIT_TIMEOUT:-180s}"
+BACKEND_IMAGE_REPO="ghcr.io/laflut3/let-note-backend"
+FRONTEND_IMAGE_REPO="ghcr.io/laflut3/let-note-frontend"
 
 if ! command -v kubectl >/dev/null 2>&1; then
   echo "Erreur: kubectl est requis."
@@ -14,6 +18,18 @@ fi
 if [ -z "${VAULT_APP_TOKEN:-}" ]; then
   echo "Erreur: VAULT_APP_TOKEN n'est pas exporte."
   echo "Exemple: export VAULT_APP_TOKEN='<token-let-note-read>'"
+  exit 1
+fi
+
+if [ ! -f "${CONFIG_FILE}" ]; then
+  echo "Erreur: fichier de config introuvable: ${CONFIG_FILE}"
+  exit 1
+fi
+
+IMAGE_VERSION="$(sed -n 's/^[[:space:]]*version[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' "${CONFIG_FILE}" | head -n1)"
+if [ -z "${IMAGE_VERSION}" ]; then
+  echo "Erreur: version image introuvable dans ${CONFIG_FILE}"
+  echo "Attendu: version = \"0.1.0\""
   exit 1
 fi
 
@@ -29,9 +45,13 @@ deploy_env() {
   echo "==> Deploy ${env}"
   kubectl apply -k "${overlay}"
 
+  echo "==> Set images ${env} (tag=${IMAGE_VERSION})"
+  kubectl -n "${env}" set image deploy/backend backend="${BACKEND_IMAGE_REPO}:${IMAGE_VERSION}"
+  kubectl -n "${env}" set image deploy/front front="${FRONTEND_IMAGE_REPO}:${IMAGE_VERSION}"
+
   echo "==> Rollout status ${env}"
   kubectl -n "${env}" rollout status deploy/backend --timeout="${WAIT_TIMEOUT}"
-  kubectl -n "${env}" rollout status deploy/frontend --timeout="${WAIT_TIMEOUT}"
+  kubectl -n "${env}" rollout status deploy/front --timeout="${WAIT_TIMEOUT}"
 
   echo "==> Etat ${env}"
   kubectl -n "${env}" get deploy,pods,svc,ingress
@@ -40,6 +60,7 @@ deploy_env() {
 echo "==> Apply namespaces/quotas"
 kubectl apply -f "${SCRIPT_DIR}/cluster/namespaces.yaml"
 kubectl apply -f "${SCRIPT_DIR}/cluster/quotas-limits.yaml"
+echo "==> Image tag: ${IMAGE_VERSION}"
 
 case "${TARGET}" in
   all)
