@@ -3,8 +3,6 @@ kind: Kustomization
 resources:
 - 00-configmaps.yaml
 - 01-secrets.yaml
-- 02-pvc.yaml
-- 10-postgres.yaml
 - 20-backend.yaml
 - 23-front.yaml
 - 30-ingress.yaml

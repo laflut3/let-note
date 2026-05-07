@@ -17,6 +17,7 @@ pub struct CreateProfesseur {
   pub nom: String,
   pub email: String,
   pub date_naissance: NaiveDate,
+  pub mot_de_passe: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

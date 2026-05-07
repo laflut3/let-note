@@ -3,10 +3,8 @@ kind: ConfigMap
 metadata:
   name: backend-config
 data:
-  PS_BDD_SERVER: postgres
+  PS_BDD_SERVER: postgres.database.svc.cluster.local
   PS_BDD_PORT: "5432"
-  PS_BDD_DB: let_note_dev
-  PS_BDD_USER: let_note
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -18,7 +16,25 @@ data:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: postgres-config
+  name: app-config
 data:
-  POSTGRES_DB: let_note_dev
-  POSTGRES_USER: let_note
+  app-config.yaml: |
+    app:
+      name: let-note
+      env: dev
+    routes:
+      frontend_base_url: http://dev.app.local
+      backend_base_url: http://dev.app.local/api
+      health_path: /api/health
+      auth:
+        login_path: /api/auth/login
+        logout_path: /api/auth/logout
+    ingress:
+      host: dev.app.local
+      frontend_path: /
+      api_path: /api
+    cors:
+      allowed_origins:
+        - http://localhost:5173
+        - http://127.0.0.1:5173
+        - http://dev.app.local

@@ -1,61 +1,35 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: postgres
-spec:
-  selector:
-    matchLabels:
-      app: postgres
-  template:
-    spec:
-      containers:
-      - name: postgres
-        resources:
-          requests:
-            cpu: 200m
-            memory: 256Mi
-          limits:
-            cpu: 600m
-            memory: 768Mi
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
   name: backend
 spec:
-  selector:
-    matchLabels:
-      app: backend
-  replicas: 2
+  replicas: 3
   template:
     spec:
       containers:
       - name: backend
         resources:
           requests:
-            cpu: 200m
+            cpu: 250m
             memory: 256Mi
           limits:
-            cpu: 600m
-            memory: 768Mi
+            cpu: 800m
+            memory: 1024Mi
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: front
 spec:
-  selector:
-    matchLabels:
-      app: front
-  replicas: 2
+  replicas: 3
   template:
     spec:
       containers:
       - name: front
         resources:
           requests:
-            cpu: 200m
+            cpu: 250m
             memory: 256Mi
           limits:
-            cpu: 600m
-            memory: 768Mi
+            cpu: 800m
+            memory: 1024Mi

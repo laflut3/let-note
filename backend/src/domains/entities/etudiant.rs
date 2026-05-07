@@ -2,7 +2,7 @@ use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow, PartialEq, Eq)]
 pub struct GetEtudiant {
   pub id: Uuid,
   pub nom: String,
@@ -17,6 +17,7 @@ pub struct CreateEtudiant {
   pub prenom: String,
   pub email: String,
   pub date_naissance: NaiveDate,
+  pub mot_de_passe: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

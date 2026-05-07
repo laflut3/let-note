@@ -7,9 +7,14 @@
 # Node / frontend
 frontend/node_modules
 frontend/dist
+frontend/.vite
+frontend/.npm
+frontend/coverage
 
 # Environment files
 .env
+.env.*
+!*.example
 
 # AI tools artifacts
 .codex
@@ -18,3 +23,31 @@ frontend/dist
 .windsurf/
 .continue/
 .claude/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor / IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Python caches (tooling)
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Misc caches
+.cache/

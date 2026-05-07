@@ -1,13 +1,6 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: backend-config
-data:
-  PS_BDD_DB: let_note_prod
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
   name: front-config
 data:
   APP_ENV: prod
@@ -15,6 +8,23 @@ data:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: postgres-config
+  name: app-config
 data:
-  POSTGRES_DB: let_note_prod
+  app-config.yaml: |
+    app:
+      name: let-note
+      env: prod
+    routes:
+      frontend_base_url: http://prod.app.local
+      backend_base_url: http://prod.app.local/api
+      health_path: /api/health
+      auth:
+        login_path: /api/auth/login
+        logout_path: /api/auth/logout
+    ingress:
+      host: prod.app.local
+      frontend_path: /
+      api_path: /api
+    cors:
+      allowed_origins:
+        - http://prod.app.local

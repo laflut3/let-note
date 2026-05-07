@@ -1,5 +1,8 @@
 FROM lukemathwalker/cargo-chef:0.1.77-rust-1.95@sha256:00c3c07c51d092325df88f0df2d626cd4302e12933f179ba154509cc314d6c2a AS chef
 ARG TARGETARCH
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends musl-tools=* pkg-config=* \
+  && rm -rf /var/lib/apt/lists/*
 RUN case "$TARGETARCH" in \
   "arm64") echo "aarch64-unknown-linux-musl" ;; \
   "amd64"|"") echo "x86_64-unknown-linux-musl" ;; \

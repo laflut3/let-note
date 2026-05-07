@@ -21,6 +21,20 @@ permissions:
 jobs:
   tests:
     runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: let_note_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d let_note_test"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
 
     steps:
       - name: Checkout
@@ -32,4 +46,7 @@ jobs:
           toolchain: 1.95
 
       - name: Test
+        env:
+          DATABASE_URL_TEST: postgres://postgres:postgres@127.0.0.1:5432/let_note_test
+          JWT_SECRET: test-jwt-secret
         run: cargo test --workspace
