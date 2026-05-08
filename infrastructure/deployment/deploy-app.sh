@@ -103,6 +103,10 @@ deploy_env() {
   local env="$1"
   local overlay="${SCRIPT_DIR}/environments/${env}"
   local escaped_token=""
+  local backend_expected="${BACKEND_IMAGE_REPO}:${IMAGE_TAG}"
+  local front_expected="${FRONTEND_IMAGE_REPO}:${IMAGE_TAG}"
+  local backend_images=""
+  local front_images=""
 
   if [ ! -d "${overlay}" ]; then
     echo "Erreur: overlay introuvable ${overlay}"
@@ -121,6 +125,25 @@ deploy_env() {
   echo "==> Rollout status ${env}"
   kubectl -n "${env}" rollout status deploy/backend --timeout="${WAIT_TIMEOUT}"
   kubectl -n "${env}" rollout status deploy/front --timeout="${WAIT_TIMEOUT}"
+
+  backend_images="$(kubectl -n "${env}" get pods -l app=backend -o jsonpath='{range .items[*]}{.spec.containers[0].image}{"\n"}{end}' | sort -u)"
+  front_images="$(kubectl -n "${env}" get pods -l app=front -o jsonpath='{range .items[*]}{.spec.containers[0].image}{"\n"}{end}' | sort -u)"
+
+  if [ "${backend_images}" != "${backend_expected}" ]; then
+    echo "Erreur: images backend deployees inattendues en ${env}"
+    echo "Attendu: ${backend_expected}"
+    echo "Observe:"
+    printf '%s\n' "${backend_images}"
+    exit 1
+  fi
+
+  if [ "${front_images}" != "${front_expected}" ]; then
+    echo "Erreur: images frontend deployees inattendues en ${env}"
+    echo "Attendu: ${front_expected}"
+    echo "Observe:"
+    printf '%s\n' "${front_images}"
+    exit 1
+  fi
 
   echo "==> Etat ${env}"
   kubectl -n "${env}" get deploy,pods,svc,ingress
