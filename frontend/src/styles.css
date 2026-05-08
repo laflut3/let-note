@@ -39,7 +39,7 @@
   }
 
   * {
-    @apply border-border;
+    border-color: hsl(24 15% 82%);
   }
 
   body {
