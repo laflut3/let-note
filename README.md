@@ -124,6 +124,41 @@ cp .env.exemple .env
 ./set_vault_vars.sh [all|dev|staging|prod]
 ```
 
+### Policies Vault (token applicatif)
+
+Le backend a besoin d'un token Vault avec droits en lecture sur `secret/let-note/*`.
+
+```bash
+cat > /tmp/let-note-read.hcl <<'EOF'
+path "secret/data/let-note/*" {
+  capabilities = ["read"]
+}
+
+path "secret/metadata/let-note/*" {
+  capabilities = ["read", "list"]
+}
+EOF
+```
+
+Appliquer la policy et creer un token applicatif (avec un root token Vault valide):
+
+```bash
+kubectl cp /tmp/let-note-read.hcl default/vault-0:/tmp/let-note-read.hcl
+kubectl exec -n default -it vault-0 -- sh -c '
+  export VAULT_ADDR=http://127.0.0.1:8200
+  export VAULT_TOKEN="hvs.<ROOT_TOKEN_VALIDE>"
+  vault policy write let-note-read /tmp/let-note-read.hcl
+  vault token create -policy=let-note-read -format=json
+'
+```
+
+Recuperer le `client_token` puis l'utiliser pour le deploiement:
+
+```bash
+export VAULT_APP_TOKEN='hvs....'
+./infrastructure/deployment/deploy-app.sh dev
+```
+
 ## Tagger une version (release)
 
 Le workflow GitHub `release.yml` se declenche sur un tag `v*` (ex: `v0.1.1`).

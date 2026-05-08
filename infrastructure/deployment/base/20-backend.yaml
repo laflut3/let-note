@@ -39,6 +39,8 @@ spec:
         env:
         - name: APP_CONFIG_PATH
           value: /etc/let-note/app-config.yaml
+        - name: APP_HOST
+          value: 0.0.0.0
         - name: VAULT_ADDR
           value: http://vault.default.svc.cluster.local:8200
         - name: VAULT_KV_MOUNT

@@ -102,18 +102,21 @@ esac
 deploy_env() {
   local env="$1"
   local overlay="${SCRIPT_DIR}/environments/${env}"
+  local escaped_token=""
 
   if [ ! -d "${overlay}" ]; then
     echo "Erreur: overlay introuvable ${overlay}"
     exit 1
   fi
 
-  echo "==> Deploy ${env}"
-  kubectl apply -k "${overlay}"
+  escaped_token="$(printf '%s' "${VAULT_APP_TOKEN}" | sed 's/[&|]/\\&/g')"
 
-  echo "==> Set images ${env} (tag=${IMAGE_TAG}, arch=${IMAGE_ARCH})"
-  kubectl -n "${env}" set image deploy/backend backend="${BACKEND_IMAGE_REPO}:${IMAGE_TAG}"
-  kubectl -n "${env}" set image deploy/front front="${FRONTEND_IMAGE_REPO}:${IMAGE_TAG}"
+  echo "==> Deploy ${env} (tag=${IMAGE_TAG}, arch=${IMAGE_ARCH})"
+  kubectl kustomize "${overlay}" \
+    | sed "s|${BACKEND_IMAGE_REPO}:latest|${BACKEND_IMAGE_REPO}:${IMAGE_TAG}|g" \
+    | sed "s|${FRONTEND_IMAGE_REPO}:latest|${FRONTEND_IMAGE_REPO}:${IMAGE_TAG}|g" \
+    | sed "s|\${VAULT_APP_TOKEN}|${escaped_token}|g" \
+    | kubectl apply -f -
 
   echo "==> Rollout status ${env}"
   kubectl -n "${env}" rollout status deploy/backend --timeout="${WAIT_TIMEOUT}"

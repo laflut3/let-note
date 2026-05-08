@@ -80,13 +80,14 @@ push_env() {
   local suffix="$2"     # DEV|STAGGING|PROD
 
   local vault_addr vault_token kv_mount secret_path
-  local ps_db ps_user ps_pass ps_port jwt cookie
+  local ps_server ps_db ps_user ps_pass ps_port jwt cookie
 
   vault_addr="$(must_get VAULT_ADDR)"
   vault_token="$(must_get VAULT_TOKEN)"
   kv_mount="$(must_get VAULT_KV_MOUNT)"
   secret_path="$(must_get VAULT_SECRET_PATH_${suffix})"
 
+  ps_server="$(must_get PS_BDD_SERVER_${suffix})"
   ps_db="$(must_get PS_BDD_DB_${suffix})"
   ps_user="$(must_get PS_BDD_USER_${suffix})"
   ps_pass="$(must_get PS_BDD_PASS_${suffix})"
@@ -95,6 +96,7 @@ push_env() {
   cookie="$(must_get COOKIE_SECURE_${suffix})"
 
   vault_exec "$vault_addr" "$vault_token" kv put "${kv_mount}/${secret_path}" \
+    PS_BDD_SERVER="$ps_server" \
     PS_BDD_DB="$ps_db" \
     PS_BDD_USER="$ps_user" \
     PS_BDD_PASS="$ps_pass" \
