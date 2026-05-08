@@ -9,6 +9,8 @@ TARGET="${1:-all}"
 WAIT_TIMEOUT="${WAIT_TIMEOUT:-180s}"
 BACKEND_IMAGE_REPO="ghcr.io/laflut3/let-note-backend"
 FRONTEND_IMAGE_REPO="ghcr.io/laflut3/let-note-frontend"
+CLI_VERSION=""
+CLI_ARCH=""
 
 if ! command -v kubectl >/dev/null 2>&1; then
   echo "Erreur: kubectl est requis."
@@ -21,17 +23,81 @@ if [ -z "${VAULT_APP_TOKEN:-}" ]; then
   exit 1
 fi
 
-if [ ! -f "${CONFIG_FILE}" ]; then
-  echo "Erreur: fichier de config introuvable: ${CONFIG_FILE}"
+usage() {
+  cat <<EOF
+Usage: $0 [all|dev|staging|prod] [--version <semver>] [--arch <multi|amd64|arm64>]
+
+Exemples:
+  $0 prod --version 0.1.0 --arch multi
+  $0 staging --version 0.1.0 --arch amd64
+  $0 all
+EOF
+}
+
+if [[ "${TARGET}" == "-h" || "${TARGET}" == "--help" ]]; then
+  usage
+  exit 0
+fi
+
+shift || true
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --version)
+      CLI_VERSION="${2:-}"
+      shift 2
+      ;;
+    --arch)
+      CLI_ARCH="${2:-}"
+      shift 2
+      ;;
+    *)
+      echo "Erreur: argument inconnu: $1"
+      usage
+      exit 1
+      ;;
+  esac
+done
+
+if [ -n "${CLI_VERSION}" ] && [[ ! "${CLI_VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+  echo "Erreur: version invalide '${CLI_VERSION}' (ex: 0.1.0)"
   exit 1
 fi
 
-IMAGE_VERSION="$(sed -n 's/^[[:space:]]*version[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' "${CONFIG_FILE}" | head -n1)"
-if [ -z "${IMAGE_VERSION}" ]; then
-  echo "Erreur: version image introuvable dans ${CONFIG_FILE}"
-  echo "Attendu: version = \"0.1.0\""
+if [ -n "${CLI_ARCH}" ] && [[ "${CLI_ARCH}" != "multi" && "${CLI_ARCH}" != "amd64" && "${CLI_ARCH}" != "arm64" ]]; then
+  echo "Erreur: arch invalide '${CLI_ARCH}'"
+  echo "Valeurs autorisees: multi, amd64, arm64"
   exit 1
 fi
+
+if [ -f "${CONFIG_FILE}" ]; then
+  CONFIG_VERSION="$(sed -n 's/^[[:space:]]*version[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' "${CONFIG_FILE}" | head -n1)"
+  CONFIG_ARCH="$(sed -n 's/^[[:space:]]*arch[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' "${CONFIG_FILE}" | head -n1)"
+else
+  CONFIG_VERSION=""
+  CONFIG_ARCH=""
+fi
+
+IMAGE_VERSION="${CLI_VERSION:-${LET_NOTE_VERSION:-${CONFIG_VERSION:-}}}"
+if [ -z "${IMAGE_VERSION}" ]; then
+  echo "Erreur: version image introuvable."
+  echo "Definis --version <x.y.z>, LET_NOTE_VERSION, ou version dans ${CONFIG_FILE}"
+  exit 1
+fi
+
+IMAGE_ARCH="${CLI_ARCH:-${LET_NOTE_ARCH:-${CONFIG_ARCH:-amd64}}}"
+case "${IMAGE_ARCH}" in
+  multi)
+    IMAGE_TAG="${IMAGE_VERSION}"
+    ;;
+  amd64|arm64)
+    IMAGE_TAG="${IMAGE_VERSION}-${IMAGE_ARCH}"
+    ;;
+  *)
+    echo "Erreur: arch invalide: ${IMAGE_ARCH}"
+    echo "Valeurs autorisees: multi, amd64, arm64"
+    exit 1
+    ;;
+esac
 
 deploy_env() {
   local env="$1"
@@ -45,9 +111,9 @@ deploy_env() {
   echo "==> Deploy ${env}"
   kubectl apply -k "${overlay}"
 
-  echo "==> Set images ${env} (tag=${IMAGE_VERSION})"
-  kubectl -n "${env}" set image deploy/backend backend="${BACKEND_IMAGE_REPO}:${IMAGE_VERSION}"
-  kubectl -n "${env}" set image deploy/front front="${FRONTEND_IMAGE_REPO}:${IMAGE_VERSION}"
+  echo "==> Set images ${env} (tag=${IMAGE_TAG}, arch=${IMAGE_ARCH})"
+  kubectl -n "${env}" set image deploy/backend backend="${BACKEND_IMAGE_REPO}:${IMAGE_TAG}"
+  kubectl -n "${env}" set image deploy/front front="${FRONTEND_IMAGE_REPO}:${IMAGE_TAG}"
 
   echo "==> Rollout status ${env}"
   kubectl -n "${env}" rollout status deploy/backend --timeout="${WAIT_TIMEOUT}"
@@ -60,7 +126,9 @@ deploy_env() {
 echo "==> Apply namespaces/quotas"
 kubectl apply -f "${SCRIPT_DIR}/cluster/namespaces.yaml"
 kubectl apply -f "${SCRIPT_DIR}/cluster/quotas-limits.yaml"
-echo "==> Image tag: ${IMAGE_VERSION}"
+echo "==> Image version: ${IMAGE_VERSION}"
+echo "==> Image arch: ${IMAGE_ARCH}"
+echo "==> Image tag used: ${IMAGE_TAG}"
 
 case "${TARGET}" in
   all)

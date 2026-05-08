@@ -80,3 +80,28 @@ export VAULT_APP_TOKEN='<token-let-note-read>'
 ./infrastructure/deployment/deploy-app.sh staging
 ./infrastructure/deployment/deploy-app.sh prod
 ```
+
+## Deploy versionne (recommande)
+
+Par defaut, le script lit `config-let-note.toml`:
+
+```toml
+[images]
+version = "0.1.0"
+arch = "amd64"
+```
+
+Vous pouvez aussi surcharger a l'execution:
+
+```bash
+# Deploy la release multi-arch 0.1.0 en prod
+./infrastructure/deployment/deploy-app.sh prod --version 0.1.0 --arch multi
+
+# Deploy une image monoplatforme (si tag suffixe publie)
+./infrastructure/deployment/deploy-app.sh staging --version 0.1.0 --arch amd64
+```
+
+Priorite des valeurs:
+1. arguments CLI `--version/--arch`
+2. variables d'environnement `LET_NOTE_VERSION/LET_NOTE_ARCH`
+3. `config-let-note.toml`

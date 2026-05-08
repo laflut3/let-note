@@ -40,7 +40,7 @@ spec:
         - name: APP_CONFIG_PATH
           value: /etc/let-note/app-config.yaml
         - name: VAULT_ADDR
-          value: http://vault.vault.svc.cluster.local:18200
+          value: http://vault.default.svc.cluster.local:8200
         - name: VAULT_KV_MOUNT
           value: secret
         - name: VAULT_SECRET_PATH

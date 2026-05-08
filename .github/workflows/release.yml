@@ -60,12 +60,52 @@ jobs:
             -t ${{ env.CONTAINER_REGISTRY }}/${{ env.BACKEND_IMAGE_NAME }}:${DOCKER_TAG} \
             ${{ env.CONTAINER_REGISTRY }}/${{ env.BACKEND_IMAGE_NAME }}:${{ github.sha }}
 
+      - name: Tag and push backend release image (amd64)
+        run: |
+          DOCKER_TAG="${RELEASE_TAG#v}"
+          AMD64_DIGEST="$(docker buildx imagetools inspect ${{ env.CONTAINER_REGISTRY }}/${{ env.BACKEND_IMAGE_NAME }}:${{ github.sha }} --raw \
+            | jq -r '.manifests[] | select(.platform.architecture=="amd64" and .platform.os=="linux") | .digest')"
+          test -n "${AMD64_DIGEST}"
+          docker buildx imagetools create \
+            -t ${{ env.CONTAINER_REGISTRY }}/${{ env.BACKEND_IMAGE_NAME }}:${DOCKER_TAG}-amd64 \
+            ${{ env.CONTAINER_REGISTRY }}/${{ env.BACKEND_IMAGE_NAME }}@${AMD64_DIGEST}
+
+      - name: Tag and push backend release image (arm64)
+        run: |
+          DOCKER_TAG="${RELEASE_TAG#v}"
+          ARM64_DIGEST="$(docker buildx imagetools inspect ${{ env.CONTAINER_REGISTRY }}/${{ env.BACKEND_IMAGE_NAME }}:${{ github.sha }} --raw \
+            | jq -r '.manifests[] | select(.platform.architecture=="arm64" and .platform.os=="linux") | .digest')"
+          test -n "${ARM64_DIGEST}"
+          docker buildx imagetools create \
+            -t ${{ env.CONTAINER_REGISTRY }}/${{ env.BACKEND_IMAGE_NAME }}:${DOCKER_TAG}-arm64 \
+            ${{ env.CONTAINER_REGISTRY }}/${{ env.BACKEND_IMAGE_NAME }}@${ARM64_DIGEST}
+
       - name: Tag and push frontend release image
         run: |
           DOCKER_TAG="${RELEASE_TAG#v}"
           docker buildx imagetools create \
             -t ${{ env.CONTAINER_REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}:${DOCKER_TAG} \
             ${{ env.CONTAINER_REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}:${{ github.sha }}
+
+      - name: Tag and push frontend release image (amd64)
+        run: |
+          DOCKER_TAG="${RELEASE_TAG#v}"
+          AMD64_DIGEST="$(docker buildx imagetools inspect ${{ env.CONTAINER_REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}:${{ github.sha }} --raw \
+            | jq -r '.manifests[] | select(.platform.architecture=="amd64" and .platform.os=="linux") | .digest')"
+          test -n "${AMD64_DIGEST}"
+          docker buildx imagetools create \
+            -t ${{ env.CONTAINER_REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}:${DOCKER_TAG}-amd64 \
+            ${{ env.CONTAINER_REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}@${AMD64_DIGEST}
+
+      - name: Tag and push frontend release image (arm64)
+        run: |
+          DOCKER_TAG="${RELEASE_TAG#v}"
+          ARM64_DIGEST="$(docker buildx imagetools inspect ${{ env.CONTAINER_REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}:${{ github.sha }} --raw \
+            | jq -r '.manifests[] | select(.platform.architecture=="arm64" and .platform.os=="linux") | .digest')"
+          test -n "${ARM64_DIGEST}"
+          docker buildx imagetools create \
+            -t ${{ env.CONTAINER_REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}:${DOCKER_TAG}-arm64 \
+            ${{ env.CONTAINER_REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}@${ARM64_DIGEST}
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3
