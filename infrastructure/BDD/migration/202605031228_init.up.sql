@@ -5,7 +5,8 @@ CREATE TABLE IF NOT EXISTS etudiant (
   nom TEXT NOT NULL,
   prenom TEXT NOT NULL,
   email TEXT NOT NULL UNIQUE,
-  date_naissance DATE NOT NULL
+  date_naissance DATE NOT NULL,
+  mot_de_passe TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS professeur (

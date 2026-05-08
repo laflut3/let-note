@@ -5,21 +5,41 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 CONFIG_FILE="${REPO_ROOT}/config-let-note.toml"
-TARGET="${1:-all}"
+TARGET="${1:-}"
 WAIT_TIMEOUT="${WAIT_TIMEOUT:-180s}"
 BACKEND_IMAGE_REPO="ghcr.io/laflut3/let-note-backend"
 FRONTEND_IMAGE_REPO="ghcr.io/laflut3/let-note-frontend"
+MIGRATIONS_DIR="${REPO_ROOT}/infrastructure/BDD/migration"
 CLI_VERSION=""
 CLI_ARCH=""
 
+if [ -t 1 ]; then
+  C_RESET="$(printf '\033[0m')"
+  C_INFO="$(printf '\033[90m')"
+  C_WARN="$(printf '\033[33m')"
+  C_ERR="$(printf '\033[31m')"
+  C_OK="$(printf '\033[32m')"
+else
+  C_RESET=""
+  C_INFO=""
+  C_WARN=""
+  C_ERR=""
+  C_OK=""
+fi
+
+info() { printf '%b\n' "${C_INFO}[INFO]${C_RESET} $*"; }
+warn() { printf '%b\n' "${C_WARN}[WARN]${C_RESET} $*"; }
+ok() { printf '%b\n' "${C_OK}[OK]${C_RESET} $*"; }
+err() { printf '%b\n' "${C_ERR}[ERR]${C_RESET} $*" >&2; }
+
 if ! command -v kubectl >/dev/null 2>&1; then
-  echo "Erreur: kubectl est requis."
+  err "kubectl est requis."
   exit 1
 fi
 
 if [ -z "${VAULT_APP_TOKEN:-}" ]; then
-  echo "Erreur: VAULT_APP_TOKEN n'est pas exporte."
-  echo "Exemple: export VAULT_APP_TOKEN='<token-let-note-read>'"
+  err "VAULT_APP_TOKEN n'est pas exporte."
+  info "Exemple: export VAULT_APP_TOKEN='<token-let-note-read>'"
   exit 1
 fi
 
@@ -34,9 +54,36 @@ Exemples:
 EOF
 }
 
+choose_target_interactive() {
+  local options=("dev" "staging" "prod" "all")
+  info "Aucun environnement fourni. Choisissez une cible:"
+  select choice in "${options[@]}"; do
+    case "${choice}" in
+      dev|staging|prod|all)
+        TARGET="${choice}"
+        ok "Cible selectionnee: ${TARGET}"
+        break
+        ;;
+      *)
+        warn "Choix invalide. Reessayez."
+        ;;
+    esac
+  done
+}
+
 if [[ "${TARGET}" == "-h" || "${TARGET}" == "--help" ]]; then
   usage
   exit 0
+fi
+
+if [ -z "${TARGET}" ]; then
+  if [ -t 0 ]; then
+    choose_target_interactive
+  else
+    err "Aucun environnement fourni."
+    usage
+    exit 1
+  fi
 fi
 
 shift || true
@@ -51,7 +98,7 @@ while [[ $# -gt 0 ]]; do
       shift 2
       ;;
     *)
-      echo "Erreur: argument inconnu: $1"
+      err "Argument inconnu: $1"
       usage
       exit 1
       ;;
@@ -59,13 +106,13 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [ -n "${CLI_VERSION}" ] && [[ ! "${CLI_VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
-  echo "Erreur: version invalide '${CLI_VERSION}' (ex: 0.1.0)"
+  err "Version invalide '${CLI_VERSION}' (ex: 0.1.0)"
   exit 1
 fi
 
 if [ -n "${CLI_ARCH}" ] && [[ "${CLI_ARCH}" != "multi" && "${CLI_ARCH}" != "amd64" && "${CLI_ARCH}" != "arm64" ]]; then
-  echo "Erreur: arch invalide '${CLI_ARCH}'"
-  echo "Valeurs autorisees: multi, amd64, arm64"
+  err "Arch invalide '${CLI_ARCH}'"
+  info "Valeurs autorisees: multi, amd64, arm64"
   exit 1
 fi
 
@@ -79,8 +126,8 @@ fi
 
 IMAGE_VERSION="${CLI_VERSION:-${LET_NOTE_VERSION:-${CONFIG_VERSION:-}}}"
 if [ -z "${IMAGE_VERSION}" ]; then
-  echo "Erreur: version image introuvable."
-  echo "Definis --version <x.y.z>, LET_NOTE_VERSION, ou version dans ${CONFIG_FILE}"
+  err "Version image introuvable."
+  info "Definis --version <x.y.z>, LET_NOTE_VERSION, ou version dans ${CONFIG_FILE}"
   exit 1
 fi
 
@@ -93,8 +140,8 @@ case "${IMAGE_ARCH}" in
     IMAGE_TAG="${IMAGE_VERSION}-${IMAGE_ARCH}"
     ;;
   *)
-    echo "Erreur: arch invalide: ${IMAGE_ARCH}"
-    echo "Valeurs autorisees: multi, amd64, arm64"
+    err "Arch invalide: ${IMAGE_ARCH}"
+    info "Valeurs autorisees: multi, amd64, arm64"
     exit 1
     ;;
 esac
@@ -109,20 +156,52 @@ deploy_env() {
   local front_images=""
 
   if [ ! -d "${overlay}" ]; then
-    echo "Erreur: overlay introuvable ${overlay}"
+    err "Overlay introuvable ${overlay}"
     exit 1
   fi
 
   escaped_token="$(printf '%s' "${VAULT_APP_TOKEN}" | sed 's/[&|]/\\&/g')"
 
-  echo "==> Deploy ${env} (tag=${IMAGE_TAG}, arch=${IMAGE_ARCH})"
+  info "Deploy ${env} (tag=${IMAGE_TAG}, arch=${IMAGE_ARCH})"
   kubectl kustomize "${overlay}" \
     | sed "s|${BACKEND_IMAGE_REPO}:latest|${BACKEND_IMAGE_REPO}:${IMAGE_TAG}|g" \
     | sed "s|${FRONTEND_IMAGE_REPO}:latest|${FRONTEND_IMAGE_REPO}:${IMAGE_TAG}|g" \
     | sed "s|\${VAULT_APP_TOKEN}|${escaped_token}|g" \
     | kubectl apply -f -
 
-  echo "==> Rollout status ${env}"
+  info "Rollout status postgres ${env}"
+  kubectl -n "${env}" rollout status deploy/postgres --timeout="${WAIT_TIMEOUT}"
+
+  if [ -d "${MIGRATIONS_DIR}" ]; then
+    info "Apply SQL migrations ${env}"
+    migrated_count=0
+    while IFS= read -r -d '' migration_file; do
+      info "  -> $(basename "${migration_file}")"
+      kubectl -n "${env}" exec deploy/postgres -- sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < "${migration_file}"
+      migrated_count=$((migrated_count + 1))
+    done < <(find "${MIGRATIONS_DIR}" -maxdepth 1 -type f -name "*.up.sql" -print0 | sort -z)
+
+    if [ "${migrated_count}" -eq 0 ]; then
+      warn "Aucun fichier *.up.sql trouve dans ${MIGRATIONS_DIR}"
+    fi
+  fi
+
+  info "Verify database schema ${env}"
+  kubectl -n "${env}" exec deploy/postgres -- sh -c '
+    psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "
+      CREATE TABLE IF NOT EXISTS etudiant (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        nom TEXT NOT NULL,
+        prenom TEXT NOT NULL,
+        email TEXT NOT NULL UNIQUE,
+        date_naissance DATE NOT NULL,
+        mot_de_passe TEXT NOT NULL
+      );
+      ALTER TABLE etudiant
+      ADD COLUMN IF NOT EXISTS mot_de_passe TEXT NOT NULL DEFAULT '\'''\'';"
+  '
+
+  info "Rollout status ${env}"
   kubectl -n "${env}" rollout status deploy/backend --timeout="${WAIT_TIMEOUT}"
   kubectl -n "${env}" rollout status deploy/front --timeout="${WAIT_TIMEOUT}"
 
@@ -130,31 +209,32 @@ deploy_env() {
   front_images="$(kubectl -n "${env}" get pods -l app=front -o jsonpath='{range .items[*]}{.spec.containers[0].image}{"\n"}{end}' | sort -u)"
 
   if [ "${backend_images}" != "${backend_expected}" ]; then
-    echo "Erreur: images backend deployees inattendues en ${env}"
-    echo "Attendu: ${backend_expected}"
-    echo "Observe:"
+    err "Images backend deployees inattendues en ${env}"
+    info "Attendu: ${backend_expected}"
+    info "Observe:"
     printf '%s\n' "${backend_images}"
     exit 1
   fi
 
   if [ "${front_images}" != "${front_expected}" ]; then
-    echo "Erreur: images frontend deployees inattendues en ${env}"
-    echo "Attendu: ${front_expected}"
-    echo "Observe:"
+    err "Images frontend deployees inattendues en ${env}"
+    info "Attendu: ${front_expected}"
+    info "Observe:"
     printf '%s\n' "${front_images}"
     exit 1
   fi
 
-  echo "==> Etat ${env}"
+  ok "Deploiement valide sur ${env}"
+  info "Etat ${env}"
   kubectl -n "${env}" get deploy,pods,svc,ingress
 }
 
-echo "==> Apply namespaces/quotas"
+info "Apply namespaces/quotas"
 kubectl apply -f "${SCRIPT_DIR}/cluster/namespaces.yaml"
 kubectl apply -f "${SCRIPT_DIR}/cluster/quotas-limits.yaml"
-echo "==> Image version: ${IMAGE_VERSION}"
-echo "==> Image arch: ${IMAGE_ARCH}"
-echo "==> Image tag used: ${IMAGE_TAG}"
+info "Image version: ${IMAGE_VERSION}"
+info "Image arch: ${IMAGE_ARCH}"
+info "Image tag used: ${IMAGE_TAG}"
 
 case "${TARGET}" in
   all)
@@ -166,9 +246,10 @@ case "${TARGET}" in
     deploy_env "${TARGET}"
     ;;
   *)
-    echo "Usage: $0 [all|dev|staging|prod]"
+    err "Cible invalide: ${TARGET}"
+    usage
     exit 1
     ;;
 esac
 
-echo "==> Deploiement termine (${TARGET})"
+ok "Deploiement termine (${TARGET})"
