@@ -14,6 +14,7 @@ pub struct AuthMessage {
 #[derive(Debug, Serialize)]
 pub struct AuthUser {
   pub email: String,
+  pub roles: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

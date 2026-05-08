@@ -17,7 +17,6 @@ struct LoginRow {
 }
 
 pub struct AuthenticatedUser {
-  pub email: String,
   pub token: String,
 }
 
@@ -33,7 +32,7 @@ pub async fn authenticate_user(
   }
 
   let token = build_token(&email)?;
-  Ok(AuthenticatedUser { email, token })
+  Ok(AuthenticatedUser { token })
 }
 
 pub fn parse_token(token: &str) -> Result<Claims, ApiError> {
@@ -45,6 +44,23 @@ pub fn parse_token(token: &str) -> Result<Claims, ApiError> {
   )
   .map(|data| data.claims)
   .map_err(|_| ApiError::unauthorized("invalid credentials"))
+}
+
+pub async fn fetch_roles_by_email(db: &PgPool, email: &str) -> Result<Vec<String>, ApiError> {
+  sqlx::query_scalar::<_, String>(
+    r#"
+    SELECT r.role
+    FROM etudiant e
+    JOIN role_etu re ON re.id_etu = e.id
+    JOIN role r ON r.id = re.id_role
+    WHERE e.email = $1
+    ORDER BY r.role
+    "#,
+  )
+  .bind(email)
+  .fetch_all(db)
+  .await
+  .map_err(|_| ApiError::internal("authentication service unavailable"))
 }
 
 fn normalize_credentials(input: LoginInfo) -> Result<(String, String), ApiError> {

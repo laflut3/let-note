@@ -22,7 +22,12 @@ pub async fn create_etudiant(
   let password_hash = hash_password(&etudiant.mot_de_passe)
     .map_err(|_| ApiError::internal("unable to secure password at this time"))?;
 
-  sqlx::query_as::<_, GetEtudiant>(
+  let mut tx = db
+    .begin()
+    .await
+    .map_err(|_| ApiError::internal("unable to create account at this time"))?;
+
+  let created = sqlx::query_as::<_, GetEtudiant>(
     r#"
     INSERT INTO etudiant (nom, prenom, email, date_naissance, mot_de_passe)
     VALUES ($1, $2, $3, $4, $5)
@@ -34,9 +39,29 @@ pub async fn create_etudiant(
   .bind(etudiant.email.trim().to_lowercase())
   .bind(etudiant.date_naissance)
   .bind(password_hash)
-  .fetch_one(db)
+  .fetch_one(&mut *tx)
   .await
-  .map_err(map_create_error)
+  .map_err(map_create_error)?;
+
+  sqlx::query(
+    r#"
+    INSERT INTO role_etu (id_role, id_etu)
+    SELECT r.id, $1
+    FROM role r
+    WHERE r.role = 'eleve'
+    ON CONFLICT DO NOTHING
+    "#,
+  )
+  .bind(created.id)
+  .execute(&mut *tx)
+  .await
+  .map_err(|_| ApiError::internal("unable to assign default role"))?;
+
+  tx.commit()
+    .await
+    .map_err(|_| ApiError::internal("unable to finalize account creation"))?;
+
+  Ok(created)
 }
 
 fn map_create_error(error: sqlx::Error) -> ApiError {

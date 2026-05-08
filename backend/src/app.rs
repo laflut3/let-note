@@ -7,7 +7,7 @@ use serde::Serialize;
 use sqlx::PgPool;
 use tower_http::cors::CorsLayer;
 
-use crate::domains::routes::{auth::auth_routes, etudiant::etudiant_routes};
+use crate::domains::routes::{admin::admin_routes, auth::auth_routes, etudiant::etudiant_routes};
 
 #[derive(Serialize)]
 struct HealthResponse {
@@ -28,6 +28,7 @@ pub fn create_router() -> Router<PgPool> {
     .route("/_health", get(health_check))
     .route("/api/health", get(health_json))
     .nest("/api/auth", auth_routes())
+    .nest("/api/admin", admin_routes())
     .nest("/api", etudiant_routes())
     .fallback(fallback)
     .layer(cors)

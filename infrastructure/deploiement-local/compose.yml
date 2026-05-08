@@ -32,8 +32,8 @@ services:
     command:
       - |
         set -eu
-        for f in $(ls /migrations/*_*.up.sql | sort); do
-          echo "Applying migration: $f"
+        for f in $(find /migrations -maxdepth 1 -type f -name "*.up.sql" | sort); do
+          echo "Applying migration: $$f"
           psql -h postgres -U "$${PS_BDD_USER}" -d "$${PS_BDD_DB}" -v ON_ERROR_STOP=1 -f "$${f}"
         done
         echo "Migrations applied"
@@ -58,6 +58,9 @@ services:
       APP_PORT: 8080
       PS_BDD_SERVER: postgres
       PS_BDD_PORT: 5432
+      PS_BDD_DB: ${PS_BDD_DB:-let_note_dev}
+      PS_BDD_USER: ${PS_BDD_USER:-let_note}
+      PS_BDD_PASS: ${PS_BDD_PASS:-let_note_dev_password_change_me}
     ports:
       - "${BACKEND_PORT:-8081}:8080"
 
