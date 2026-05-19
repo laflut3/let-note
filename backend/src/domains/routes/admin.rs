@@ -43,7 +43,7 @@ pub fn admin_routes(db: PgPool) -> Router<PgPool> {
       middleware::right_admin(get(list_promotions).post(create_promotion), db.clone()),
     )
     .route(
-      "/promotions/:promo_id/delegues/:etu_id",
+      "/promotions/{promo_id}/delegues/{etu_id}",
       middleware::right_admin(post(assign_delegue).delete(remove_delegue), db),
     )
 }

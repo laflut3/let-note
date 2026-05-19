@@ -13,34 +13,34 @@ use crate::domains::{middleware, services::promo_service};
 pub fn promo_routes(db: PgPool) -> Router<PgPool> {
   Router::new()
     .route("/promotions", get(list_accessible_promotions))
-    .route("/promotions/:promo_id/dashboard", get(get_promo_dashboard))
-    .route("/promotions/:promo_id/ues", get(list_ues_for_promo))
+    .route("/promotions/{promo_id}/dashboard", get(get_promo_dashboard))
+    .route("/promotions/{promo_id}/ues", get(list_ues_for_promo))
     .route(
-      "/promotions/:promo_id/ical-url",
+      "/promotions/{promo_id}/ical-url",
       middleware::right_admin_or_delegue_for_promo(put(update_promo_ical_url), db.clone()),
     )
     .route(
-      "/promotions/:promo_id/ues",
+      "/promotions/{promo_id}/ues",
       middleware::right_admin_or_delegue_for_promo(post(create_ue_for_promo), db.clone()),
     )
     .route(
-      "/promotions/:promo_id/matieres",
+      "/promotions/{promo_id}/matieres",
       middleware::right_admin_or_delegue_for_promo(post(add_matiere_to_promo), db.clone()),
     )
     .route(
-      "/promotions/:promo_id/professeurs",
+      "/promotions/{promo_id}/professeurs",
       middleware::right_admin_or_delegue_for_promo(post(add_professeur_to_promo), db.clone()),
     )
     .route(
-      "/promotions/:promo_id/matieres/:matiere_id/referent/:prof_id",
+      "/promotions/{promo_id}/matieres/{matiere_id}/referent/{prof_id}",
       middleware::right_admin_or_delegue_for_promo(put(set_referent_for_matiere), db.clone()),
     )
     .route(
-      "/promotions/:promo_id/matieres/:matiere_id/resultats",
+      "/promotions/{promo_id}/matieres/{matiere_id}/resultats",
       post(create_resultat_for_matiere),
     )
     .route(
-      "/promotions/:promo_id/resultats/:resultat_id",
+      "/promotions/{promo_id}/resultats/{resultat_id}",
       put(update_resultat),
     )
 }
