@@ -67,7 +67,7 @@ export function AuthPage() {
     }
 
     const isDesktop = window.innerWidth >= 768;
-    const cardX = isDesktop ? (isLogin ? 350 : -350) : 0;
+    const cardX = 0;
     const shapeX = isDesktop ? (isLogin ? -430 : 430) : 0;
 
     gsap.to(shapeRef.current, {
