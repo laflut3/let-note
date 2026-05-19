@@ -89,6 +89,7 @@ export function AdminPage() {
   const [editProfPrenom, setEditProfPrenom] = useState('');
   const [editProfNom, setEditProfNom] = useState('');
   const [editProfEmail, setEditProfEmail] = useState('');
+  const [editingProfId, setEditingProfId] = useState('');
 
   const [selectedMatiereCode, setSelectedMatiereCode] = useState('');
   const [editMatiereNom, setEditMatiereNom] = useState('');
@@ -626,6 +627,7 @@ export function AdminPage() {
                         setEditProfPrenom(prof.prenom);
                         setEditProfNom(prof.nom);
                         setEditProfEmail(prof.email);
+                        setEditingProfId(prof.id);
                       }}
                     >
                       <Pencil className="h-4 w-4" />
@@ -650,61 +652,6 @@ export function AdminPage() {
                   </div>
                 </div>
               ))}
-            </div>
-
-            <div className="mt-4 grid gap-3 md:grid-cols-2">
-              <input
-                value={editProfPrenom}
-                onChange={(e) => setEditProfPrenom(e.target.value)}
-                placeholder="Prenom"
-                className="h-11 rounded-xl border border-zinc-300 px-3"
-              />
-              <input
-                value={editProfNom}
-                onChange={(e) => setEditProfNom(e.target.value)}
-                placeholder="Nom"
-                className="h-11 rounded-xl border border-zinc-300 px-3"
-              />
-              <input
-                value={editProfEmail}
-                onChange={(e) => setEditProfEmail(e.target.value)}
-                placeholder="Email"
-                className="h-11 rounded-xl border border-zinc-300 px-3 md:col-span-2"
-              />
-            </div>
-            <div className="mt-4 flex flex-wrap gap-3">
-              <Button
-                type="button"
-                onClick={() =>
-                  void runAction(
-                    () =>
-                      adminUpdateProfesseurRequest(selectedProfId, {
-                        prenom: editProfPrenom,
-                        nom: editProfNom,
-                        email: editProfEmail,
-                      }),
-                    'Professeur modifie.'
-                  )
-                }
-                disabled={!selectedProfId}
-                className="h-11 rounded-xl bg-zinc-900 px-5 text-white hover:bg-zinc-800"
-              >
-                Enregistrer l'edition
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() =>
-                  void runAction(
-                    () => adminDeleteProfesseurRequest(selectedProfId),
-                    'Professeur supprime.'
-                  )
-                }
-                disabled={!selectedProfId}
-                className="h-11 rounded-xl"
-              >
-                Supprimer le professeur
-              </Button>
             </div>
           </section>
         )}
@@ -937,6 +884,61 @@ export function AdminPage() {
               >
                 Fermer
               </Button>
+            </div>
+          </section>
+        )}
+
+        {editingProfId && (
+          <section className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
+            <div className="w-full max-w-2xl rounded-2xl border border-black/10 bg-white p-6 shadow-2xl">
+              <h3 className="text-lg font-semibold text-zinc-900">Editer le professeur</h3>
+              <div className="mt-3 grid gap-3 md:grid-cols-2">
+                <input
+                  value={editProfPrenom}
+                  onChange={(e) => setEditProfPrenom(e.target.value)}
+                  placeholder="Prenom"
+                  className="h-11 rounded-xl border border-zinc-300 px-3"
+                />
+                <input
+                  value={editProfNom}
+                  onChange={(e) => setEditProfNom(e.target.value)}
+                  placeholder="Nom"
+                  className="h-11 rounded-xl border border-zinc-300 px-3"
+                />
+                <input
+                  value={editProfEmail}
+                  onChange={(e) => setEditProfEmail(e.target.value)}
+                  placeholder="Email"
+                  className="h-11 rounded-xl border border-zinc-300 px-3 md:col-span-2"
+                />
+              </div>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  className="h-10 rounded-xl bg-zinc-900 text-white"
+                  onClick={() =>
+                    void runAction(
+                      () =>
+                        adminUpdateProfesseurRequest(editingProfId, {
+                          prenom: editProfPrenom,
+                          nom: editProfNom,
+                          email: editProfEmail,
+                        }),
+                      'Professeur modifie.'
+                    )
+                  }
+                >
+                  Enregistrer
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-10 rounded-xl"
+                  onClick={() => setEditingProfId('')}
+                >
+                  Fermer
+                </Button>
+              </div>
             </div>
           </section>
         )}
