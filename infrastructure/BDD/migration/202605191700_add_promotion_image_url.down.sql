@@ -1,0 +1,2 @@
+ALTER TABLE promotion
+DROP COLUMN IF EXISTS image_url;

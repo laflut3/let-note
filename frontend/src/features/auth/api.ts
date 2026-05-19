@@ -2,6 +2,19 @@ import type { AuthFields } from '@/features/auth/types';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api';
 
+export type AdminUser = {
+  id: string;
+  nom: string;
+  prenom: string;
+  email: string;
+};
+
+export type CreatePromotionPayload = {
+  image_url: string;
+  annee: number;
+  etudiant_ids: string[];
+};
+
 export async function loginRequest(email: string, password: string): Promise<Response> {
   return fetch(`${API_BASE_URL}/auth/login`, {
     method: 'POST',
@@ -44,5 +57,25 @@ export async function registerRequest(fields: AuthFields): Promise<Response> {
       date_naissance: fields.birthDate,
       mot_de_passe: fields.password,
     }),
+  });
+}
+
+export async function adminListUsersRequest(): Promise<Response> {
+  return fetch(`${API_BASE_URL}/admin/users`, {
+    method: 'GET',
+    credentials: 'include',
+  });
+}
+
+export async function adminCreatePromotionRequest(
+  payload: CreatePromotionPayload
+): Promise<Response> {
+  return fetch(`${API_BASE_URL}/admin/promotions`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    credentials: 'include',
+    body: JSON.stringify(payload),
   });
 }
