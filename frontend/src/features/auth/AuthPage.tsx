@@ -67,12 +67,12 @@ export function AuthPage() {
     }
 
     const isDesktop = window.innerWidth >= 768;
-    const cardX = 0;
-    const shapeX = isDesktop ? (isLogin ? -430 : 430) : 0;
+    const cardX = isDesktop ? (isLogin ? 120 : -120) : 0;
+    const shapeX = isDesktop ? (isLogin ? -300 : 300) : 0;
 
     gsap.to(shapeRef.current, {
       x: shapeX,
-      rotation: isDesktop ? (isLogin ? -7 : 7) : 0,
+      rotation: isDesktop ? (isLogin ? -6 : 6) : 0,
       duration: isDesktop ? 0.95 : 0.4,
       ease: 'expo.inOut',
       overwrite: 'auto',
@@ -107,7 +107,7 @@ export function AuthPage() {
         backgroundImage: `linear-gradient(var(--auth-overlay), var(--auth-overlay)), url(${backgroundImageUrl})`,
       }}
     >
-      <section className="relative min-h-screen w-full overflow-x-hidden overflow-y-auto px-3 pb-6 pt-6 sm:px-4 sm:pt-8 md:overflow-hidden md:px-8 md:py-10">
+      <section className="relative min-h-screen w-full overflow-x-hidden overflow-y-auto px-3 pb-6 pt-6 sm:px-4 sm:pt-8 md:px-8 md:py-10">
         <ThemeToggle
           theme={theme}
           onToggle={() => setTheme((prev) => (prev === 'light' ? 'dark' : 'light'))}
@@ -125,7 +125,7 @@ export function AuthPage() {
           className="auth-fade pointer-events-none absolute left-1/2 top-[46%] h-[78vw] w-[78vw] min-h-[240px] min-w-[240px] max-h-[560px] max-w-[560px] -translate-x-1/2 -translate-y-1/2 rounded-[38%_62%_55%_45%/42%_34%_66%_58%] border border-white/20 bg-[linear-gradient(145deg,var(--auth-split-panel),#8e365f_58%,#b0447a)] shadow-[0_30px_80px_rgba(0,0,0,0.32)] md:top-1/2 md:h-[62vh] md:w-[62vh] md:max-h-[690px] md:max-w-[690px] md:shadow-[0_45px_120px_rgba(0,0,0,0.34)]"
         />
 
-        <div className="auth-fade relative z-10 mx-auto w-fit rounded-full border border-white/25 bg-black/10 px-3 py-1.5 text-[10px] font-medium uppercase tracking-[0.24em] text-white backdrop-blur-sm sm:text-xs md:absolute md:left-1/2 md:top-14 md:-translate-x-1/2 md:px-4 md:py-2">
+        <div className="auth-fade relative z-30 mx-auto w-fit rounded-full border border-white/25 bg-black/10 px-3 py-1.5 text-[10px] font-medium uppercase tracking-[0.24em] text-white backdrop-blur-sm sm:text-xs md:absolute md:left-1/2 md:top-14 md:-translate-x-1/2 md:px-4 md:py-2">
           Let Note Etudiant
         </div>
 

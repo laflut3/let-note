@@ -1,5 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AuthPage } from '@/features/auth/AuthPage';
+import { PublicOnlyRoute } from '@/features/auth/PublicOnlyRoute';
 import { AdminPage } from '@/features/dashboard/AdminPage';
 import { ProtectedAdminRoute } from '@/features/dashboard/ProtectedAdminRoute';
 import { DashboardPage } from '@/features/dashboard/DashboardPage';
@@ -9,7 +10,14 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<AuthPage />} />
+        <Route
+          path="/"
+          element={
+            <PublicOnlyRoute>
+              <AuthPage />
+            </PublicOnlyRoute>
+          }
+        />
         <Route
           path="/dashboard"
           element={
