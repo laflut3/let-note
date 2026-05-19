@@ -56,11 +56,17 @@ services:
     environment:
       APP_HOST: 0.0.0.0
       APP_PORT: 8080
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      JWT_SECRET: ${JWT_SECRET:-dev_jwt_secret_change_me}
       PS_BDD_SERVER: postgres
       PS_BDD_PORT: 5432
       PS_BDD_DB: ${PS_BDD_DB:-let_note_dev}
       PS_BDD_USER: ${PS_BDD_USER:-let_note}
       PS_BDD_PASS: ${PS_BDD_PASS:-let_note_dev_password_change_me}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@let-note.local}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-Admin123456!}
+      ADMIN_PRENOM: ${ADMIN_PRENOM:-Super}
+      ADMIN_NOM: ${ADMIN_NOM:-Admin}
     ports:
       - "${BACKEND_PORT:-8081}:8080"
 

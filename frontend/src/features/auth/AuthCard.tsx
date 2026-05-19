@@ -1,4 +1,5 @@
-import type { ChangeEvent, FormEvent } from 'react';
+import { type ChangeEvent, type FormEvent, useState } from 'react';
+import { Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -25,6 +26,8 @@ export function AuthCard({
   onToggleMode,
 }: AuthCardProps) {
   const isLogin = mode === 'login';
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const handleInputChange =
     (field: keyof AuthFields) =>
@@ -98,25 +101,53 @@ export function AuthCard({
 
           <div className="mx-auto w-full max-w-[520px]">
             <Label htmlFor="password">Mot de passe</Label>
-            <Input
-              id="password"
-              type="password"
-              placeholder="Minimum 8 caracteres"
-              value={fields.password}
-              onChange={handleInputChange('password')}
-            />
+            <div className="relative">
+              <Input
+                id="password"
+                type={showPassword ? 'text' : 'password'}
+                placeholder="Minimum 8 caracteres"
+                value={fields.password}
+                onChange={handleInputChange('password')}
+                className="pr-12"
+              />
+              <button
+                type="button"
+                aria-label={showPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
+                aria-pressed={showPassword}
+                onClick={() => setShowPassword((previous) => !previous)}
+                className="absolute right-2 top-1/2 z-10 -translate-y-1/2 rounded-md border border-slate-300/70 bg-white/90 p-1.5 text-slate-600 shadow-sm transition hover:bg-white hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
           </div>
 
           {!isLogin && (
             <div className="mx-auto w-full max-w-[520px]">
               <Label htmlFor="confirmPassword">Confirmation</Label>
-              <Input
-                id="confirmPassword"
-                type="password"
-                placeholder="Saisissez a nouveau le mot de passe"
-                value={fields.confirmPassword}
-                onChange={handleInputChange('confirmPassword')}
-              />
+              <div className="relative">
+                <Input
+                  id="confirmPassword"
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  placeholder="Saisissez a nouveau le mot de passe"
+                  value={fields.confirmPassword}
+                  onChange={handleInputChange('confirmPassword')}
+                  className="pr-12"
+                />
+                <button
+                  type="button"
+                  aria-label={
+                    showConfirmPassword
+                      ? 'Masquer la confirmation du mot de passe'
+                      : 'Afficher la confirmation du mot de passe'
+                  }
+                  aria-pressed={showConfirmPassword}
+                  onClick={() => setShowConfirmPassword((previous) => !previous)}
+                  className="absolute right-2 top-1/2 z-10 -translate-y-1/2 rounded-md border border-slate-300/70 bg-white/90 p-1.5 text-slate-600 shadow-sm transition hover:bg-white hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+                >
+                  {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
             </div>
           )}
 
