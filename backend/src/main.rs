@@ -10,7 +10,7 @@ async fn main() -> anyhow::Result<()> {
   let config = http::read_app_config();
   vault::load_secrets_from_vault().await?;
   let db_pool = bdd::create_db_pool().await?;
-  let app = create_router().with_state(db_pool);
+  let app = create_router(db_pool.clone()).with_state(db_pool);
   http::serve_http(app, &config).await?;
   Ok(())
 }

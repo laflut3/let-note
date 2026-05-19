@@ -1,12 +1,13 @@
 use axum::{
   Json, Router,
-  extract::State,
+  extract::{Path, State},
   http::StatusCode,
   response::IntoResponse,
   routing::{get, post},
 };
 use serde::Serialize;
 use sqlx::PgPool;
+use uuid::Uuid;
 
 use crate::domains::{entities::promotion::CreatePromotion, middleware, services::admin_service};
 
@@ -15,14 +16,24 @@ struct AdminStatus {
   message: &'static str,
 }
 
-pub fn admin_routes() -> Router<PgPool> {
+pub fn admin_routes(db: PgPool) -> Router<PgPool> {
   Router::new()
-    .route("/status", middleware::right_admin(get(admin_status)))
+    .route(
+      "/status",
+      middleware::right_admin(get(admin_status), db.clone()),
+    )
+    .route(
+      "/users",
+      middleware::right_admin(get(list_users), db.clone()),
+    )
     .route(
       "/promotions",
-      middleware::right_admin(post(create_promotion)),
+      middleware::right_admin(get(list_promotions).post(create_promotion), db.clone()),
     )
-    .route("/users", middleware::right_admin(get(list_users)))
+    .route(
+      "/promotions/:promo_id/delegues/:etu_id",
+      middleware::right_admin(post(assign_delegue).delete(remove_delegue), db),
+    )
 }
 
 async fn admin_status(State(_db): State<PgPool>) -> impl IntoResponse {
@@ -35,6 +46,20 @@ async fn admin_status(State(_db): State<PgPool>) -> impl IntoResponse {
     .into_response()
 }
 
+async fn list_users(State(db): State<PgPool>) -> impl IntoResponse {
+  match admin_service::list_etudiants(&db).await {
+    Ok(users) => (StatusCode::OK, Json(users)).into_response(),
+    Err(error) => error.into_response(),
+  }
+}
+
+async fn list_promotions(State(db): State<PgPool>) -> impl IntoResponse {
+  match admin_service::list_promotions(&db).await {
+    Ok(promotions) => (StatusCode::OK, Json(promotions)).into_response(),
+    Err(error) => error.into_response(),
+  }
+}
+
 async fn create_promotion(
   State(db): State<PgPool>,
   Json(payload): Json<CreatePromotion>,
@@ -45,9 +70,28 @@ async fn create_promotion(
   }
 }
 
-async fn list_users(State(db): State<PgPool>) -> impl IntoResponse {
-  match admin_service::list_etudiants(&db).await {
-    Ok(users) => (StatusCode::OK, Json(users)).into_response(),
+async fn assign_delegue(
+  State(db): State<PgPool>,
+  headers: axum::http::HeaderMap,
+  Path((promo_id, etu_id)): Path<(Uuid, Uuid)>,
+) -> impl IntoResponse {
+  let auth = match middleware::extract_auth_context(&headers, &db).await {
+    Ok(value) => value,
+    Err(error) => return error.into_response(),
+  };
+
+  match admin_service::assign_delegue(&db, promo_id, etu_id, auth.user_id).await {
+    Ok(result) => (StatusCode::OK, Json(result)).into_response(),
+    Err(error) => error.into_response(),
+  }
+}
+
+async fn remove_delegue(
+  State(db): State<PgPool>,
+  Path((promo_id, etu_id)): Path<(Uuid, Uuid)>,
+) -> impl IntoResponse {
+  match admin_service::remove_delegue(&db, promo_id, etu_id).await {
+    Ok(()) => StatusCode::NO_CONTENT.into_response(),
     Err(error) => error.into_response(),
   }
 }

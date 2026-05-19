@@ -6,6 +6,7 @@ use uuid::Uuid;
 pub struct GetPromotion {
   pub id: Uuid,
   pub image_url: String,
+  pub ical_url: Option<String>,
   pub annee_debut: NaiveDate,
   pub annee_fin: NaiveDate,
 }
@@ -13,6 +14,7 @@ pub struct GetPromotion {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct CreatePromotion {
   pub image_url: String,
+  pub ical_url: Option<String>,
   pub annee: i32,
   pub etudiant_ids: Vec<Uuid>,
 }

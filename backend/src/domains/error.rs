@@ -25,6 +25,10 @@ impl ApiError {
     Self::new(StatusCode::UNAUTHORIZED, message)
   }
 
+  pub const fn forbidden(message: &'static str) -> Self {
+    Self::new(StatusCode::FORBIDDEN, message)
+  }
+
   pub const fn conflict(message: &'static str) -> Self {
     Self::new(StatusCode::CONFLICT, message)
   }

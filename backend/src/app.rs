@@ -7,20 +7,28 @@ use serde::Serialize;
 use sqlx::PgPool;
 use tower_http::cors::CorsLayer;
 
-use crate::domains::routes::{admin::admin_routes, auth::auth_routes, etudiant::etudiant_routes};
+use crate::domains::routes::{
+  admin::admin_routes, auth::auth_routes, etudiant::etudiant_routes, promo::promo_routes,
+};
 
 #[derive(Serialize)]
 struct HealthResponse {
   status: &'static str,
 }
 
-pub fn create_router() -> Router<PgPool> {
+pub fn create_router(db: PgPool) -> Router<PgPool> {
   let cors = CorsLayer::new()
     .allow_origin([
       "http://localhost:5173".parse().expect("invalid origin"),
       "http://127.0.0.1:5173".parse().expect("invalid origin"),
     ])
-    .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
+    .allow_methods([
+      Method::GET,
+      Method::POST,
+      Method::PUT,
+      Method::DELETE,
+      Method::OPTIONS,
+    ])
     .allow_headers([header::CONTENT_TYPE, header::ACCEPT])
     .allow_credentials(true);
 
@@ -28,8 +36,9 @@ pub fn create_router() -> Router<PgPool> {
     .route("/_health", get(health_check))
     .route("/api/health", get(health_json))
     .nest("/api/auth", auth_routes())
-    .nest("/api/admin", admin_routes())
+    .nest("/api/admin", admin_routes(db.clone()))
     .nest("/api", etudiant_routes())
+    .nest("/api", promo_routes(db))
     .fallback(fallback)
     .layer(cors)
 }

@@ -3,6 +3,7 @@ use axum::{
   http::{HeaderMap, header},
 };
 use sqlx::PgPool;
+use uuid::Uuid;
 
 use crate::domains::{error::ApiError, services::auth_service};
 
@@ -10,6 +11,7 @@ const AUTH_COOKIE_NAME: &str = "let_note_auth";
 
 #[derive(Debug, Clone)]
 pub struct AuthContext {
+  pub user_id: Uuid,
   pub email: String,
   pub roles: Vec<String>,
 }
@@ -30,15 +32,16 @@ pub async fn extract_auth_context(
   let token =
     extract_cookie_token(headers).ok_or_else(|| ApiError::unauthorized("missing session"))?;
   let claims = auth_service::parse_token(&token)?;
-  let roles = auth_service::fetch_roles_by_email(db, &claims.sub).await?;
+  let user = auth_service::fetch_user_context_by_email(db, &claims.sub).await?;
 
-  if roles.is_empty() {
+  if user.roles.is_empty() {
     return Err(ApiError::unauthorized("account has no role"));
   }
 
   Ok(AuthContext {
+    user_id: user.user_id,
     email: claims.sub,
-    roles,
+    roles: user.roles,
   })
 }
 

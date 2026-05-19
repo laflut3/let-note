@@ -2,6 +2,7 @@ use argon2::{Argon2, PasswordHash, PasswordVerifier};
 use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, encode};
 use sqlx::PgPool;
 use tokio::time::{Duration, sleep};
+use uuid::Uuid;
 
 use crate::domains::{
   entities::auth::{Claims, LoginInfo},
@@ -18,6 +19,11 @@ struct LoginRow {
 
 pub struct AuthenticatedUser {
   pub token: String,
+}
+
+pub struct AuthUserContext {
+  pub user_id: Uuid,
+  pub roles: Vec<String>,
 }
 
 pub async fn authenticate_user(
@@ -61,6 +67,40 @@ pub async fn fetch_roles_by_email(db: &PgPool, email: &str) -> Result<Vec<String
   .fetch_all(db)
   .await
   .map_err(|_| ApiError::internal("authentication service unavailable"))
+}
+
+pub async fn fetch_user_context_by_email(
+  db: &PgPool,
+  email: &str,
+) -> Result<AuthUserContext, ApiError> {
+  let user_id = sqlx::query_scalar::<_, Uuid>(
+    r#"
+    SELECT id
+    FROM etudiant
+    WHERE email = $1
+    "#,
+  )
+  .bind(email)
+  .fetch_optional(db)
+  .await
+  .map_err(|_| ApiError::internal("authentication service unavailable"))?
+  .ok_or_else(|| ApiError::unauthorized("invalid credentials"))?;
+
+  let roles = sqlx::query_scalar::<_, String>(
+    r#"
+    SELECT r.role
+    FROM role_etu re
+    JOIN role r ON r.id = re.id_role
+    WHERE re.id_etu = $1
+    ORDER BY r.role
+    "#,
+  )
+  .bind(user_id)
+  .fetch_all(db)
+  .await
+  .map_err(|_| ApiError::internal("authentication service unavailable"))?;
+
+  Ok(AuthUserContext { user_id, roles })
 }
 
 fn normalize_credentials(input: LoginInfo) -> Result<(String, String), ApiError> {
