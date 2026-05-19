@@ -1,8 +1,5 @@
 use axum::{
-  Json, Router,
-  extract::State,
-  http::{HeaderMap, StatusCode},
-  response::IntoResponse,
+  Json, Router, extract::State, http::StatusCode, middleware::from_fn, response::IntoResponse,
   routing::get,
 };
 use serde::Serialize;
@@ -16,19 +13,12 @@ struct AdminStatus {
 }
 
 pub fn admin_routes() -> Router<PgPool> {
-  Router::new().route("/status", get(admin_status))
+  Router::new()
+    .route("/status", get(admin_status))
+    .route_layer(from_fn(middleware::require_admin))
 }
 
-async fn admin_status(State(db): State<PgPool>, headers: HeaderMap) -> impl IntoResponse {
-  let auth = match middleware::extract_auth_context(&headers, &db).await {
-    Ok(value) => value,
-    Err(error) => return error.into_response(),
-  };
-
-  if let Err(error) = auth.require_role("admin") {
-    return error.into_response();
-  }
-
+async fn admin_status(State(_db): State<PgPool>) -> impl IntoResponse {
   (
     StatusCode::OK,
     Json(AdminStatus {
