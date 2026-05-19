@@ -3,7 +3,7 @@ use axum::{
   extract::{Path, State},
   http::{HeaderMap, StatusCode},
   response::IntoResponse,
-  routing::{get, post},
+  routing::{get, post, put},
 };
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
@@ -39,8 +39,24 @@ pub fn admin_routes(db: PgPool) -> Router<PgPool> {
       middleware::right_admin(get(list_professeurs).post(create_professeur), db.clone()),
     )
     .route(
+      "/professeurs/{prof_id}",
+      middleware::right_admin(put(update_professeur).delete(delete_professeur), db.clone()),
+    )
+    .route(
       "/promotions",
       middleware::right_admin(get(list_promotions).post(create_promotion), db.clone()),
+    )
+    .route(
+      "/promotions/{promo_id}",
+      middleware::right_admin(put(update_promotion).delete(delete_promotion), db.clone()),
+    )
+    .route(
+      "/matieres",
+      middleware::right_admin(get(list_matieres), db.clone()),
+    )
+    .route(
+      "/matieres/{code_matiere}",
+      middleware::right_admin(put(update_matiere).delete(delete_matiere), db.clone()),
     )
     .route(
       "/promotions/{promo_id}/delegues/{etu_id}",
@@ -97,12 +113,82 @@ async fn list_promotions(State(db): State<PgPool>) -> impl IntoResponse {
   }
 }
 
+async fn update_promotion(
+  State(db): State<PgPool>,
+  Path(promo_id): Path<Uuid>,
+  Json(payload): Json<admin_service::UpdatePromotionInput>,
+) -> impl IntoResponse {
+  match admin_service::update_promotion(&db, promo_id, payload).await {
+    Ok(updated) => (StatusCode::OK, Json(updated)).into_response(),
+    Err(error) => error.into_response(),
+  }
+}
+
+async fn delete_promotion(
+  State(db): State<PgPool>,
+  Path(promo_id): Path<Uuid>,
+) -> impl IntoResponse {
+  match admin_service::delete_promotion(&db, promo_id).await {
+    Ok(deleted) => (StatusCode::OK, Json(deleted)).into_response(),
+    Err(error) => error.into_response(),
+  }
+}
+
 async fn create_promotion(
   State(db): State<PgPool>,
   Json(payload): Json<CreatePromotion>,
 ) -> impl IntoResponse {
   match admin_service::create_promotion(&db, payload).await {
     Ok(created) => (StatusCode::CREATED, Json(created)).into_response(),
+    Err(error) => error.into_response(),
+  }
+}
+
+async fn update_professeur(
+  State(db): State<PgPool>,
+  Path(prof_id): Path<Uuid>,
+  Json(payload): Json<admin_service::UpdateProfesseurInput>,
+) -> impl IntoResponse {
+  match admin_service::update_professeur(&db, prof_id, payload).await {
+    Ok(updated) => (StatusCode::OK, Json(updated)).into_response(),
+    Err(error) => error.into_response(),
+  }
+}
+
+async fn delete_professeur(
+  State(db): State<PgPool>,
+  Path(prof_id): Path<Uuid>,
+) -> impl IntoResponse {
+  match admin_service::delete_professeur(&db, prof_id).await {
+    Ok(deleted) => (StatusCode::OK, Json(deleted)).into_response(),
+    Err(error) => error.into_response(),
+  }
+}
+
+async fn list_matieres(State(db): State<PgPool>) -> impl IntoResponse {
+  match admin_service::list_matieres(&db).await {
+    Ok(matieres) => (StatusCode::OK, Json(matieres)).into_response(),
+    Err(error) => error.into_response(),
+  }
+}
+
+async fn update_matiere(
+  State(db): State<PgPool>,
+  Path(code_matiere): Path<String>,
+  Json(payload): Json<admin_service::UpdateMatiereInput>,
+) -> impl IntoResponse {
+  match admin_service::update_matiere(&db, &code_matiere, payload).await {
+    Ok(updated) => (StatusCode::OK, Json(updated)).into_response(),
+    Err(error) => error.into_response(),
+  }
+}
+
+async fn delete_matiere(
+  State(db): State<PgPool>,
+  Path(code_matiere): Path<String>,
+) -> impl IntoResponse {
+  match admin_service::delete_matiere(&db, &code_matiere).await {
+    Ok(deleted) => (StatusCode::OK, Json(deleted)).into_response(),
     Err(error) => error.into_response(),
   }
 }

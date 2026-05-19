@@ -101,6 +101,12 @@ export type AdminProfesseur = {
   email: string;
 };
 
+export type AdminMatiere = {
+  code_matiere: string;
+  nom_matiere: string;
+  promotion_count: number;
+};
+
 export type UeItem = {
   id: string;
   semestre: number;
@@ -183,6 +189,28 @@ export async function adminCreateProfesseurRequest(payload: {
   });
 }
 
+export async function adminUpdateProfesseurRequest(
+  profId: string,
+  payload: {
+    prenom?: string;
+    nom?: string;
+    email?: string;
+    date_naissance?: string;
+  }
+): Promise<Response> {
+  return jsonRequest(`/admin/professeurs/${profId}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function adminDeleteProfesseurRequest(profId: string): Promise<Response> {
+  return jsonRequest(`/admin/professeurs/${profId}`, { method: 'DELETE' });
+}
+
 export async function adminCreatePromotionRequest(
   payload: CreatePromotionPayload
 ): Promise<Response> {
@@ -195,12 +223,59 @@ export async function adminCreatePromotionRequest(
   });
 }
 
+export async function adminUpdatePromotionRequest(
+  promoId: string,
+  payload: {
+    nom?: string;
+    image_url?: string;
+    ical_url?: string;
+    annee_arrivee?: number;
+    annee_depart?: number;
+    referent_prof_id?: string;
+  }
+): Promise<Response> {
+  return jsonRequest(`/admin/promotions/${promoId}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function adminDeletePromotionRequest(promoId: string): Promise<Response> {
+  return jsonRequest(`/admin/promotions/${promoId}`, { method: 'DELETE' });
+}
+
 export async function adminAssignDelegueRequest(promoId: string, etuId: string): Promise<Response> {
   return jsonRequest(`/admin/promotions/${promoId}/delegues/${etuId}`, { method: 'POST' });
 }
 
 export async function adminRemoveDelegueRequest(promoId: string, etuId: string): Promise<Response> {
   return jsonRequest(`/admin/promotions/${promoId}/delegues/${etuId}`, { method: 'DELETE' });
+}
+
+export async function adminListMatieresRequest(): Promise<Response> {
+  return jsonRequest('/admin/matieres', { method: 'GET' });
+}
+
+export async function adminUpdateMatiereRequest(
+  codeMatiere: string,
+  payload: {
+    nom_matiere?: string;
+  }
+): Promise<Response> {
+  return jsonRequest(`/admin/matieres/${codeMatiere}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function adminDeleteMatiereRequest(codeMatiere: string): Promise<Response> {
+  return jsonRequest(`/admin/matieres/${codeMatiere}`, { method: 'DELETE' });
 }
 
 export async function listAccessiblePromotionsRequest(): Promise<Response> {

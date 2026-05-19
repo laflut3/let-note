@@ -17,7 +17,7 @@ pub fn promo_routes(db: PgPool) -> Router<PgPool> {
     .route("/promotions/{promo_id}/ues", get(list_ues_for_promo))
     .route(
       "/promotions/{promo_id}/ical-url",
-      middleware::right_admin_or_delegue_for_promo(put(update_promo_ical_url), db.clone()),
+      middleware::right_admin(put(update_promo_ical_url), db.clone()),
     )
     .route(
       "/promotions/{promo_id}/ues",
