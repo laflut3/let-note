@@ -1,7 +1,4 @@
-use axum::{
-  Json, Router, extract::State, http::StatusCode, middleware::from_fn, response::IntoResponse,
-  routing::get,
-};
+use axum::{Json, Router, extract::State, http::StatusCode, response::IntoResponse, routing::get};
 use serde::Serialize;
 use sqlx::PgPool;
 
@@ -13,9 +10,7 @@ struct AdminStatus {
 }
 
 pub fn admin_routes() -> Router<PgPool> {
-  Router::new()
-    .route("/status", get(admin_status))
-    .route_layer(from_fn(middleware::require_admin))
+  Router::new().route("/status", middleware::right_admin(get(admin_status)))
 }
 
 async fn admin_status(State(_db): State<PgPool>) -> impl IntoResponse {
