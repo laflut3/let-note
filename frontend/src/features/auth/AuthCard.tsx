@@ -105,6 +105,22 @@ export function AuthCard({
             </div>
           )}
 
+          {!isLogin && (
+            <div className="mx-auto w-full max-w-[620px]">
+              <Label htmlFor="studentNumber">Numero etudiant (8 chiffres)</Label>
+              <Input
+                id="studentNumber"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]{8}"
+                maxLength={8}
+                placeholder="22303078"
+                value={fields.studentNumber}
+                onChange={handleInputChange('studentNumber')}
+              />
+            </div>
+          )}
+
           <div className="mx-auto w-full max-w-[620px]">
             <Label htmlFor="email">Adresse email</Label>
             <Input

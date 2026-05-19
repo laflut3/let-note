@@ -13,6 +13,13 @@ pub async fn create_etudiant(
   db: &PgPool,
   etudiant: CreateEtudiant,
 ) -> Result<GetEtudiant, ApiError> {
+  let numero = etudiant.numero_etudiant.trim().to_string();
+  if numero.len() != 8 || !numero.chars().all(|char| char.is_ascii_digit()) {
+    return Err(ApiError::bad_request(
+      "student number must contain exactly 8 digits",
+    ));
+  }
+
   if etudiant.mot_de_passe.trim().len() < 8 {
     return Err(ApiError::bad_request(
       "password must be at least 8 characters",
@@ -29,11 +36,12 @@ pub async fn create_etudiant(
 
   let created = sqlx::query_as::<_, GetEtudiant>(
     r#"
-    INSERT INTO etudiant (nom, prenom, email, date_naissance, mot_de_passe)
-    VALUES ($1, $2, $3, $4, $5)
-    RETURNING id, nom, prenom, email, date_naissance
+    INSERT INTO etudiant (numero_etudiant, nom, prenom, email, date_naissance, mot_de_passe)
+    VALUES ($1, $2, $3, $4, $5, $6)
+    RETURNING id, numero_etudiant, nom, prenom, email, date_naissance
     "#,
   )
+  .bind(numero)
   .bind(&etudiant.nom)
   .bind(&etudiant.prenom)
   .bind(etudiant.email.trim().to_lowercase())
@@ -67,7 +75,17 @@ pub async fn create_etudiant(
 fn map_create_error(error: sqlx::Error) -> ApiError {
   match error {
     sqlx::Error::Database(db_err) if db_err.code().as_deref() == Some("23505") => {
+      if db_err
+        .constraint()
+        .map(|value| value.contains("numero_etudiant"))
+        .unwrap_or(false)
+      {
+        return ApiError::conflict("student number already exists");
+      }
       ApiError::conflict("email already exists")
+    }
+    sqlx::Error::Database(db_err) if db_err.code().as_deref() == Some("23514") => {
+      ApiError::bad_request("student number must contain exactly 8 digits")
     }
     _ => ApiError::internal("unable to create account at this time"),
   }

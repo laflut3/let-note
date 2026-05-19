@@ -1,11 +1,11 @@
 use axum::{
   Json, Router,
   extract::{Path, State},
-  http::StatusCode,
+  http::{HeaderMap, StatusCode},
   response::IntoResponse,
   routing::{get, post},
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -14,6 +14,14 @@ use crate::domains::{entities::promotion::CreatePromotion, middleware, services:
 #[derive(Serialize)]
 struct AdminStatus {
   message: &'static str,
+}
+
+#[derive(Debug, Deserialize)]
+struct CreateAdminProfesseurPayload {
+  prenom: String,
+  nom: String,
+  email: String,
+  date_naissance: chrono::NaiveDate,
 }
 
 pub fn admin_routes(db: PgPool) -> Router<PgPool> {
@@ -25,6 +33,10 @@ pub fn admin_routes(db: PgPool) -> Router<PgPool> {
     .route(
       "/users",
       middleware::right_admin(get(list_users), db.clone()),
+    )
+    .route(
+      "/professeurs",
+      middleware::right_admin(get(list_professeurs).post(create_professeur), db.clone()),
     )
     .route(
       "/promotions",
@@ -53,6 +65,31 @@ async fn list_users(State(db): State<PgPool>) -> impl IntoResponse {
   }
 }
 
+async fn list_professeurs(State(db): State<PgPool>) -> impl IntoResponse {
+  match admin_service::list_professeurs(&db).await {
+    Ok(users) => (StatusCode::OK, Json(users)).into_response(),
+    Err(error) => error.into_response(),
+  }
+}
+
+async fn create_professeur(
+  State(db): State<PgPool>,
+  Json(payload): Json<CreateAdminProfesseurPayload>,
+) -> impl IntoResponse {
+  let dto = crate::domains::entities::professeur::CreateProfesseur {
+    prenom: payload.prenom,
+    nom: payload.nom,
+    email: payload.email,
+    date_naissance: payload.date_naissance,
+    mot_de_passe: String::new(),
+  };
+
+  match admin_service::create_professeur(&db, dto).await {
+    Ok(created) => (StatusCode::CREATED, Json(created)).into_response(),
+    Err(error) => error.into_response(),
+  }
+}
+
 async fn list_promotions(State(db): State<PgPool>) -> impl IntoResponse {
   match admin_service::list_promotions(&db).await {
     Ok(promotions) => (StatusCode::OK, Json(promotions)).into_response(),
@@ -72,7 +109,7 @@ async fn create_promotion(
 
 async fn assign_delegue(
   State(db): State<PgPool>,
-  headers: axum::http::HeaderMap,
+  headers: HeaderMap,
   Path((promo_id, etu_id)): Path<(Uuid, Uuid)>,
 ) -> impl IntoResponse {
   let auth = match middleware::extract_auth_context(&headers, &db).await {

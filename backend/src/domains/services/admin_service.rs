@@ -1,29 +1,45 @@
-use chrono::{Datelike, NaiveDate};
+use chrono::NaiveDate;
 use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::domains::{
-  entities::{etudiant::GetEtudiant, promotion::CreatePromotion},
+  entities::{etudiant::GetEtudiant, professeur::CreateProfesseur, promotion::CreatePromotion},
   error::ApiError,
 };
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct CreatedPromotion {
   pub id: Uuid,
+  pub nom: String,
   pub image_url: String,
   pub ical_url: Option<String>,
-  pub annee: i32,
+  pub annee_arrivee: i32,
+  pub annee_depart: i32,
+  pub referent_prof_id: Uuid,
   pub user_count: usize,
 }
 
 #[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
 pub struct AdminPromotionSummary {
   pub id: Uuid,
+  pub nom: String,
   pub image_url: String,
   pub ical_url: Option<String>,
-  pub annee: i32,
+  pub annee_arrivee: i32,
+  pub annee_depart: i32,
+  pub referent_prof_id: Option<Uuid>,
+  pub referent_prof_nom: Option<String>,
+  pub referent_prof_prenom: Option<String>,
   pub etudiant_count: i64,
   pub delegue_count: i64,
+}
+
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+pub struct AdminProfesseur {
+  pub id: Uuid,
+  pub nom: String,
+  pub prenom: String,
+  pub email: String,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -35,14 +51,57 @@ pub struct DelegateAssignment {
 pub async fn list_etudiants(db: &PgPool) -> Result<Vec<GetEtudiant>, ApiError> {
   sqlx::query_as::<_, GetEtudiant>(
     r#"
-    SELECT id, nom, prenom, email, date_naissance
+    SELECT id, numero_etudiant, nom, prenom, email, date_naissance
     FROM etudiant
     ORDER BY nom, prenom, email
     "#,
   )
   .fetch_all(db)
   .await
-  .map_err(|_| ApiError::internal("unable to list students at this time"))
+  .map_err(map_schema_error("unable to list students at this time"))
+}
+
+pub async fn list_professeurs(db: &PgPool) -> Result<Vec<AdminProfesseur>, ApiError> {
+  sqlx::query_as::<_, AdminProfesseur>(
+    r#"
+    SELECT id, nom, prenom, email
+    FROM professeur
+    ORDER BY nom, prenom, email
+    "#,
+  )
+  .fetch_all(db)
+  .await
+  .map_err(map_schema_error("unable to list professors at this time"))
+}
+
+pub async fn create_professeur(
+  db: &PgPool,
+  payload: CreateProfesseur,
+) -> Result<AdminProfesseur, ApiError> {
+  let prenom = payload.prenom.trim();
+  let nom = payload.nom.trim();
+  let email = payload.email.trim().to_lowercase();
+
+  if prenom.is_empty() || nom.is_empty() || email.is_empty() {
+    return Err(ApiError::bad_request("prenom, nom and email are required"));
+  }
+
+  sqlx::query_as::<_, AdminProfesseur>(
+    r#"
+    INSERT INTO professeur (prenom, nom, email, date_naissance)
+    VALUES ($1, $2, $3, $4)
+    ON CONFLICT (email)
+    DO UPDATE SET prenom = EXCLUDED.prenom, nom = EXCLUDED.nom
+    RETURNING id, nom, prenom, email
+    "#,
+  )
+  .bind(prenom)
+  .bind(nom)
+  .bind(email)
+  .bind(payload.date_naissance)
+  .fetch_one(db)
+  .await
+  .map_err(map_schema_error("unable to create professor"))
 }
 
 pub async fn list_promotions(db: &PgPool) -> Result<Vec<AdminPromotionSummary>, ApiError> {
@@ -50,27 +109,37 @@ pub async fn list_promotions(db: &PgPool) -> Result<Vec<AdminPromotionSummary>, 
     r#"
     SELECT
       p.id,
+      p.nom,
       p.image_url,
       p.ical_url,
-      EXTRACT(YEAR FROM p.annee_debut)::INT AS annee,
+      p.annee_arrivee,
+      p.annee_depart,
+      p.referent_prof_id,
+      pr.nom AS referent_prof_nom,
+      pr.prenom AS referent_prof_prenom,
       COUNT(DISTINCT ep.id_etu)::BIGINT AS etudiant_count,
       COUNT(DISTINCT dp.id_etu)::BIGINT AS delegue_count
     FROM promotion p
     LEFT JOIN etu_promo ep ON ep.id_promo = p.id
     LEFT JOIN delegue_promo dp ON dp.id_promo = p.id
-    GROUP BY p.id, p.image_url, p.ical_url, p.annee_debut
-    ORDER BY p.annee_debut DESC, p.id
+    LEFT JOIN professeur pr ON pr.id = p.referent_prof_id
+    GROUP BY p.id, pr.id
+    ORDER BY p.annee_arrivee DESC, p.nom
     "#,
   )
   .fetch_all(db)
   .await
-  .map_err(map_list_promotions_error)
+  .map_err(map_schema_error("unable to list promotions at this time"))
 }
 
 pub async fn create_promotion(
   db: &PgPool,
   payload: CreatePromotion,
 ) -> Result<CreatedPromotion, ApiError> {
+  let promo_name = payload.nom.trim().to_string();
+  if promo_name.is_empty() {
+    return Err(ApiError::bad_request("promotion name is required"));
+  }
   if payload.image_url.trim().is_empty() {
     return Err(ApiError::bad_request("promotion image is required"));
   }
@@ -85,7 +154,25 @@ pub async fn create_promotion(
   etudiant_ids.sort_unstable();
   etudiant_ids.dedup();
 
-  let (annee_debut, annee_fin) = year_bounds(payload.annee)?;
+  let (annee_debut, annee_fin) = years_bounds(payload.annee_arrivee, payload.annee_depart)?;
+
+  let referent_exists = sqlx::query_scalar::<_, i64>(
+    r#"
+    SELECT COUNT(*)
+    FROM professeur
+    WHERE id = $1
+    "#,
+  )
+  .bind(payload.referent_prof_id)
+  .fetch_one(db)
+  .await
+  .map_err(map_schema_error("unable to validate professor"))?
+    > 0;
+
+  if !referent_exists {
+    return Err(ApiError::bad_request("referent professor does not exist"));
+  }
+
   let ical_url = payload
     .ical_url
     .map(|value| value.trim().to_string())
@@ -96,20 +183,28 @@ pub async fn create_promotion(
     .await
     .map_err(|_| ApiError::internal("unable to create promotion at this time"))?;
 
-  let created = sqlx::query_as::<_, (Uuid, NaiveDate, NaiveDate, String, Option<String>)>(
+  let created = sqlx::query_as::<
+    _,
+    (Uuid, String, String, Option<String>, i32, i32, Uuid),
+  >(
     r#"
-    INSERT INTO promotion (annee_debut, annee_fin, image_url, ical_url)
-    VALUES ($1, $2, $3, $4)
-    RETURNING id, annee_debut, annee_fin, image_url, ical_url
+    INSERT INTO promotion
+      (nom, image_url, ical_url, annee_arrivee, annee_depart, annee_debut, annee_fin, referent_prof_id)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    RETURNING id, nom, image_url, ical_url, annee_arrivee, annee_depart, referent_prof_id
     "#,
   )
-  .bind(annee_debut)
-  .bind(annee_fin)
+  .bind(&promo_name)
   .bind(payload.image_url.trim())
   .bind(ical_url)
+  .bind(payload.annee_arrivee)
+  .bind(payload.annee_depart)
+  .bind(annee_debut)
+  .bind(annee_fin)
+  .bind(payload.referent_prof_id)
   .fetch_one(&mut *tx)
   .await
-  .map_err(map_create_promotion_error)?;
+  .map_err(map_schema_error("unable to create promotion at this time"))?;
 
   sqlx::query(
     r#"
@@ -131,9 +226,12 @@ pub async fn create_promotion(
 
   Ok(CreatedPromotion {
     id: created.0,
-    image_url: created.3,
-    ical_url: created.4,
-    annee: created.1.year(),
+    nom: created.1,
+    image_url: created.2,
+    ical_url: created.3,
+    annee_arrivee: created.4,
+    annee_depart: created.5,
+    referent_prof_id: created.6,
     user_count: etudiant_ids.len(),
   })
 }
@@ -160,7 +258,7 @@ pub async fn assign_delegue(
   .bind(promo_id)
   .execute(&mut *tx)
   .await
-  .map_err(map_delegue_schema_error)?;
+  .map_err(map_schema_error("unable to update delegate scope"))?;
 
   sqlx::query(
     r#"
@@ -175,7 +273,7 @@ pub async fn assign_delegue(
   .bind(assigned_by)
   .execute(&mut *tx)
   .await
-  .map_err(map_delegue_schema_error)?;
+  .map_err(map_schema_error("unable to update delegate scope"))?;
 
   sqlx::query(
     r#"
@@ -214,7 +312,7 @@ pub async fn remove_delegue(db: &PgPool, promo_id: Uuid, etu_id: Uuid) -> Result
   .bind(promo_id)
   .execute(&mut *tx)
   .await
-  .map_err(map_delegue_schema_error)?;
+  .map_err(map_schema_error("unable to update delegate scope"))?;
 
   let has_other_assignments = sqlx::query_scalar::<_, i64>(
     r#"
@@ -226,7 +324,7 @@ pub async fn remove_delegue(db: &PgPool, promo_id: Uuid, etu_id: Uuid) -> Result
   .bind(etu_id)
   .fetch_one(&mut *tx)
   .await
-  .map_err(map_delegue_schema_error)?
+  .map_err(map_schema_error("unable to update delegate scope"))?
     > 0;
 
   if !has_other_assignments {
@@ -250,15 +348,20 @@ pub async fn remove_delegue(db: &PgPool, promo_id: Uuid, etu_id: Uuid) -> Result
   Ok(())
 }
 
-fn year_bounds(year: i32) -> Result<(NaiveDate, NaiveDate), ApiError> {
-  if !(1900..=3000).contains(&year) {
-    return Err(ApiError::bad_request("invalid year"));
+fn years_bounds(annee_arrivee: i32, annee_depart: i32) -> Result<(NaiveDate, NaiveDate), ApiError> {
+  if !(1900..=3000).contains(&annee_arrivee) || !(1900..=3000).contains(&annee_depart) {
+    return Err(ApiError::bad_request("invalid years"));
+  }
+  if annee_arrivee > annee_depart {
+    return Err(ApiError::bad_request(
+      "arrival year must be less than or equal to departure year",
+    ));
   }
 
-  let start =
-    NaiveDate::from_ymd_opt(year, 1, 1).ok_or_else(|| ApiError::bad_request("invalid year"))?;
-  let end =
-    NaiveDate::from_ymd_opt(year, 12, 31).ok_or_else(|| ApiError::bad_request("invalid year"))?;
+  let start = NaiveDate::from_ymd_opt(annee_arrivee, 1, 1)
+    .ok_or_else(|| ApiError::bad_request("invalid arrival year"))?;
+  let end = NaiveDate::from_ymd_opt(annee_depart, 12, 31)
+    .ok_or_else(|| ApiError::bad_request("invalid departure year"))?;
 
   Ok((start, end))
 }
@@ -272,39 +375,16 @@ fn map_student_assignment_error(error: sqlx::Error) -> ApiError {
   }
 }
 
-fn map_create_promotion_error(error: sqlx::Error) -> ApiError {
-  match error {
-    sqlx::Error::Database(db_err) if db_err.code().as_deref() == Some("42703") => {
-      ApiError::internal("database schema is outdated: missing promotion column")
-    }
-    sqlx::Error::Database(db_err) if db_err.code().as_deref() == Some("42P01") => {
-      ApiError::internal("database schema is outdated: missing promotion table")
-    }
-    _ => ApiError::internal("unable to create promotion at this time"),
-  }
-}
-
-fn map_delegue_schema_error(error: sqlx::Error) -> ApiError {
-  match error {
+fn map_schema_error(message: &'static str) -> impl Fn(sqlx::Error) -> ApiError {
+  move |error| match error {
     sqlx::Error::Database(db_err)
       if matches!(db_err.code().as_deref(), Some("42P01") | Some("42703")) =>
     {
-      ApiError::internal("database schema is outdated for delegate scope")
+      ApiError::internal("database schema is outdated")
     }
     sqlx::Error::Database(db_err) if db_err.code().as_deref() == Some("23503") => {
-      ApiError::bad_request("invalid student or promotion")
+      ApiError::bad_request("invalid foreign key reference")
     }
-    _ => ApiError::internal("unable to update delegate scope"),
-  }
-}
-
-fn map_list_promotions_error(error: sqlx::Error) -> ApiError {
-  match error {
-    sqlx::Error::Database(db_err)
-      if matches!(db_err.code().as_deref(), Some("42P01") | Some("42703")) =>
-    {
-      ApiError::internal("database schema is outdated for promotions")
-    }
-    _ => ApiError::internal("unable to list promotions at this time"),
+    _ => ApiError::internal(message),
   }
 }

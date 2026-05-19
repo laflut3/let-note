@@ -17,6 +17,7 @@ type UseAuthFormReturn = {
 
 const initialFields: AuthFields = {
   fullName: '',
+  studentNumber: '',
   email: '',
   password: '',
   confirmPassword: '',
@@ -30,6 +31,7 @@ function requiredFieldsMissing(mode: AuthMode, fields: AuthFields): boolean {
 
   return (
     !fields.fullName.trim() ||
+    !fields.studentNumber.trim() ||
     !fields.email.trim() ||
     !fields.password.trim() ||
     !fields.confirmPassword.trim() ||
@@ -44,6 +46,13 @@ function validationError(mode: AuthMode, fields: AuthFields): string {
 
   if (mode === 'register' && fields.password !== fields.confirmPassword) {
     return 'Les mots de passe ne correspondent pas.';
+  }
+
+  if (
+    mode === 'register' &&
+    (fields.studentNumber.trim().length !== 8 || !/^\d{8}$/.test(fields.studentNumber.trim()))
+  ) {
+    return 'Le numero etudiant doit contenir exactement 8 chiffres.';
   }
 
   return '';
