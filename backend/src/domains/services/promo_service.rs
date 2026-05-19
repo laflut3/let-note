@@ -146,12 +146,17 @@ pub async fn list_accessible_promotions(
         pr.nom AS referent_prof_nom,
         pr.prenom AS referent_prof_prenom,
         pr.email AS referent_prof_email,
-        TRUE AS can_manage
+        EXISTS (
+          SELECT 1
+          FROM delegue_promo dp
+          WHERE dp.id_promo = p.id AND dp.id_etu = $1
+        ) AS can_manage
       FROM promotion p
       LEFT JOIN professeur pr ON pr.id = p.referent_prof_id
       ORDER BY p.annee_arrivee DESC, p.nom
       "#,
     )
+    .bind(auth.user_id)
     .fetch_all(db)
     .await
     .map_err(map_schema_error("unable to list promotions"));
@@ -795,12 +800,17 @@ async fn get_accessible_promotion(
         pr.nom AS referent_prof_nom,
         pr.prenom AS referent_prof_prenom,
         pr.email AS referent_prof_email,
-        TRUE AS can_manage
+        EXISTS (
+          SELECT 1
+          FROM delegue_promo dp
+          WHERE dp.id_promo = p.id AND dp.id_etu = $1
+        ) AS can_manage
       FROM promotion p
       LEFT JOIN professeur pr ON pr.id = p.referent_prof_id
-      WHERE p.id = $1
+      WHERE p.id = $2
       "#,
     )
+    .bind(auth.user_id)
     .bind(promo_id)
     .fetch_optional(db)
     .await
@@ -845,10 +855,6 @@ async fn can_manage_promo(
   auth: &AuthContext,
   promo_id: Uuid,
 ) -> Result<bool, ApiError> {
-  if auth.roles.iter().any(|r| r == "admin") {
-    return Ok(true);
-  }
-
   let has_scope = sqlx::query_scalar::<_, i64>(
     r#"
     SELECT COUNT(*)

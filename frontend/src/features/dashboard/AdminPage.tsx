@@ -1,29 +1,37 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { BookOpen, GraduationCap, Pencil, Trash2, User, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
+  adminAddStudentToPromotionRequest,
   adminAssignDelegueRequest,
   adminCreateProfesseurRequest,
   adminCreatePromotionRequest,
   adminDeleteMatiereRequest,
   adminDeleteProfesseurRequest,
   adminDeletePromotionRequest,
+  adminListPromotionStudentsRequest,
   adminListMatieresRequest,
   adminListProfesseursRequest,
   adminListPromotionsRequest,
   adminListUsersRequest,
+  adminListUsersDetailsRequest,
   adminRemoveDelegueRequest,
+  adminRemoveStudentFromPromotionRequest,
   adminUpdateMatiereRequest,
   adminUpdateProfesseurRequest,
   adminUpdatePromotionRequest,
+  adminUpdateUserRequest,
   logoutRequest,
   type AdminMatiere,
   type AdminProfesseur,
   type AdminPromotionSummary,
+  type AdminStudentDetails,
   type AdminUser,
+  type PromotionStudent,
 } from '@/features/auth/api';
 
-type AdminTab = 'promotions' | 'professeurs' | 'matieres';
+type AdminTab = 'promotions' | 'etudiants' | 'professeurs' | 'matieres';
 
 type Feedback = {
   type: '' | 'success' | 'error';
@@ -42,6 +50,8 @@ export function AdminPage() {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const [users, setUsers] = useState<AdminUser[]>([]);
+  const [studentsDetails, setStudentsDetails] = useState<AdminStudentDetails[]>([]);
+  const [expandedStudentId, setExpandedStudentId] = useState('');
   const [promotions, setPromotions] = useState<AdminPromotionSummary[]>([]);
   const [professeurs, setProfesseurs] = useState<AdminProfesseur[]>([]);
   const [matieres, setMatieres] = useState<AdminMatiere[]>([]);
@@ -64,6 +74,10 @@ export function AdminPage() {
   const [editPromoArrivee, setEditPromoArrivee] = useState('');
   const [editPromoDepart, setEditPromoDepart] = useState('');
   const [editPromoReferentId, setEditPromoReferentId] = useState('');
+  const [editingPromoId, setEditingPromoId] = useState('');
+  const [studentsPopupPromoId, setStudentsPopupPromoId] = useState('');
+  const [promoStudents, setPromoStudents] = useState<PromotionStudent[]>([]);
+  const [selectedStudentForPromo, setSelectedStudentForPromo] = useState('');
 
   const [profPrenom, setProfPrenom] = useState('');
   const [profNom, setProfNom] = useState('');
@@ -80,7 +94,11 @@ export function AdminPage() {
   const [editMatiereNom, setEditMatiereNom] = useState('');
 
   const [selectedDelegueId, setSelectedDelegueId] = useState('');
-  const [isAssigningDelegue, setIsAssigningDelegue] = useState(false);
+  const [editStudentNumero, setEditStudentNumero] = useState('');
+  const [editStudentPrenom, setEditStudentPrenom] = useState('');
+  const [editStudentNom, setEditStudentNom] = useState('');
+  const [editStudentEmail, setEditStudentEmail] = useState('');
+  const [editStudentBirthDate, setEditStudentBirthDate] = useState('');
 
   const [feedback, setFeedback] = useState<Feedback>({ type: '', message: '' });
 
@@ -91,18 +109,18 @@ export function AdminPage() {
       imageUrl.trim().length > 0 &&
       Number.isInteger(Number(anneeArrivee)) &&
       Number.isInteger(Number(anneeDepart)) &&
-      selectedCount > 0 &&
-      referentProfId.trim().length > 0
+      selectedCount > 0
     );
-  }, [anneeArrivee, anneeDepart, imageUrl, promoName, referentProfId, selectedCount]);
+  }, [anneeArrivee, anneeDepart, imageUrl, promoName, selectedCount]);
 
   const loadAdminData = async () => {
     setIsLoading(true);
     setLoadingError('');
 
     try {
-      const [usersRes, promosRes, profRes, matieresRes] = await Promise.all([
+      const [usersRes, usersDetailsRes, promosRes, profRes, matieresRes] = await Promise.all([
         adminListUsersRequest(),
+        adminListUsersDetailsRequest(),
         adminListPromotionsRequest(),
         adminListProfesseursRequest(),
         adminListMatieresRequest(),
@@ -115,6 +133,13 @@ export function AdminPage() {
         setUsers([]);
       } else {
         setUsers((await usersRes.json()) as AdminUser[]);
+      }
+
+      if (!usersDetailsRes.ok) {
+        setLoadingError((prev) => prev || 'Impossible de charger les details des etudiants.');
+        setStudentsDetails([]);
+      } else {
+        setStudentsDetails((await usersDetailsRes.json()) as AdminStudentDetails[]);
       }
 
       if (!promosRes.ok) {
@@ -149,6 +174,7 @@ export function AdminPage() {
     } catch {
       setLoadingError('Erreur reseau. Reessayez.');
       setUsers([]);
+      setStudentsDetails([]);
       setPromotions([]);
       setProfesseurs([]);
       setMatieres([]);
@@ -220,6 +246,42 @@ export function AdminPage() {
     }
   };
 
+  const openEditPromotionPopup = (promotion: AdminPromotionSummary) => {
+    setEditingPromoId(promotion.id);
+    setSelectedPromoId(promotion.id);
+    setEditPromoName(promotion.nom);
+    setEditPromoImage(promotion.image_url);
+    setEditPromoIcal(promotion.ical_url ?? '');
+    setEditPromoArrivee(String(promotion.annee_arrivee));
+    setEditPromoDepart(String(promotion.annee_depart));
+    setEditPromoReferentId(promotion.referent_prof_id ?? '');
+  };
+
+  const openStudentsPopup = async (promoId: string) => {
+    setStudentsPopupPromoId(promoId);
+    setPromoStudents([]);
+    setSelectedStudentForPromo('');
+    const response = await adminListPromotionStudentsRequest(promoId);
+    if (response.ok) {
+      const students = (await response.json()) as PromotionStudent[];
+      setPromoStudents(students);
+      setSelectedStudentForPromo(students[0]?.id ?? '');
+    }
+  };
+
+  const toggleStudentDetails = (student: AdminStudentDetails) => {
+    if (expandedStudentId === student.id) {
+      setExpandedStudentId('');
+      return;
+    }
+    setExpandedStudentId(student.id);
+    setEditStudentNumero(student.numero_etudiant ?? '');
+    setEditStudentPrenom(student.prenom);
+    setEditStudentNom(student.nom);
+    setEditStudentEmail(student.email);
+    setEditStudentBirthDate(student.date_naissance);
+  };
+
   const toggleUser = (userId: string) => {
     setSelectedUserIds((prev) =>
       prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]
@@ -253,8 +315,7 @@ export function AdminPage() {
     if (!canCreatePromotion) {
       setFeedback({
         type: 'error',
-        message:
-          'Nom, image, annees arrivee/depart, professeur referent et au moins un utilisateur sont requis.',
+        message: 'Nom, image, annees arrivee/depart et au moins un utilisateur sont requis.',
       });
       return;
     }
@@ -268,7 +329,7 @@ export function AdminPage() {
           ical_url: icalUrl.trim() || undefined,
           annee_arrivee: Number(anneeArrivee),
           annee_depart: Number(anneeDepart),
-          referent_prof_id: referentProfId,
+          referent_prof_id: referentProfId || undefined,
           etudiant_ids: selectedUserIds,
         }),
       'Promotion creee avec succes.'
@@ -282,7 +343,6 @@ export function AdminPage() {
       return;
     }
 
-    setIsAssigningDelegue(true);
     await runAction(
       () =>
         remove
@@ -290,7 +350,6 @@ export function AdminPage() {
           : adminAssignDelegueRequest(selectedPromoId, selectedDelegueId),
       remove ? 'Delegue retire de la promotion.' : 'Delegue assigne a la promotion.'
     );
-    setIsAssigningDelegue(false);
   };
 
   const handleLogout = async () => {
@@ -310,23 +369,25 @@ export function AdminPage() {
           <div className="flex flex-wrap gap-2">
             {(
               [
-                ['promotions', 'Promotions'],
-                ['professeurs', 'Professeurs'],
-                ['matieres', 'Matieres'],
+                ['promotions', 'Promotions', GraduationCap],
+                ['etudiants', 'Etudiants', Users],
+                ['professeurs', 'Professeurs', User],
+                ['matieres', 'Matieres', BookOpen],
               ] as const
-            ).map(([value, label]) => (
+            ).map(([value, label, Icon]) => (
               <button
                 key={value}
                 type="button"
                 onClick={() => setActiveTab(value)}
                 className={[
-                  'rounded-xl border px-3 py-2 text-sm transition',
+                  'rounded-xl border px-3 py-2 text-sm transition flex items-center gap-2',
                   activeTab === value
                     ? 'border-zinc-900 bg-zinc-900 text-white'
                     : 'border-zinc-300 bg-white text-zinc-700 hover:border-zinc-500',
                 ].join(' ')}
               >
-                {label}
+                <Icon className="h-4 w-4" />
+                <span className="hidden sm:inline">{label}</span>
               </button>
             ))}
           </div>
@@ -339,14 +400,6 @@ export function AdminPage() {
               className="h-10 rounded-xl"
             >
               Dashboard
-            </Button>
-            <Button
-              type="button"
-              onClick={() => navigate('/delegue')}
-              variant="outline"
-              className="h-10 rounded-xl"
-            >
-              Vue delegue
             </Button>
             <Button
               type="button"
@@ -457,136 +510,59 @@ export function AdminPage() {
             </section>
 
             <section className="rounded-3xl border border-black/10 bg-white/90 p-6 shadow-[0_20px_60px_rgba(26,18,8,0.12)]">
-              <h2 className="text-xl font-semibold text-zinc-900">
-                Modifier ou supprimer une promotion
-              </h2>
-              <div className="mt-4 grid gap-3 md:grid-cols-2">
-                <select
-                  value={selectedPromoId}
-                  onChange={(e) => setSelectedPromoId(e.target.value)}
-                  className="h-11 rounded-xl border border-zinc-300 px-3 md:col-span-2"
-                >
-                  <option value="">Selectionner la promotion</option>
-                  {promotions.map((promotion) => (
-                    <option key={promotion.id} value={promotion.id}>
-                      {promotion.nom} ({promotion.annee_arrivee}-{promotion.annee_depart})
-                    </option>
-                  ))}
-                </select>
-                <input
-                  value={editPromoName}
-                  onChange={(e) => setEditPromoName(e.target.value)}
-                  placeholder="Nom"
-                  className="h-11 rounded-xl border border-zinc-300 px-3"
-                />
-                <input
-                  value={editPromoImage}
-                  onChange={(e) => setEditPromoImage(e.target.value)}
-                  placeholder="Image URL"
-                  className="h-11 rounded-xl border border-zinc-300 px-3"
-                />
-                <input
-                  value={editPromoArrivee}
-                  onChange={(e) => setEditPromoArrivee(e.target.value)}
-                  placeholder="Annee arrivee"
-                  className="h-11 rounded-xl border border-zinc-300 px-3"
-                />
-                <input
-                  value={editPromoDepart}
-                  onChange={(e) => setEditPromoDepart(e.target.value)}
-                  placeholder="Annee depart"
-                  className="h-11 rounded-xl border border-zinc-300 px-3"
-                />
-                <input
-                  value={editPromoIcal}
-                  onChange={(e) => setEditPromoIcal(e.target.value)}
-                  placeholder="URL iCal"
-                  className="h-11 rounded-xl border border-zinc-300 px-3 md:col-span-2"
-                />
-                <select
-                  value={editPromoReferentId}
-                  onChange={(e) => setEditPromoReferentId(e.target.value)}
-                  className="h-11 rounded-xl border border-zinc-300 px-3 md:col-span-2"
-                >
-                  <option value="">Selectionner referent</option>
-                  {professeurs.map((prof) => (
-                    <option key={prof.id} value={prof.id}>
-                      {prof.prenom} {prof.nom} - {prof.email}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="mt-4 flex flex-wrap gap-3">
-                <Button
-                  type="button"
-                  onClick={() =>
-                    void runAction(
-                      () =>
-                        adminUpdatePromotionRequest(selectedPromoId, {
-                          nom: editPromoName,
-                          image_url: editPromoImage,
-                          ical_url: editPromoIcal,
-                          annee_arrivee: Number(editPromoArrivee),
-                          annee_depart: Number(editPromoDepart),
-                          referent_prof_id: editPromoReferentId || undefined,
-                        }),
-                      'Promotion modifiee.'
-                    )
-                  }
-                  disabled={!selectedPromoId}
-                  className="h-11 rounded-xl bg-zinc-900 px-5 text-white hover:bg-zinc-800"
-                >
-                  Modifier la promotion
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() =>
-                    void runAction(
-                      () => adminDeletePromotionRequest(selectedPromoId),
-                      'Promotion supprimee.'
-                    )
-                  }
-                  disabled={!selectedPromoId}
-                  className="h-11 rounded-xl"
-                >
-                  Supprimer la promotion
-                </Button>
-              </div>
-
-              <h3 className="mt-6 text-lg font-semibold text-zinc-900">Assigner un delegue</h3>
-              <div className="mt-3 grid gap-3 md:grid-cols-2">
-                <select
-                  value={selectedDelegueId}
-                  onChange={(e) => setSelectedDelegueId(e.target.value)}
-                  className="h-11 rounded-xl border border-zinc-300 px-3"
-                >
-                  <option value="">Selectionner l'etudiant</option>
-                  {users.map((user) => (
-                    <option key={user.id} value={user.id}>
-                      {user.prenom} {user.nom} ({user.numero_etudiant ?? 'sans numero'})
-                    </option>
-                  ))}
-                </select>
-                <div className="flex flex-wrap gap-3">
-                  <Button
-                    type="button"
-                    onClick={() => void handleAssignDelegue(false)}
-                    disabled={isAssigningDelegue || !selectedPromoId}
-                    className="h-11 rounded-xl bg-zinc-900 px-5 text-white hover:bg-zinc-800"
+              <h2 className="text-xl font-semibold text-zinc-900">Liste des promotions</h2>
+              <div className="mt-4 space-y-3">
+                {promotions.map((promotion) => (
+                  <div
+                    key={promotion.id}
+                    className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between rounded-xl border border-zinc-200 bg-zinc-50 p-3"
                   >
-                    Assigner
-                  </Button>
-                  <Button
-                    type="button"
-                    onClick={() => void handleAssignDelegue(true)}
-                    disabled={isAssigningDelegue || !selectedPromoId}
-                    variant="outline"
-                    className="h-11 rounded-xl"
-                  >
-                    Retirer
-                  </Button>
-                </div>
+                    <p className="text-sm text-zinc-800">
+                      <span className="font-semibold">{promotion.nom}</span> (
+                      {promotion.annee_arrivee}-{promotion.annee_depart})
+                    </p>
+                    <p className="text-xs text-zinc-600">
+                      Delegue(s):{' '}
+                      {promotion.delegues.length > 0 ? promotion.delegues.join(', ') : 'aucun'}
+                    </p>
+                    <div className="flex gap-2 self-end sm:self-auto">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="h-9 w-9 rounded-lg p-0 sm:h-9 sm:w-auto sm:px-3"
+                        onClick={() => void openStudentsPopup(promotion.id)}
+                      >
+                        <Users className="h-4 w-4" />
+                        <span className="hidden sm:inline sm:ml-2">Eleves</span>
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="h-9 w-9 rounded-lg p-0 sm:h-9 sm:w-auto sm:px-3"
+                        onClick={() => openEditPromotionPopup(promotion)}
+                      >
+                        <Pencil className="h-4 w-4" />
+                        <span className="hidden sm:inline sm:ml-2">Editer</span>
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="h-9 w-9 rounded-lg p-0 sm:h-9 sm:w-auto sm:px-3"
+                        onClick={() => {
+                          if (window.confirm('Supprimer cette promotion ?')) {
+                            void runAction(
+                              () => adminDeletePromotionRequest(promotion.id),
+                              'Promotion supprimee.'
+                            );
+                          }
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        <span className="hidden sm:inline sm:ml-2">Supprimer</span>
+                      </Button>
+                    </div>
+                  </div>
+                ))}
               </div>
             </section>
           </>
@@ -630,22 +606,53 @@ export function AdminPage() {
               {isCreatingProf ? 'Creation...' : 'Creer professeur'}
             </Button>
 
-            <h3 className="mt-6 text-lg font-semibold text-zinc-900">
-              Modifier ou supprimer un professeur
-            </h3>
-            <div className="mt-3 grid gap-3 md:grid-cols-2">
-              <select
-                value={selectedProfId}
-                onChange={(e) => setSelectedProfId(e.target.value)}
-                className="h-11 rounded-xl border border-zinc-300 px-3 md:col-span-2"
-              >
-                <option value="">Selectionner le professeur</option>
-                {professeurs.map((prof) => (
-                  <option key={prof.id} value={prof.id}>
+            <h3 className="mt-6 text-lg font-semibold text-zinc-900">Liste des professeurs</h3>
+            <div className="mt-3 space-y-2">
+              {professeurs.map((prof) => (
+                <div
+                  key={prof.id}
+                  className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between rounded-xl border border-zinc-200 bg-zinc-50 p-3"
+                >
+                  <p className="text-sm text-zinc-800">
                     {prof.prenom} {prof.nom} - {prof.email}
-                  </option>
-                ))}
-              </select>
+                  </p>
+                  <div className="flex gap-2 self-end sm:self-auto">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-9 w-9 rounded-lg p-0 sm:h-9 sm:w-auto sm:px-3"
+                      onClick={() => {
+                        setSelectedProfId(prof.id);
+                        setEditProfPrenom(prof.prenom);
+                        setEditProfNom(prof.nom);
+                        setEditProfEmail(prof.email);
+                      }}
+                    >
+                      <Pencil className="h-4 w-4" />
+                      <span className="hidden sm:inline sm:ml-2">Editer</span>
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-9 w-9 rounded-lg p-0 sm:h-9 sm:w-auto sm:px-3"
+                      onClick={() => {
+                        if (window.confirm('Supprimer ce professeur ?')) {
+                          void runAction(
+                            () => adminDeleteProfesseurRequest(prof.id),
+                            'Professeur supprime.'
+                          );
+                        }
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      <span className="hidden sm:inline sm:ml-2">Supprimer</span>
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
               <input
                 value={editProfPrenom}
                 onChange={(e) => setEditProfPrenom(e.target.value)}
@@ -682,7 +689,7 @@ export function AdminPage() {
                 disabled={!selectedProfId}
                 className="h-11 rounded-xl bg-zinc-900 px-5 text-white hover:bg-zinc-800"
               >
-                Modifier le professeur
+                Enregistrer l'edition
               </Button>
               <Button
                 type="button"
@@ -698,6 +705,98 @@ export function AdminPage() {
               >
                 Supprimer le professeur
               </Button>
+            </div>
+          </section>
+        )}
+
+        {activeTab === 'etudiants' && (
+          <section className="rounded-3xl border border-black/10 bg-white/90 p-6 shadow-[0_20px_60px_rgba(26,18,8,0.12)]">
+            <h2 className="text-xl font-semibold text-zinc-900">Liste des etudiants</h2>
+            <div className="mt-4 space-y-2">
+              {studentsDetails.map((student) => (
+                <div key={student.id} className="rounded-xl border border-zinc-200 bg-zinc-50 p-3">
+                  <button
+                    type="button"
+                    className="flex w-full items-center justify-between text-left"
+                    onClick={() => toggleStudentDetails(student)}
+                  >
+                    <span className="text-sm text-zinc-800">
+                      {student.prenom} {student.nom} - roles: {student.roles.join(', ') || 'eleve'}
+                    </span>
+                    <span className="text-xs text-zinc-500">
+                      {expandedStudentId === student.id ? 'Masquer' : 'Details'}
+                    </span>
+                  </button>
+
+                  {expandedStudentId === student.id && (
+                    <div className="mt-3 space-y-3 border-t border-zinc-200 pt-3">
+                      <div className="grid gap-2 md:grid-cols-2">
+                        <input
+                          value={editStudentNumero}
+                          onChange={(e) => setEditStudentNumero(e.target.value)}
+                          placeholder="Numero etudiant"
+                          className="h-10 rounded-lg border border-zinc-300 px-3"
+                        />
+                        <input
+                          value={editStudentBirthDate}
+                          onChange={(e) => setEditStudentBirthDate(e.target.value)}
+                          type="date"
+                          className="h-10 rounded-lg border border-zinc-300 px-3"
+                        />
+                        <input
+                          value={editStudentPrenom}
+                          onChange={(e) => setEditStudentPrenom(e.target.value)}
+                          placeholder="Prenom"
+                          className="h-10 rounded-lg border border-zinc-300 px-3"
+                        />
+                        <input
+                          value={editStudentNom}
+                          onChange={(e) => setEditStudentNom(e.target.value)}
+                          placeholder="Nom"
+                          className="h-10 rounded-lg border border-zinc-300 px-3"
+                        />
+                        <input
+                          value={editStudentEmail}
+                          onChange={(e) => setEditStudentEmail(e.target.value)}
+                          placeholder="Email"
+                          className="h-10 rounded-lg border border-zinc-300 px-3 md:col-span-2"
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        className="h-10 rounded-lg bg-zinc-900 text-white"
+                        onClick={() =>
+                          void runAction(
+                            () =>
+                              adminUpdateUserRequest(student.id, {
+                                numero_etudiant: editStudentNumero || undefined,
+                                prenom: editStudentPrenom,
+                                nom: editStudentNom,
+                                email: editStudentEmail,
+                                date_naissance: editStudentBirthDate || undefined,
+                              }),
+                            'Etudiant modifie.'
+                          )
+                        }
+                      >
+                        Enregistrer les modifications
+                      </Button>
+                      <div className="text-sm text-zinc-700">
+                        <p>Promotions:</p>
+                        <ul className="ml-4 list-disc">
+                          {student.promotions.length === 0 && <li>Aucune promotion</li>}
+                          {student.promotions.map((promo) => (
+                            <li key={promo.promo_id}>
+                              {promo.promo_nom} ({promo.annee_arrivee}-{promo.annee_depart}) -{' '}
+                              {promo.is_delegue ? 'Delegue' : 'Non delegue'}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
           </section>
         )}
@@ -757,6 +856,206 @@ export function AdminPage() {
                 className="h-11 rounded-xl"
               >
                 Supprimer la matiere
+              </Button>
+            </div>
+          </section>
+        )}
+
+        {editingPromoId && (
+          <section className="rounded-3xl border border-black/10 bg-white p-6">
+            <h3 className="text-lg font-semibold text-zinc-900">Editer la promotion</h3>
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              <input
+                value={editPromoName}
+                onChange={(e) => setEditPromoName(e.target.value)}
+                placeholder="Nom"
+                className="h-11 rounded-xl border border-zinc-300 px-3"
+              />
+              <input
+                value={editPromoImage}
+                onChange={(e) => setEditPromoImage(e.target.value)}
+                placeholder="Image URL"
+                className="h-11 rounded-xl border border-zinc-300 px-3"
+              />
+              <input
+                value={editPromoArrivee}
+                onChange={(e) => setEditPromoArrivee(e.target.value)}
+                placeholder="Annee arrivee"
+                className="h-11 rounded-xl border border-zinc-300 px-3"
+              />
+              <input
+                value={editPromoDepart}
+                onChange={(e) => setEditPromoDepart(e.target.value)}
+                placeholder="Annee depart"
+                className="h-11 rounded-xl border border-zinc-300 px-3"
+              />
+              <input
+                value={editPromoIcal}
+                onChange={(e) => setEditPromoIcal(e.target.value)}
+                placeholder="URL iCal"
+                className="h-11 rounded-xl border border-zinc-300 px-3 md:col-span-2"
+              />
+              <select
+                value={editPromoReferentId}
+                onChange={(e) => setEditPromoReferentId(e.target.value)}
+                className="h-11 rounded-xl border border-zinc-300 px-3 md:col-span-2"
+              >
+                <option value="">Aucun referent</option>
+                {professeurs.map((prof) => (
+                  <option key={prof.id} value={prof.id}>
+                    {prof.prenom} {prof.nom} - {prof.email}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="mt-4 flex gap-2">
+              <Button
+                type="button"
+                className="h-10 rounded-xl bg-zinc-900 text-white"
+                onClick={() =>
+                  void runAction(
+                    () =>
+                      adminUpdatePromotionRequest(editingPromoId, {
+                        nom: editPromoName,
+                        image_url: editPromoImage,
+                        ical_url: editPromoIcal,
+                        annee_arrivee: Number(editPromoArrivee),
+                        annee_depart: Number(editPromoDepart),
+                        referent_prof_id: editPromoReferentId || undefined,
+                      }),
+                    'Promotion modifiee.'
+                  )
+                }
+              >
+                Enregistrer
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="h-10 rounded-xl"
+                onClick={() => setEditingPromoId('')}
+              >
+                Fermer
+              </Button>
+            </div>
+          </section>
+        )}
+
+        {studentsPopupPromoId && (
+          <section className="rounded-3xl border border-black/10 bg-white p-6">
+            <h3 className="text-lg font-semibold text-zinc-900">
+              Gestion des eleves de la promotion
+            </h3>
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              <select
+                value={selectedStudentForPromo}
+                onChange={(e) => setSelectedStudentForPromo(e.target.value)}
+                className="h-11 rounded-xl border border-zinc-300 px-3"
+              >
+                <option value="">Selectionner un eleve</option>
+                {users.map((user) => (
+                  <option key={user.id} value={user.id}>
+                    {user.prenom} {user.nom}
+                  </option>
+                ))}
+              </select>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  className="h-10 rounded-xl bg-zinc-900 text-white"
+                  onClick={() => {
+                    if (
+                      selectedStudentForPromo &&
+                      window.confirm('Ajouter cet eleve a la promotion ?')
+                    ) {
+                      void runAction(
+                        () =>
+                          adminAddStudentToPromotionRequest(
+                            studentsPopupPromoId,
+                            selectedStudentForPromo
+                          ),
+                        'Eleve ajoute.'
+                      );
+                    }
+                  }}
+                >
+                  Ajouter
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-10 rounded-xl"
+                  onClick={() => {
+                    if (
+                      selectedStudentForPromo &&
+                      window.confirm('Retirer cet eleve de la promotion ?')
+                    ) {
+                      void runAction(
+                        () =>
+                          adminRemoveStudentFromPromotionRequest(
+                            studentsPopupPromoId,
+                            selectedStudentForPromo
+                          ),
+                        'Eleve retire.'
+                      );
+                    }
+                  }}
+                >
+                  Retirer
+                </Button>
+              </div>
+            </div>
+            <div className="mt-4">
+              <p className="text-sm text-zinc-700">Eleves actuellement dans la promo:</p>
+              <ul className="mt-2 space-y-1 text-sm text-zinc-700">
+                {promoStudents.map((student) => (
+                  <li key={student.id}>
+                    {student.prenom} {student.nom} ({student.numero_etudiant ?? 'sans numero'})
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="mt-4 flex gap-2">
+              <select
+                value={selectedDelegueId}
+                onChange={(e) => setSelectedDelegueId(e.target.value)}
+                className="h-10 rounded-xl border border-zinc-300 px-3"
+              >
+                <option value="">Delegue</option>
+                {promoStudents.map((student) => (
+                  <option key={student.id} value={student.id}>
+                    {student.prenom} {student.nom}
+                  </option>
+                ))}
+              </select>
+              <Button
+                type="button"
+                className="h-10 rounded-xl bg-zinc-900 text-white"
+                onClick={() => {
+                  setSelectedPromoId(studentsPopupPromoId);
+                  void handleAssignDelegue(false);
+                }}
+              >
+                Assigner delegue
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="h-10 rounded-xl"
+                onClick={() => {
+                  setSelectedPromoId(studentsPopupPromoId);
+                  void handleAssignDelegue(true);
+                }}
+              >
+                Retirer delegue
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="h-10 rounded-xl"
+                onClick={() => setStudentsPopupPromoId('')}
+              >
+                Fermer
               </Button>
             </div>
           </section>

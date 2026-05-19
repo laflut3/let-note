@@ -21,7 +21,7 @@ pub fn promo_routes(db: PgPool) -> Router<PgPool> {
     )
     .route(
       "/promotions/{promo_id}/ues",
-      middleware::right_admin_or_delegue_for_promo(post(create_ue_for_promo), db.clone()),
+      middleware::right_delegue_for_promo(post(create_ue_for_promo), db.clone()),
     )
     .route(
       "/promotions/{promo_id}/matieres",

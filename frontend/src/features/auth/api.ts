@@ -10,15 +10,34 @@ export type AdminUser = {
   email: string;
 };
 
+export type AdminStudentDetails = {
+  id: string;
+  numero_etudiant: string | null;
+  nom: string;
+  prenom: string;
+  email: string;
+  date_naissance: string;
+  roles: string[];
+  promotions: {
+    promo_id: string;
+    promo_nom: string;
+    annee_arrivee: number;
+    annee_depart: number;
+    is_delegue: boolean;
+  }[];
+};
+
 export type CreatePromotionPayload = {
   nom: string;
   image_url: string;
   ical_url?: string;
   annee_arrivee: number;
   annee_depart: number;
-  referent_prof_id: string;
+  referent_prof_id?: string;
   etudiant_ids: string[];
 };
+
+export type PromotionStudent = AdminUser;
 
 export type PromotionScope = {
   id: string;
@@ -92,6 +111,7 @@ export type AdminPromotionSummary = {
   referent_prof_prenom: string | null;
   etudiant_count: number;
   delegue_count: number;
+  delegues: string[];
 };
 
 export type AdminProfesseur = {
@@ -168,6 +188,29 @@ export async function adminListUsersRequest(): Promise<Response> {
 
 export async function adminListPromotionsRequest(): Promise<Response> {
   return jsonRequest('/admin/promotions', { method: 'GET' });
+}
+
+export async function adminListUsersDetailsRequest(): Promise<Response> {
+  return jsonRequest('/admin/users/details', { method: 'GET' });
+}
+
+export async function adminUpdateUserRequest(
+  etuId: string,
+  payload: {
+    numero_etudiant?: string;
+    prenom?: string;
+    nom?: string;
+    email?: string;
+    date_naissance?: string;
+  }
+): Promise<Response> {
+  return jsonRequest(`/admin/users/${etuId}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function adminListProfesseursRequest(): Promise<Response> {
@@ -253,6 +296,24 @@ export async function adminAssignDelegueRequest(promoId: string, etuId: string):
 
 export async function adminRemoveDelegueRequest(promoId: string, etuId: string): Promise<Response> {
   return jsonRequest(`/admin/promotions/${promoId}/delegues/${etuId}`, { method: 'DELETE' });
+}
+
+export async function adminListPromotionStudentsRequest(promoId: string): Promise<Response> {
+  return jsonRequest(`/admin/promotions/${promoId}/etudiants`, { method: 'GET' });
+}
+
+export async function adminAddStudentToPromotionRequest(
+  promoId: string,
+  etuId: string
+): Promise<Response> {
+  return jsonRequest(`/admin/promotions/${promoId}/etudiants/${etuId}`, { method: 'POST' });
+}
+
+export async function adminRemoveStudentFromPromotionRequest(
+  promoId: string,
+  etuId: string
+): Promise<Response> {
+  return jsonRequest(`/admin/promotions/${promoId}/etudiants/${etuId}`, { method: 'DELETE' });
 }
 
 export async function adminListMatieresRequest(): Promise<Response> {

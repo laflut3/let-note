@@ -28,15 +28,6 @@ export function ProtectedDelegueRoute({ children }: ProtectedDelegueRouteProps) 
           return;
         }
 
-        const meData = (await meResponse.json()) as { roles?: string[] };
-        const roles = Array.isArray(meData.roles) ? meData.roles : [];
-        if (roles.includes('admin')) {
-          if (mounted) {
-            setStatus('allowed');
-          }
-          return;
-        }
-
         const promotionsResponse = await listAccessiblePromotionsRequest();
         if (!promotionsResponse.ok) {
           if (mounted) {

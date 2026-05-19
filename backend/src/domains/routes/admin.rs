@@ -35,6 +35,14 @@ pub fn admin_routes(db: PgPool) -> Router<PgPool> {
       middleware::right_admin(get(list_users), db.clone()),
     )
     .route(
+      "/users/details",
+      middleware::right_admin(get(list_users_details), db.clone()),
+    )
+    .route(
+      "/users/{etu_id}",
+      middleware::right_admin(put(update_user), db.clone()),
+    )
+    .route(
       "/professeurs",
       middleware::right_admin(get(list_professeurs).post(create_professeur), db.clone()),
     )
@@ -49,6 +57,17 @@ pub fn admin_routes(db: PgPool) -> Router<PgPool> {
     .route(
       "/promotions/{promo_id}",
       middleware::right_admin(put(update_promotion).delete(delete_promotion), db.clone()),
+    )
+    .route(
+      "/promotions/{promo_id}/etudiants",
+      middleware::right_admin(get(list_promotion_students), db.clone()),
+    )
+    .route(
+      "/promotions/{promo_id}/etudiants/{etu_id}",
+      middleware::right_admin(
+        post(add_student_to_promotion).delete(remove_student_from_promotion),
+        db.clone(),
+      ),
     )
     .route(
       "/matieres",
@@ -77,6 +96,24 @@ async fn admin_status(State(_db): State<PgPool>) -> impl IntoResponse {
 async fn list_users(State(db): State<PgPool>) -> impl IntoResponse {
   match admin_service::list_etudiants(&db).await {
     Ok(users) => (StatusCode::OK, Json(users)).into_response(),
+    Err(error) => error.into_response(),
+  }
+}
+
+async fn list_users_details(State(db): State<PgPool>) -> impl IntoResponse {
+  match admin_service::list_students_details(&db).await {
+    Ok(users) => (StatusCode::OK, Json(users)).into_response(),
+    Err(error) => error.into_response(),
+  }
+}
+
+async fn update_user(
+  State(db): State<PgPool>,
+  Path(etu_id): Path<Uuid>,
+  Json(payload): Json<admin_service::UpdateStudentInput>,
+) -> impl IntoResponse {
+  match admin_service::update_student(&db, etu_id, payload).await {
+    Ok(updated) => (StatusCode::OK, Json(updated)).into_response(),
     Err(error) => error.into_response(),
   }
 }
@@ -204,6 +241,36 @@ async fn assign_delegue(
   };
 
   match admin_service::assign_delegue(&db, promo_id, etu_id, auth.user_id).await {
+    Ok(result) => (StatusCode::OK, Json(result)).into_response(),
+    Err(error) => error.into_response(),
+  }
+}
+
+async fn list_promotion_students(
+  State(db): State<PgPool>,
+  Path(promo_id): Path<Uuid>,
+) -> impl IntoResponse {
+  match admin_service::list_promotion_students(&db, promo_id).await {
+    Ok(users) => (StatusCode::OK, Json(users)).into_response(),
+    Err(error) => error.into_response(),
+  }
+}
+
+async fn add_student_to_promotion(
+  State(db): State<PgPool>,
+  Path((promo_id, etu_id)): Path<(Uuid, Uuid)>,
+) -> impl IntoResponse {
+  match admin_service::add_student_to_promotion(&db, promo_id, etu_id).await {
+    Ok(result) => (StatusCode::OK, Json(result)).into_response(),
+    Err(error) => error.into_response(),
+  }
+}
+
+async fn remove_student_from_promotion(
+  State(db): State<PgPool>,
+  Path((promo_id, etu_id)): Path<(Uuid, Uuid)>,
+) -> impl IntoResponse {
+  match admin_service::remove_student_from_promotion(&db, promo_id, etu_id).await {
     Ok(result) => (StatusCode::OK, Json(result)).into_response(),
     Err(error) => error.into_response(),
   }

@@ -87,9 +87,7 @@ export function DelegatePage() {
       }
 
       const accessiblePromotions = (await promotionsResponse.json()) as PromotionScope[];
-      const manageablePromotions = userRoles.includes('admin')
-        ? accessiblePromotions
-        : accessiblePromotions.filter((promotion) => promotion.can_manage);
+      const manageablePromotions = accessiblePromotions.filter((promotion) => promotion.can_manage);
 
       setPromotions(manageablePromotions);
       setSelectedPromoId((prev) => prev || manageablePromotions[0]?.id || '');

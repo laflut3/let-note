@@ -15,7 +15,7 @@ pub struct CreatedPromotion {
   pub ical_url: Option<String>,
   pub annee_arrivee: i32,
   pub annee_depart: i32,
-  pub referent_prof_id: Uuid,
+  pub referent_prof_id: Option<Uuid>,
   pub user_count: usize,
 }
 
@@ -32,6 +32,7 @@ pub struct AdminPromotionSummary {
   pub referent_prof_prenom: Option<String>,
   pub etudiant_count: i64,
   pub delegue_count: i64,
+  pub delegues: Vec<String>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
@@ -53,6 +54,56 @@ pub struct AdminMatiereSummary {
   pub code_matiere: String,
   pub nom_matiere: String,
   pub promotion_count: i64,
+}
+
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+pub struct PromotionStudent {
+  pub id: Uuid,
+  pub numero_etudiant: Option<String>,
+  pub nom: String,
+  pub prenom: String,
+  pub email: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+pub struct AdminStudentDetailsRow {
+  pub id: Uuid,
+  pub numero_etudiant: Option<String>,
+  pub nom: String,
+  pub prenom: String,
+  pub email: String,
+  pub date_naissance: NaiveDate,
+  pub roles: Vec<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+pub struct AdminStudentPromoInfo {
+  pub promo_id: Uuid,
+  pub promo_nom: String,
+  pub annee_arrivee: i32,
+  pub annee_depart: i32,
+  pub is_delegue: bool,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct AdminStudentDetails {
+  pub id: Uuid,
+  pub numero_etudiant: Option<String>,
+  pub nom: String,
+  pub prenom: String,
+  pub email: String,
+  pub date_naissance: NaiveDate,
+  pub roles: Vec<String>,
+  pub promotions: Vec<AdminStudentPromoInfo>,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct UpdateStudentInput {
+  pub numero_etudiant: Option<String>,
+  pub prenom: Option<String>,
+  pub nom: Option<String>,
+  pub email: Option<String>,
+  pub date_naissance: Option<NaiveDate>,
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
@@ -153,11 +204,17 @@ pub async fn list_promotions(db: &PgPool) -> Result<Vec<AdminPromotionSummary>, 
       pr.nom AS referent_prof_nom,
       pr.prenom AS referent_prof_prenom,
       COUNT(DISTINCT ep.id_etu)::BIGINT AS etudiant_count,
-      COUNT(DISTINCT dp.id_etu)::BIGINT AS delegue_count
+      COUNT(DISTINCT dp.id_etu)::BIGINT AS delegue_count,
+      COALESCE(
+        ARRAY_AGG(DISTINCT CONCAT(e.prenom, ' ', e.nom))
+        FILTER (WHERE e.id IS NOT NULL),
+        ARRAY[]::TEXT[]
+      ) AS delegues
     FROM promotion p
     LEFT JOIN etu_promo ep ON ep.id_promo = p.id
     LEFT JOIN delegue_promo dp ON dp.id_promo = p.id
     LEFT JOIN professeur pr ON pr.id = p.referent_prof_id
+    LEFT JOIN etudiant e ON e.id = dp.id_etu
     GROUP BY p.id, pr.id
     ORDER BY p.annee_arrivee DESC, p.nom
     "#,
@@ -165,6 +222,146 @@ pub async fn list_promotions(db: &PgPool) -> Result<Vec<AdminPromotionSummary>, 
   .fetch_all(db)
   .await
   .map_err(map_schema_error("unable to list promotions at this time"))
+}
+
+pub async fn list_students_details(db: &PgPool) -> Result<Vec<AdminStudentDetails>, ApiError> {
+  let rows = sqlx::query_as::<_, AdminStudentDetailsRow>(
+    r#"
+    SELECT
+      e.id,
+      e.numero_etudiant,
+      e.nom,
+      e.prenom,
+      e.email,
+      e.date_naissance,
+      COALESCE(ARRAY_AGG(DISTINCT r.role) FILTER (WHERE r.role IS NOT NULL), ARRAY[]::TEXT[]) AS roles
+    FROM etudiant e
+    LEFT JOIN role_etu re ON re.id_etu = e.id
+    LEFT JOIN role r ON r.id = re.id_role
+    GROUP BY e.id
+    ORDER BY e.nom, e.prenom, e.email
+    "#,
+  )
+  .fetch_all(db)
+  .await
+  .map_err(map_schema_error("unable to list student details"))?;
+
+  let mut out = Vec::with_capacity(rows.len());
+  for row in rows {
+    let promotions = sqlx::query_as::<_, AdminStudentPromoInfo>(
+      r#"
+      SELECT
+        p.id AS promo_id,
+        p.nom AS promo_nom,
+        p.annee_arrivee,
+        p.annee_depart,
+        EXISTS (
+          SELECT 1
+          FROM delegue_promo dp
+          WHERE dp.id_etu = $1 AND dp.id_promo = p.id
+        ) AS is_delegue
+      FROM etu_promo ep
+      JOIN promotion p ON p.id = ep.id_promo
+      WHERE ep.id_etu = $1
+      ORDER BY p.annee_arrivee DESC, p.nom
+      "#,
+    )
+    .bind(row.id)
+    .fetch_all(db)
+    .await
+    .map_err(map_schema_error("unable to list student promotion details"))?;
+
+    out.push(AdminStudentDetails {
+      id: row.id,
+      numero_etudiant: row.numero_etudiant,
+      nom: row.nom,
+      prenom: row.prenom,
+      email: row.email,
+      date_naissance: row.date_naissance,
+      roles: row.roles,
+      promotions,
+    });
+  }
+
+  Ok(out)
+}
+
+pub async fn update_student(
+  db: &PgPool,
+  etu_id: Uuid,
+  payload: UpdateStudentInput,
+) -> Result<MutationAck, ApiError> {
+  let current = sqlx::query_as::<_, (Option<String>, String, String, String, NaiveDate)>(
+    r#"
+    SELECT numero_etudiant, prenom, nom, email, date_naissance
+    FROM etudiant
+    WHERE id = $1
+    "#,
+  )
+  .bind(etu_id)
+  .fetch_optional(db)
+  .await
+  .map_err(map_schema_error("unable to update student"))?
+  .ok_or_else(|| ApiError::bad_request("student not found"))?;
+
+  let numero_etudiant = payload
+    .numero_etudiant
+    .as_deref()
+    .map(str::trim)
+    .filter(|v| !v.is_empty())
+    .map(str::to_string)
+    .or(current.0);
+  if let Some(ref numero) = numero_etudiant
+    && (numero.len() != 8 || !numero.chars().all(|char| char.is_ascii_digit()))
+  {
+    return Err(ApiError::bad_request(
+      "student number must contain exactly 8 digits",
+    ));
+  }
+
+  let prenom = payload
+    .prenom
+    .as_deref()
+    .map(str::trim)
+    .filter(|v| !v.is_empty())
+    .unwrap_or(&current.1)
+    .to_string();
+  let nom = payload
+    .nom
+    .as_deref()
+    .map(str::trim)
+    .filter(|v| !v.is_empty())
+    .unwrap_or(&current.2)
+    .to_string();
+  let email = payload
+    .email
+    .as_deref()
+    .map(str::trim)
+    .filter(|v| !v.is_empty())
+    .unwrap_or(&current.3)
+    .to_lowercase();
+  let date_naissance = payload.date_naissance.unwrap_or(current.4);
+
+  sqlx::query(
+    r#"
+    UPDATE etudiant
+    SET numero_etudiant = $2, prenom = $3, nom = $4, email = $5, date_naissance = $6
+    WHERE id = $1
+    "#,
+  )
+  .bind(etu_id)
+  .bind(numero_etudiant)
+  .bind(prenom)
+  .bind(nom)
+  .bind(email)
+  .bind(date_naissance)
+  .execute(db)
+  .await
+  .map_err(map_schema_error("unable to update student"))?;
+
+  Ok(MutationAck {
+    message: "student updated",
+  })
 }
 
 pub async fn list_matieres(db: &PgPool) -> Result<Vec<AdminMatiereSummary>, ApiError> {
@@ -209,21 +406,23 @@ pub async fn create_promotion(
 
   let (annee_debut, annee_fin) = years_bounds(payload.annee_arrivee, payload.annee_depart)?;
 
-  let referent_exists = sqlx::query_scalar::<_, i64>(
-    r#"
-    SELECT COUNT(*)
-    FROM professeur
-    WHERE id = $1
-    "#,
-  )
-  .bind(payload.referent_prof_id)
-  .fetch_one(db)
-  .await
-  .map_err(map_schema_error("unable to validate professor"))?
-    > 0;
+  if let Some(referent_prof_id) = payload.referent_prof_id {
+    let referent_exists = sqlx::query_scalar::<_, i64>(
+      r#"
+      SELECT COUNT(*)
+      FROM professeur
+      WHERE id = $1
+      "#,
+    )
+    .bind(referent_prof_id)
+    .fetch_one(db)
+    .await
+    .map_err(map_schema_error("unable to validate professor"))?
+      > 0;
 
-  if !referent_exists {
-    return Err(ApiError::bad_request("referent professor does not exist"));
+    if !referent_exists {
+      return Err(ApiError::bad_request("referent professor does not exist"));
+    }
   }
 
   let ical_url = payload
@@ -238,7 +437,7 @@ pub async fn create_promotion(
 
   let created = sqlx::query_as::<
     _,
-    (Uuid, String, String, Option<String>, i32, i32, Uuid),
+    (Uuid, String, String, Option<String>, i32, i32, Option<Uuid>),
   >(
     r#"
     INSERT INTO promotion
@@ -347,6 +546,118 @@ pub async fn assign_delegue(
     .map_err(|_| ApiError::internal("unable to finalize delegate assignment"))?;
 
   Ok(DelegateAssignment { promo_id, etu_id })
+}
+
+pub async fn list_promotion_students(
+  db: &PgPool,
+  promo_id: Uuid,
+) -> Result<Vec<PromotionStudent>, ApiError> {
+  sqlx::query_as::<_, PromotionStudent>(
+    r#"
+    SELECT e.id, e.numero_etudiant, e.nom, e.prenom, e.email
+    FROM etu_promo ep
+    JOIN etudiant e ON e.id = ep.id_etu
+    WHERE ep.id_promo = $1
+    ORDER BY e.nom, e.prenom, e.email
+    "#,
+  )
+  .bind(promo_id)
+  .fetch_all(db)
+  .await
+  .map_err(map_schema_error("unable to list promotion students"))
+}
+
+pub async fn add_student_to_promotion(
+  db: &PgPool,
+  promo_id: Uuid,
+  etu_id: Uuid,
+) -> Result<MutationAck, ApiError> {
+  sqlx::query(
+    r#"
+    INSERT INTO etu_promo (id_etu, id_promo)
+    VALUES ($1, $2)
+    ON CONFLICT DO NOTHING
+    "#,
+  )
+  .bind(etu_id)
+  .bind(promo_id)
+  .execute(db)
+  .await
+  .map_err(map_schema_error("unable to add student to promotion"))?;
+
+  Ok(MutationAck {
+    message: "student added to promotion",
+  })
+}
+
+pub async fn remove_student_from_promotion(
+  db: &PgPool,
+  promo_id: Uuid,
+  etu_id: Uuid,
+) -> Result<MutationAck, ApiError> {
+  let mut tx = db
+    .begin()
+    .await
+    .map_err(|_| ApiError::internal("unable to remove student from promotion"))?;
+
+  sqlx::query(
+    r#"
+    DELETE FROM delegue_promo
+    WHERE id_etu = $1 AND id_promo = $2
+    "#,
+  )
+  .bind(etu_id)
+  .bind(promo_id)
+  .execute(&mut *tx)
+  .await
+  .map_err(map_schema_error("unable to update delegate scope"))?;
+
+  sqlx::query(
+    r#"
+    DELETE FROM etu_promo
+    WHERE id_etu = $1 AND id_promo = $2
+    "#,
+  )
+  .bind(etu_id)
+  .bind(promo_id)
+  .execute(&mut *tx)
+  .await
+  .map_err(map_schema_error("unable to remove student from promotion"))?;
+
+  let has_other_assignments = sqlx::query_scalar::<_, i64>(
+    r#"
+    SELECT COUNT(*)
+    FROM delegue_promo
+    WHERE id_etu = $1
+    "#,
+  )
+  .bind(etu_id)
+  .fetch_one(&mut *tx)
+  .await
+  .map_err(map_schema_error("unable to update delegate scope"))?
+    > 0;
+
+  if !has_other_assignments {
+    sqlx::query(
+      r#"
+      DELETE FROM role_etu
+      WHERE id_etu = $1
+        AND id_role IN (SELECT id FROM role WHERE role = 'delegue')
+      "#,
+    )
+    .bind(etu_id)
+    .execute(&mut *tx)
+    .await
+    .map_err(|_| ApiError::internal("unable to unset delegate role"))?;
+  }
+
+  tx.commit()
+    .await
+    .map_err(|_| ApiError::internal("unable to finalize student removal"))?;
+
+  Ok(MutationAck {
+    message: "student removed from promotion",
+  })
 }
 
 pub async fn remove_delegue(db: &PgPool, promo_id: Uuid, etu_id: Uuid) -> Result<(), ApiError> {

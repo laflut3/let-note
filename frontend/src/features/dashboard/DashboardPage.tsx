@@ -152,7 +152,7 @@ export function DashboardPage() {
           </div>
 
           <div className="flex items-center gap-2">
-            {(isAdmin || hasDelegueScope) && (
+            {hasDelegueScope && (
               <Button
                 type="button"
                 variant="ghost"
