@@ -364,8 +364,8 @@ export function AdminPage() {
   };
 
   return (
-    <main className="min-h-screen bg-[linear-gradient(180deg,#f8f1e7,#f2e7d5)] p-5 md:p-8">
-      <section className="mx-auto max-w-6xl space-y-6">
+    <main className="min-h-screen bg-[linear-gradient(180deg,#f8f1e7,#f2e7d5)] p-3 sm:p-5 md:p-8">
+      <section className="mx-auto max-w-6xl w-full space-y-6">
         <nav className="flex flex-wrap items-center justify-between gap-3 rounded-3xl border border-black/10 bg-white/90 p-4 shadow-[0_20px_60px_rgba(26,18,8,0.12)]">
           <div className="flex flex-wrap gap-2">
             {(
@@ -415,18 +415,18 @@ export function AdminPage() {
 
         {activeTab === 'promotions' && (
           <>
-            <section className="rounded-3xl border border-black/10 bg-white/90 p-6 shadow-[0_20px_60px_rgba(26,18,8,0.12)]">
+            <section className="rounded-3xl border border-black/10 bg-white/90 p-4 sm:p-6 shadow-[0_20px_60px_rgba(26,18,8,0.12)]">
               <h2 className="text-xl font-semibold text-zinc-900">Creer une promotion</h2>
               <p className="mt-1 text-sm text-zinc-600">
                 Nom, image, annees, prof referent et etudiants.
               </p>
 
-              <div className="mt-4 grid gap-3 md:grid-cols-2">
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
                 <input
                   value={promoName}
                   onChange={(e) => setPromoName(e.target.value)}
                   placeholder="Nom de la promotion"
-                  className="h-11 rounded-xl border border-zinc-300 px-3 md:col-span-2"
+                  className="h-11 rounded-xl border border-zinc-300 px-3 sm:col-span-2"
                 />
                 <input
                   value={anneeArrivee}
@@ -455,7 +455,7 @@ export function AdminPage() {
                 <select
                   value={referentProfId}
                   onChange={(e) => setReferentProfId(e.target.value)}
-                  className="h-11 rounded-xl border border-zinc-300 px-3 md:col-span-2"
+                  className="h-11 rounded-xl border border-zinc-300 px-3 sm:col-span-2"
                 >
                   <option value="">Selectionner le professeur referent</option>
                   {professeurs.map((prof) => (
@@ -510,7 +510,7 @@ export function AdminPage() {
               </Button>
             </section>
 
-            <section className="rounded-3xl border border-black/10 bg-white/90 p-6 shadow-[0_20px_60px_rgba(26,18,8,0.12)]">
+            <section className="rounded-3xl border border-black/10 bg-white/90 p-4 sm:p-6 shadow-[0_20px_60px_rgba(26,18,8,0.12)]">
               <h2 className="text-xl font-semibold text-zinc-900">Liste des promotions</h2>
               <div className="mt-4 space-y-3">
                 {promotions.map((promotion) => (
@@ -570,9 +570,9 @@ export function AdminPage() {
         )}
 
         {activeTab === 'professeurs' && (
-          <section className="rounded-3xl border border-black/10 bg-white/90 p-6 shadow-[0_20px_60px_rgba(26,18,8,0.12)]">
+          <section className="rounded-3xl border border-black/10 bg-white/90 p-4 sm:p-6 shadow-[0_20px_60px_rgba(26,18,8,0.12)]">
             <h2 className="text-xl font-semibold text-zinc-900">Gestion des professeurs</h2>
-            <div className="mt-4 grid gap-3 md:grid-cols-2">
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <input
                 value={profPrenom}
                 onChange={(e) => setProfPrenom(e.target.value)}
@@ -589,13 +589,13 @@ export function AdminPage() {
                 value={profEmail}
                 onChange={(e) => setProfEmail(e.target.value)}
                 placeholder="Email"
-                className="h-11 rounded-xl border border-zinc-300 px-3 md:col-span-2"
+                className="h-11 rounded-xl border border-zinc-300 px-3 sm:col-span-2"
               />
               <input
                 type="date"
                 value={profBirthDate}
                 onChange={(e) => setProfBirthDate(e.target.value)}
-                className="h-11 rounded-xl border border-zinc-300 px-3 md:col-span-2"
+                className="h-11 rounded-xl border border-zinc-300 px-3 sm:col-span-2"
               />
             </div>
             <Button
@@ -657,7 +657,7 @@ export function AdminPage() {
         )}
 
         {activeTab === 'etudiants' && (
-          <section className="rounded-3xl border border-black/10 bg-white/90 p-6 shadow-[0_20px_60px_rgba(26,18,8,0.12)]">
+          <section className="rounded-3xl border border-black/10 bg-white/90 p-4 sm:p-6 shadow-[0_20px_60px_rgba(26,18,8,0.12)]">
             <h2 className="text-xl font-semibold text-zinc-900">Liste des etudiants</h2>
             <div className="mt-4 space-y-2">
               {studentsDetails.map((student) => (
@@ -677,7 +677,7 @@ export function AdminPage() {
 
                   {expandedStudentId === student.id && (
                     <div className="mt-3 space-y-3 border-t border-zinc-200 pt-3">
-                      <div className="grid gap-2 md:grid-cols-2">
+                      <div className="grid gap-2 sm:grid-cols-2">
                         <input
                           value={editStudentNumero}
                           onChange={(e) => setEditStudentNumero(e.target.value)}
@@ -706,7 +706,7 @@ export function AdminPage() {
                           value={editStudentEmail}
                           onChange={(e) => setEditStudentEmail(e.target.value)}
                           placeholder="Email"
-                          className="h-10 rounded-lg border border-zinc-300 px-3 md:col-span-2"
+                          className="h-10 rounded-lg border border-zinc-300 px-3 sm:col-span-2"
                         />
                       </div>
                       <Button
@@ -749,13 +749,13 @@ export function AdminPage() {
         )}
 
         {activeTab === 'matieres' && (
-          <section className="rounded-3xl border border-black/10 bg-white/90 p-6 shadow-[0_20px_60px_rgba(26,18,8,0.12)]">
+          <section className="rounded-3xl border border-black/10 bg-white/90 p-4 sm:p-6 shadow-[0_20px_60px_rgba(26,18,8,0.12)]">
             <h2 className="text-xl font-semibold text-zinc-900">Gestion des matieres</h2>
-            <div className="mt-3 grid gap-3 md:grid-cols-2">
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
               <select
                 value={selectedMatiereCode}
                 onChange={(e) => setSelectedMatiereCode(e.target.value)}
-                className="h-11 rounded-xl border border-zinc-300 px-3 md:col-span-2"
+                className="h-11 rounded-xl border border-zinc-300 px-3 sm:col-span-2"
               >
                 <option value="">Selectionner la matiere</option>
                 {matieres.map((matiere) => (
@@ -769,7 +769,7 @@ export function AdminPage() {
                 value={editMatiereNom}
                 onChange={(e) => setEditMatiereNom(e.target.value)}
                 placeholder="Nouveau nom"
-                className="h-11 rounded-xl border border-zinc-300 px-3 md:col-span-2"
+                className="h-11 rounded-xl border border-zinc-300 px-3 sm:col-span-2"
               />
             </div>
 
@@ -811,7 +811,7 @@ export function AdminPage() {
         {editingPromoId && (
           <section className="rounded-3xl border border-black/10 bg-white p-6">
             <h3 className="text-lg font-semibold text-zinc-900">Editer la promotion</h3>
-            <div className="mt-3 grid gap-3 md:grid-cols-2">
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
               <input
                 value={editPromoName}
                 onChange={(e) => setEditPromoName(e.target.value)}
@@ -840,12 +840,12 @@ export function AdminPage() {
                 value={editPromoIcal}
                 onChange={(e) => setEditPromoIcal(e.target.value)}
                 placeholder="URL iCal"
-                className="h-11 rounded-xl border border-zinc-300 px-3 md:col-span-2"
+                className="h-11 rounded-xl border border-zinc-300 px-3 sm:col-span-2"
               />
               <select
                 value={editPromoReferentId}
                 onChange={(e) => setEditPromoReferentId(e.target.value)}
-                className="h-11 rounded-xl border border-zinc-300 px-3 md:col-span-2"
+                className="h-11 rounded-xl border border-zinc-300 px-3 sm:col-span-2"
               >
                 <option value="">Aucun referent</option>
                 {professeurs.map((prof) => (
@@ -892,7 +892,7 @@ export function AdminPage() {
           <section className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
             <div className="w-full max-w-2xl rounded-2xl border border-black/10 bg-white p-6 shadow-2xl">
               <h3 className="text-lg font-semibold text-zinc-900">Editer le professeur</h3>
-              <div className="mt-3 grid gap-3 md:grid-cols-2">
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 <input
                   value={editProfPrenom}
                   onChange={(e) => setEditProfPrenom(e.target.value)}
@@ -909,7 +909,7 @@ export function AdminPage() {
                   value={editProfEmail}
                   onChange={(e) => setEditProfEmail(e.target.value)}
                   placeholder="Email"
-                  className="h-11 rounded-xl border border-zinc-300 px-3 md:col-span-2"
+                  className="h-11 rounded-xl border border-zinc-300 px-3 sm:col-span-2"
                 />
               </div>
               <div className="mt-4 flex flex-wrap gap-2">
@@ -948,7 +948,7 @@ export function AdminPage() {
             <h3 className="text-lg font-semibold text-zinc-900">
               Gestion des eleves de la promotion
             </h3>
-            <div className="mt-3 grid gap-3 md:grid-cols-2">
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
               <select
                 value={selectedStudentForPromo}
                 onChange={(e) => setSelectedStudentForPromo(e.target.value)}

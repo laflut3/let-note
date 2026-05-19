@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { BookOpen, Home, LogOut, Shield, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   addMatiereRequest,
@@ -188,8 +189,8 @@ export function DelegatePage() {
   }, [promotions, selectedPromoId]);
 
   return (
-    <main className="min-h-screen bg-[linear-gradient(180deg,#f7f0e5,#f1e7d8)] p-4 md:p-8">
-      <section className="mx-auto max-w-[1280px] space-y-4">
+    <main className="min-h-screen bg-[linear-gradient(180deg,#f7f0e5,#f1e7d8)] p-3 sm:p-4 md:p-8">
+      <section className="mx-auto max-w-[1280px] w-full space-y-4">
         <nav className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--auth-card-border)] bg-[linear-gradient(135deg,#4f1730,#6d2745)] px-4 py-3 text-white shadow-[0_16px_38px_rgba(36,14,30,0.28)]">
           <div className="flex flex-wrap items-center gap-2">
             {(
@@ -205,11 +206,15 @@ export function DelegatePage() {
                 type="button"
                 onClick={() => setActiveTab(value)}
                 className={[
-                  'rounded-lg px-3 py-1.5 text-sm transition',
+                  'rounded-lg px-3 py-1.5 text-sm transition flex items-center gap-2',
                   activeTab === value ? 'bg-white/20 font-semibold' : 'hover:bg-white/10',
                 ].join(' ')}
               >
-                {label}
+                {value === 'general' && <Home className="h-4 w-4" />}
+                {value === 'matieres' && <BookOpen className="h-4 w-4" />}
+                {value === 'professeurs' && <Users className="h-4 w-4" />}
+                {value === 'resultats' && <Shield className="h-4 w-4" />}
+                <span className="hidden sm:inline">{label}</span>
               </button>
             ))}
           </div>
@@ -221,7 +226,8 @@ export function DelegatePage() {
               onClick={() => navigate('/dashboard')}
               className="h-9 rounded-lg bg-white/15 text-white hover:bg-white/25 hover:text-white"
             >
-              Dashboard
+              <Home className="h-4 w-4" />
+              <span className="hidden sm:inline sm:ml-1">Dashboard</span>
             </Button>
             {isAdmin && (
               <Button
@@ -230,7 +236,8 @@ export function DelegatePage() {
                 onClick={() => navigate('/admin')}
                 className="h-9 rounded-lg bg-white/15 text-white hover:bg-white/25 hover:text-white"
               >
-                Admin
+                <Shield className="h-4 w-4" />
+                <span className="hidden sm:inline sm:ml-1">Admin</span>
               </Button>
             )}
             <Button
@@ -238,7 +245,8 @@ export function DelegatePage() {
               variant="ghost"
               className="h-9 rounded-lg text-white hover:bg-white/12 hover:text-white"
             >
-              Logout
+              <LogOut className="h-4 w-4" />
+              <span className="hidden sm:inline sm:ml-1">Logout</span>
             </Button>
           </div>
         </nav>
@@ -283,7 +291,7 @@ export function DelegatePage() {
           )}
 
           {activeTab === 'general' && (
-            <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4">
                 <h2 className="text-base font-semibold text-zinc-900">Resume</h2>
                 <p className="mt-2 text-sm text-zinc-600">
@@ -326,7 +334,7 @@ export function DelegatePage() {
                 </Button>
               </div>
 
-              <div className="grid gap-3 md:grid-cols-2">
+              <div className="grid gap-3 sm:grid-cols-2">
                 <input
                   value={matiereCode}
                   onChange={(e) => setMatiereCode(e.target.value)}
@@ -359,7 +367,7 @@ export function DelegatePage() {
                 />
                 <Button
                   type="button"
-                  className="h-10 rounded-xl bg-zinc-900 text-white hover:bg-zinc-800 md:col-span-2"
+                  className="h-10 rounded-xl bg-zinc-900 text-white hover:bg-zinc-800 sm:col-span-2"
                   onClick={() =>
                     void runAction(
                       () =>
@@ -377,7 +385,7 @@ export function DelegatePage() {
                 </Button>
               </div>
 
-              <div className="grid gap-3 md:grid-cols-2">
+              <div className="grid gap-3 sm:grid-cols-2">
                 <select
                   value={referentMatiere}
                   onChange={(e) => setReferentMatiere(e.target.value)}
@@ -404,7 +412,7 @@ export function DelegatePage() {
                 </select>
                 <Button
                   type="button"
-                  className="h-10 rounded-xl bg-zinc-900 text-white hover:bg-zinc-800 md:col-span-2"
+                  className="h-10 rounded-xl bg-zinc-900 text-white hover:bg-zinc-800 sm:col-span-2"
                   onClick={() =>
                     void runAction(
                       () => setReferentRequest(selectedPromoId, referentMatiere, referentProf),
@@ -420,7 +428,7 @@ export function DelegatePage() {
 
           {activeTab === 'professeurs' && selectedPromoId && (
             <div className="mt-4 space-y-4">
-              <div className="grid gap-3 md:grid-cols-2">
+              <div className="grid gap-3 sm:grid-cols-2">
                 <input
                   value={profPrenom}
                   onChange={(e) => setProfPrenom(e.target.value)}
@@ -437,11 +445,11 @@ export function DelegatePage() {
                   value={profEmail}
                   onChange={(e) => setProfEmail(e.target.value)}
                   placeholder="Email professeur"
-                  className="h-11 rounded-xl border border-zinc-300 px-3 md:col-span-2"
+                  className="h-11 rounded-xl border border-zinc-300 px-3 sm:col-span-2"
                 />
                 <Button
                   type="button"
-                  className="h-10 rounded-xl bg-zinc-900 text-white hover:bg-zinc-800 md:col-span-2"
+                  className="h-10 rounded-xl bg-zinc-900 text-white hover:bg-zinc-800 sm:col-span-2"
                   onClick={() =>
                     void runAction(
                       () =>
@@ -483,7 +491,7 @@ export function DelegatePage() {
 
           {activeTab === 'resultats' && selectedPromoId && (
             <div className="mt-4 space-y-4">
-              <div className="grid gap-3 md:grid-cols-2">
+              <div className="grid gap-3 sm:grid-cols-2">
                 <select
                   value={resultMatiereId}
                   onChange={(e) => setResultMatiereId(e.target.value)}
@@ -534,7 +542,7 @@ export function DelegatePage() {
                 />
                 <Button
                   type="button"
-                  className="h-10 rounded-xl bg-zinc-900 text-white hover:bg-zinc-800 md:col-span-2"
+                  className="h-10 rounded-xl bg-zinc-900 text-white hover:bg-zinc-800 sm:col-span-2"
                   onClick={() =>
                     void runAction(
                       () =>

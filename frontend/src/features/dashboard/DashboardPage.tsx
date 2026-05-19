@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Calendar, Home, LogOut, Shield, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   authMeRequest,
@@ -126,8 +127,8 @@ export function DashboardPage() {
   }, [selectedPromotion]);
 
   return (
-    <main className="min-h-screen bg-[linear-gradient(160deg,#f6efe1,#f1e7d8)] p-4 md:p-8">
-      <section className="mx-auto max-w-[1280px] space-y-4">
+    <main className="min-h-screen bg-[linear-gradient(160deg,#f6efe1,#f1e7d8)] p-3 sm:p-4 md:p-8">
+      <section className="mx-auto max-w-[1280px] w-full space-y-4">
         <nav className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--auth-card-border)] bg-[linear-gradient(135deg,#4f1730,#6d2745)] px-4 py-3 text-white shadow-[0_16px_38px_rgba(36,14,30,0.28)]">
           <div className="flex flex-wrap items-center gap-2">
             {(
@@ -142,11 +143,14 @@ export function DashboardPage() {
                 type="button"
                 onClick={() => setActiveTab(key)}
                 className={[
-                  'rounded-lg px-3 py-1.5 text-sm transition',
+                  'rounded-lg px-3 py-1.5 text-sm transition flex items-center gap-2',
                   activeTab === key ? 'bg-white/20 font-semibold' : 'hover:bg-white/10',
                 ].join(' ')}
               >
-                {label}
+                {key === 'accueil' && <Home className="h-4 w-4" />}
+                {key === 'edt' && <Calendar className="h-4 w-4" />}
+                {key === 'notes' && <Users className="h-4 w-4" />}
+                <span className="hidden sm:inline">{label}</span>
               </button>
             ))}
           </div>
@@ -159,7 +163,8 @@ export function DashboardPage() {
                 onClick={() => navigate('/delegue')}
                 className="h-9 rounded-lg bg-white/15 text-white hover:bg-white/25 hover:text-white"
               >
-                Delegue
+                <Users className="h-4 w-4" />
+                <span className="hidden sm:inline sm:ml-1">Delegue</span>
               </Button>
             )}
             {isAdmin && (
@@ -169,7 +174,8 @@ export function DashboardPage() {
                 onClick={() => navigate('/admin')}
                 className="h-9 rounded-lg bg-white/15 text-white hover:bg-white/25 hover:text-white"
               >
-                Admin
+                <Shield className="h-4 w-4" />
+                <span className="hidden sm:inline sm:ml-1">Admin</span>
               </Button>
             )}
             <Button
@@ -178,7 +184,10 @@ export function DashboardPage() {
               variant="ghost"
               className="h-9 rounded-lg text-white hover:bg-white/12 hover:text-white"
             >
-              {isLoggingOut ? 'Deconnexion...' : 'Logout'}
+              <LogOut className="h-4 w-4" />
+              <span className="hidden sm:inline sm:ml-1">
+                {isLoggingOut ? 'Deconnexion...' : 'Logout'}
+              </span>
             </Button>
           </div>
         </nav>

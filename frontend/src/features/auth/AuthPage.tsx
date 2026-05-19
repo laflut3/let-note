@@ -42,7 +42,7 @@ export function AuthPage() {
         backgroundImage: `linear-gradient(var(--auth-overlay), var(--auth-overlay)), url(${backgroundImageUrl})`,
       }}
     >
-      <section className="relative flex min-h-screen w-full items-center justify-center overflow-x-hidden overflow-y-auto px-3 pb-6 pt-20 sm:px-4 sm:pt-20 md:px-8 md:py-8">
+      <section className="relative flex min-h-screen w-full items-center justify-center overflow-x-hidden overflow-y-auto px-2 pb-4 pt-16 sm:px-4 sm:pt-20 md:px-8 md:py-8">
         <ThemeToggle
           theme={theme}
           onToggle={() => setTheme((prev) => (prev === 'light' ? 'dark' : 'light'))}
