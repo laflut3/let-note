@@ -21,6 +21,13 @@ pub struct UePayload {
   pub semestre: i32,
 }
 
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+pub struct UeCatalogItem {
+  pub id: Uuid,
+  pub semestre: i32,
+  pub linked_to_promo: bool,
+}
+
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct CreateMatiereInput {
   pub code_matiere: String,
@@ -412,11 +419,14 @@ pub async fn list_ues_for_promo(
 
   sqlx::query_as::<_, UePayload>(
     r#"
-    SELECT id, semestre
-    FROM ue
+    SELECT u.id, u.semestre
+    FROM promo_ue pu
+    JOIN ue u ON u.id = pu.id_ue
+    WHERE pu.id_promo = $1
     ORDER BY semestre, id
     "#,
   )
+  .bind(promo_id)
   .fetch_all(db)
   .await
   .map_err(map_schema_error("unable to list UE"))
@@ -433,7 +443,7 @@ pub async fn create_ue_for_promo(
 
   ensure_promotion_exists(db, promo_id).await?;
 
-  sqlx::query_as::<_, (Uuid, i32)>(
+  let created = sqlx::query_as::<_, (Uuid, i32)>(
     r#"
     INSERT INTO ue (semestre)
     VALUES ($1)
@@ -443,11 +453,93 @@ pub async fn create_ue_for_promo(
   .bind(payload.semestre)
   .fetch_one(db)
   .await
-  .map(|row| UePayload {
-    id: row.0,
-    semestre: row.1,
+  .map_err(map_schema_error("unable to create UE"))?;
+
+  sqlx::query(
+    r#"
+    INSERT INTO promo_ue (id_promo, id_ue)
+    VALUES ($1, $2)
+    ON CONFLICT DO NOTHING
+    "#,
+  )
+  .bind(promo_id)
+  .bind(created.0)
+  .execute(db)
+  .await
+  .map_err(map_schema_error("unable to attach UE to promotion"))?;
+
+  Ok(UePayload {
+    id: created.0,
+    semestre: created.1,
   })
-  .map_err(map_schema_error("unable to create UE"))
+}
+
+pub async fn list_ue_catalog_for_promo(
+  db: &PgPool,
+  promo_id: Uuid,
+) -> Result<Vec<UeCatalogItem>, ApiError> {
+  ensure_promotion_exists(db, promo_id).await?;
+
+  sqlx::query_as::<_, UeCatalogItem>(
+    r#"
+    SELECT
+      u.id,
+      u.semestre,
+      EXISTS(
+        SELECT 1
+        FROM promo_ue pu
+        WHERE pu.id_ue = u.id AND pu.id_promo = $1
+      ) AS linked_to_promo
+    FROM ue u
+    ORDER BY u.semestre, u.id
+    "#,
+  )
+  .bind(promo_id)
+  .fetch_all(db)
+  .await
+  .map_err(map_schema_error("unable to list UE catalog"))
+}
+
+pub async fn attach_ue_to_promo(
+  db: &PgPool,
+  promo_id: Uuid,
+  ue_id: Uuid,
+) -> Result<MutationAck, ApiError> {
+  ensure_promotion_exists(db, promo_id).await?;
+
+  let ue_exists = sqlx::query_scalar::<_, i64>(
+    r#"
+    SELECT COUNT(*)
+    FROM ue
+    WHERE id = $1
+    "#,
+  )
+  .bind(ue_id)
+  .fetch_one(db)
+  .await
+  .map_err(map_schema_error("unable to attach UE"))?
+    > 0;
+
+  if !ue_exists {
+    return Err(ApiError::bad_request("UE not found"));
+  }
+
+  sqlx::query(
+    r#"
+    INSERT INTO promo_ue (id_promo, id_ue)
+    VALUES ($1, $2)
+    ON CONFLICT DO NOTHING
+    "#,
+  )
+  .bind(promo_id)
+  .bind(ue_id)
+  .execute(db)
+  .await
+  .map_err(map_schema_error("unable to attach UE"))?;
+
+  Ok(MutationAck {
+    message: "UE attached to promotion",
+  })
 }
 
 pub async fn update_ue_for_promo(
@@ -487,27 +579,6 @@ pub async fn delete_ue_for_promo(
   ensure_promotion_exists(db, promo_id).await?;
   ensure_ue_attached_to_promo(db, promo_id, ue_id).await?;
 
-  let used_outside_target = sqlx::query_scalar::<_, i64>(
-    r#"
-    SELECT COUNT(*)
-    FROM matiere_ue mu
-    JOIN mat_promo mp ON mp.id_mat = mu.id_matiere
-    WHERE mu.id_ue = $1 AND mp.id_promo <> $2
-    "#,
-  )
-  .bind(ue_id)
-  .bind(promo_id)
-  .fetch_one(db)
-  .await
-  .map_err(map_schema_error("unable to delete UE"))?
-    > 0;
-
-  if used_outside_target {
-    return Err(ApiError::bad_request(
-      "UE is used by other promotions and cannot be deleted from this promotion context",
-    ));
-  }
-
   let used_in_target = sqlx::query_scalar::<_, i64>(
     r#"
     SELECT COUNT(*)
@@ -526,6 +597,37 @@ pub async fn delete_ue_for_promo(
     return Err(ApiError::bad_request(
       "remove subject links from this UE before deleting it",
     ));
+  }
+
+  sqlx::query(
+    r#"
+    DELETE FROM promo_ue
+    WHERE id_promo = $1 AND id_ue = $2
+    "#,
+  )
+  .bind(promo_id)
+  .bind(ue_id)
+  .execute(db)
+  .await
+  .map_err(map_schema_error("unable to detach UE"))?;
+
+  let still_attached_elsewhere = sqlx::query_scalar::<_, i64>(
+    r#"
+    SELECT COUNT(*)
+    FROM promo_ue
+    WHERE id_ue = $1
+    "#,
+  )
+  .bind(ue_id)
+  .fetch_one(db)
+  .await
+  .map_err(map_schema_error("unable to delete UE"))?
+    > 0;
+
+  if still_attached_elsewhere {
+    return Ok(MutationAck {
+      message: "UE detached from promotion",
+    });
   }
 
   let deleted = sqlx::query(
@@ -557,9 +659,8 @@ async fn ensure_ue_attached_to_promo(
   let attached = sqlx::query_scalar::<_, i64>(
     r#"
     SELECT COUNT(*)
-    FROM matiere_ue mu
-    JOIN mat_promo mp ON mp.id_mat = mu.id_matiere
-    WHERE mu.id_ue = $1 AND mp.id_promo = $2
+    FROM promo_ue pu
+    WHERE pu.id_ue = $1 AND pu.id_promo = $2
     "#,
   )
   .bind(ue_id)
@@ -608,21 +709,22 @@ pub async fn add_matiere_to_promo(
   .map_err(map_schema_error("unable to create subject"))?
   .ok_or_else(|| ApiError::bad_request("promotion not found"))?;
 
-  let ue_exists = sqlx::query_scalar::<_, i64>(
+  let ue_exists_for_promo = sqlx::query_scalar::<_, i64>(
     r#"
     SELECT COUNT(*)
-    FROM ue
-    WHERE id = $1
+    FROM promo_ue
+    WHERE id_ue = $1 AND id_promo = $2
     "#,
   )
   .bind(payload.ue_id)
+  .bind(promo_id)
   .fetch_one(db)
   .await
   .map_err(map_schema_error("unable to validate UE"))?
     > 0;
 
-  if !ue_exists {
-    return Err(ApiError::bad_request("UE does not exist"));
+  if !ue_exists_for_promo {
+    return Err(ApiError::bad_request("UE is not linked to this promotion"));
   }
 
   let prof_exists = sqlx::query_scalar::<_, i64>(

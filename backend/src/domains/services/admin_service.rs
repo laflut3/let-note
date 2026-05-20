@@ -63,6 +63,7 @@ pub struct PromotionStudent {
   pub nom: String,
   pub prenom: String,
   pub email: String,
+  pub is_delegue: bool,
 }
 
 #[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
@@ -944,18 +945,59 @@ pub async fn assign_delegue(
     .await
     .map_err(|_| ApiError::internal("unable to assign delegate at this time"))?;
 
-  sqlx::query(
+  let is_in_promo = sqlx::query_scalar::<_, i64>(
     r#"
-    INSERT INTO etu_promo (id_etu, id_promo)
-    VALUES ($1, $2)
-    ON CONFLICT DO NOTHING
+    SELECT COUNT(*)
+    FROM etu_promo
+    WHERE id_promo = $1 AND id_etu = $2
     "#,
   )
-  .bind(etu_id)
   .bind(promo_id)
-  .execute(&mut *tx)
+  .bind(etu_id)
+  .fetch_one(&mut *tx)
   .await
-  .map_err(map_schema_error("unable to update delegate scope"))?;
+  .map_err(map_schema_error("unable to validate delegate scope"))?
+    > 0;
+
+  if !is_in_promo {
+    return Err(ApiError::bad_request(
+      "student must already belong to the promotion before role change",
+    ));
+  }
+
+  let is_already_delegue = sqlx::query_scalar::<_, i64>(
+    r#"
+    SELECT COUNT(*)
+    FROM delegue_promo
+    WHERE id_promo = $1 AND id_etu = $2
+    "#,
+  )
+  .bind(promo_id)
+  .bind(etu_id)
+  .fetch_one(&mut *tx)
+  .await
+  .map_err(map_schema_error("unable to validate delegate scope"))?
+    > 0;
+
+  if !is_already_delegue {
+    let delegue_count = sqlx::query_scalar::<_, i64>(
+      r#"
+      SELECT COUNT(*)
+      FROM delegue_promo
+      WHERE id_promo = $1
+      "#,
+    )
+    .bind(promo_id)
+    .fetch_one(&mut *tx)
+    .await
+    .map_err(map_schema_error("unable to validate delegate scope"))?;
+
+    if delegue_count >= 2 {
+      return Err(ApiError::bad_request(
+        "a promotion can have at most 2 delegates",
+      ));
+    }
+  }
 
   sqlx::query(
     r#"
@@ -999,7 +1041,17 @@ pub async fn list_promotion_students(
 ) -> Result<Vec<PromotionStudent>, ApiError> {
   sqlx::query_as::<_, PromotionStudent>(
     r#"
-    SELECT e.id, e.numero_etudiant, e.nom, e.prenom, e.email
+    SELECT
+      e.id,
+      e.numero_etudiant,
+      e.nom,
+      e.prenom,
+      e.email,
+      EXISTS (
+        SELECT 1
+        FROM delegue_promo dp
+        WHERE dp.id_promo = ep.id_promo AND dp.id_etu = ep.id_etu
+      ) AS is_delegue
     FROM etu_promo ep
     JOIN etudiant e ON e.id = ep.id_etu
     WHERE ep.id_promo = $1
@@ -1017,6 +1069,26 @@ pub async fn add_student_to_promotion(
   promo_id: Uuid,
   etu_id: Uuid,
 ) -> Result<MutationAck, ApiError> {
+  let already_in_promo = sqlx::query_scalar::<_, i64>(
+    r#"
+    SELECT COUNT(*)
+    FROM etu_promo
+    WHERE id_etu = $1 AND id_promo = $2
+    "#,
+  )
+  .bind(etu_id)
+  .bind(promo_id)
+  .fetch_one(db)
+  .await
+  .map_err(map_schema_error("unable to add student to promotion"))?
+    > 0;
+
+  if already_in_promo {
+    return Err(ApiError::bad_request(
+      "student already belongs to the promotion",
+    ));
+  }
+
   sqlx::query(
     r#"
     INSERT INTO etu_promo (id_etu, id_promo)
@@ -1044,6 +1116,24 @@ pub async fn remove_student_from_promotion(
     .begin()
     .await
     .map_err(|_| ApiError::internal("unable to remove student from promotion"))?;
+
+  let is_in_promo = sqlx::query_scalar::<_, i64>(
+    r#"
+    SELECT COUNT(*)
+    FROM etu_promo
+    WHERE id_etu = $1 AND id_promo = $2
+    "#,
+  )
+  .bind(etu_id)
+  .bind(promo_id)
+  .fetch_one(&mut *tx)
+  .await
+  .map_err(map_schema_error("unable to remove student from promotion"))?
+    > 0;
+
+  if !is_in_promo {
+    return Err(ApiError::bad_request("student is not in this promotion"));
+  }
 
   sqlx::query(
     r#"
@@ -1110,6 +1200,26 @@ pub async fn remove_delegue(db: &PgPool, promo_id: Uuid, etu_id: Uuid) -> Result
     .begin()
     .await
     .map_err(|_| ApiError::internal("unable to remove delegate at this time"))?;
+
+  let is_delegue = sqlx::query_scalar::<_, i64>(
+    r#"
+    SELECT COUNT(*)
+    FROM delegue_promo
+    WHERE id_etu = $1 AND id_promo = $2
+    "#,
+  )
+  .bind(etu_id)
+  .bind(promo_id)
+  .fetch_one(&mut *tx)
+  .await
+  .map_err(map_schema_error("unable to update delegate scope"))?
+    > 0;
+
+  if !is_delegue {
+    return Err(ApiError::bad_request(
+      "student is not delegate in this promotion",
+    ));
+  }
 
   sqlx::query(
     r#"

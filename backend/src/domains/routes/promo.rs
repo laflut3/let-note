@@ -18,6 +18,10 @@ pub fn promo_routes(db: PgPool) -> Router<PgPool> {
     .route("/promotions/{promo_id}/ical", get(get_promo_ical))
     .route("/promotions/{promo_id}/ues", get(list_ues_for_promo))
     .route(
+      "/promotions/{promo_id}/ues/catalog",
+      middleware::right_admin_or_delegue_for_promo(get(list_ue_catalog_for_promo), db.clone()),
+    )
+    .route(
       "/promotions/{promo_id}/ical-url",
       middleware::right_admin(put(update_promo_ical_url), db.clone()),
     )
@@ -31,6 +35,10 @@ pub fn promo_routes(db: PgPool) -> Router<PgPool> {
         put(update_ue_for_promo).delete(delete_ue_for_promo),
         db.clone(),
       ),
+    )
+    .route(
+      "/promotions/{promo_id}/ues/{ue_id}/attach",
+      middleware::right_admin_or_delegue_for_promo(post(attach_ue_to_promo), db.clone()),
     )
     .route(
       "/promotions/{promo_id}/matieres",
@@ -143,6 +151,16 @@ async fn create_ue_for_promo(
   }
 }
 
+async fn list_ue_catalog_for_promo(
+  State(db): State<PgPool>,
+  Path(promo_id): Path<Uuid>,
+) -> impl IntoResponse {
+  match promo_service::list_ue_catalog_for_promo(&db, promo_id).await {
+    Ok(data) => axum::Json(data).into_response(),
+    Err(error) => error.into_response(),
+  }
+}
+
 async fn update_ue_for_promo(
   State(db): State<PgPool>,
   Path((promo_id, ue_id)): Path<(Uuid, Uuid)>,
@@ -159,6 +177,16 @@ async fn delete_ue_for_promo(
   Path((promo_id, ue_id)): Path<(Uuid, Uuid)>,
 ) -> impl IntoResponse {
   match promo_service::delete_ue_for_promo(&db, promo_id, ue_id).await {
+    Ok(data) => axum::Json(data).into_response(),
+    Err(error) => error.into_response(),
+  }
+}
+
+async fn attach_ue_to_promo(
+  State(db): State<PgPool>,
+  Path((promo_id, ue_id)): Path<(Uuid, Uuid)>,
+) -> impl IntoResponse {
+  match promo_service::attach_ue_to_promo(&db, promo_id, ue_id).await {
     Ok(data) => axum::Json(data).into_response(),
     Err(error) => error.into_response(),
   }

@@ -16,8 +16,10 @@ import {
   adminListUsersDetailsRequest,
   adminListUsersRequest,
   adminRemoveDelegueRequest,
+  attachUeToPromotionRequest,
   createUeRequest,
   deleteUeRequest,
+  listUeCatalogRequest,
   listUesRequest,
   logoutRequest,
   updateUeRequest,
@@ -29,10 +31,11 @@ import {
   type AdminUser,
   type PromotionStudent,
   type UeItem,
+  type UeCatalogItem,
 } from '@/services/api';
 import type { SortDirection } from '@/types/common';
 
-export type AdminTab = 'promotions' | 'etudiants' | 'professeurs' | 'matieres';
+export type AdminTab = 'promotions' | 'etudiants' | 'professeurs' | 'matieres' | 'ues';
 
 export type Feedback = {
   type: '' | 'success' | 'error';
@@ -140,6 +143,13 @@ export function useAdminController(navigate: NavigateFunction) {
   const [studentSort, setStudentSort] = useState<SortDirection>('asc');
   const [matiereSearch, setMatiereSearch] = useState('');
   const [matiereSort, setMatiereSort] = useState<SortDirection>('asc');
+  const [uePromoId, setUePromoId] = useState('');
+  const [ueItems, setUeItems] = useState<UeItem[]>([]);
+  const [newUeSemestre, setNewUeSemestre] = useState('1');
+  const [editUeId, setEditUeId] = useState('');
+  const [editUeSemestre, setEditUeSemestre] = useState('1');
+  const [ueCatalogItems, setUeCatalogItems] = useState<UeCatalogItem[]>([]);
+  const [attachUeId, setAttachUeId] = useState('');
 
   const selectedCount = selectedUserIds.length;
   const canCreatePromotion = useMemo(() => {
@@ -253,6 +263,7 @@ export function useAdminController(navigate: NavigateFunction) {
         const promoData = (await promosRes.json()) as AdminPromotionSummary[];
         setPromotions(promoData);
         setSelectedPromoId((prev) => prev || promoData[0]?.id || '');
+        setUePromoId((prev) => prev || promoData[0]?.id || '');
       }
 
       if (!profRes.ok) {
@@ -346,6 +357,43 @@ export function useAdminController(navigate: NavigateFunction) {
 
     void loadResources();
   }, [selectedMatiereCode]);
+
+  useEffect(() => {
+    const loadUes = async () => {
+      if (!uePromoId) {
+        setUeItems([]);
+        return;
+      }
+      const response = await listUesRequest(uePromoId);
+      if (!response.ok) {
+        setUeItems([]);
+        return;
+      }
+      setUeItems((await response.json()) as UeItem[]);
+    };
+    void loadUes();
+  }, [uePromoId]);
+
+  useEffect(() => {
+    const loadUeCatalog = async () => {
+      if (!uePromoId) {
+        setUeCatalogItems([]);
+        setAttachUeId('');
+        return;
+      }
+      const response = await listUeCatalogRequest(uePromoId);
+      if (!response.ok) {
+        setUeCatalogItems([]);
+        setAttachUeId('');
+        return;
+      }
+      const data = (await response.json()) as UeCatalogItem[];
+      setUeCatalogItems(data);
+      const firstAttachable = data.find((item) => !item.linked_to_promo)?.id ?? '';
+      setAttachUeId((prev) => prev || firstAttachable);
+    };
+    void loadUeCatalog();
+  }, [uePromoId, ueItems.length]);
 
   useEffect(() => {
     const loadUesForPromo = async () => {
@@ -630,6 +678,58 @@ export function useAdminController(navigate: NavigateFunction) {
     await refreshLinkUes();
   };
 
+  const refreshAdminUes = async () => {
+    if (!uePromoId) return;
+    const response = await listUesRequest(uePromoId);
+    if (!response.ok) return;
+    setUeItems((await response.json()) as UeItem[]);
+  };
+
+  const handleCreateAdminUe = async () => {
+    if (!uePromoId) {
+      setFeedback({ type: 'error', message: 'Selectionnez une promotion.' });
+      return;
+    }
+    await runAction(
+      () => createUeRequest(uePromoId, { semestre: Number(newUeSemestre) || 1 }),
+      'UE creee.',
+      false
+    );
+    await refreshAdminUes();
+  };
+
+  const handleUpdateAdminUe = async () => {
+    if (!uePromoId || !editUeId) {
+      setFeedback({ type: 'error', message: 'Selectionnez une UE.' });
+      return;
+    }
+    await runAction(
+      () => updateUeRequest(uePromoId, editUeId, { semestre: Number(editUeSemestre) || 1 }),
+      'UE modifiee.',
+      false
+    );
+    await refreshAdminUes();
+  };
+
+  const handleDeleteAdminUe = async (ueId: string) => {
+    if (!uePromoId) return;
+    await runAction(() => deleteUeRequest(uePromoId, ueId), 'UE supprimee.', false);
+    await refreshAdminUes();
+  };
+
+  const handleAttachAdminUe = async () => {
+    if (!uePromoId || !attachUeId) {
+      setFeedback({ type: 'error', message: 'Selectionnez une UE a lier.' });
+      return;
+    }
+    await runAction(
+      () => attachUeToPromotionRequest(uePromoId, attachUeId),
+      'UE liee a la promotion.',
+      false
+    );
+    await refreshAdminUes();
+  };
+
   const handleLogout = async () => {
     setIsLoggingOut(true);
     try {
@@ -788,6 +888,18 @@ export function useAdminController(navigate: NavigateFunction) {
     setMatiereSearch,
     matiereSort,
     setMatiereSort,
+    uePromoId,
+    setUePromoId,
+    ueItems,
+    newUeSemestre,
+    setNewUeSemestre,
+    editUeId,
+    setEditUeId,
+    editUeSemestre,
+    setEditUeSemestre,
+    ueCatalogItems,
+    attachUeId,
+    setAttachUeId,
     selectedCount,
     canCreatePromotion,
     runAction,
@@ -805,6 +917,10 @@ export function useAdminController(navigate: NavigateFunction) {
     handleCreateUeForLinkPromo,
     handleUpdateUeForLinkPromo,
     handleDeleteUeForLinkPromo,
+    handleCreateAdminUe,
+    handleUpdateAdminUe,
+    handleDeleteAdminUe,
+    handleAttachAdminUe,
     handleLogout,
     openConfirmDialog,
     closeConfirmDialog,

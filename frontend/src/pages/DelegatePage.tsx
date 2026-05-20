@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BookOpen, Home, LogOut, Shield, Users } from 'lucide-react';
+import { BookOpen, Home, Layers, LogOut, Shield, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { ListControls } from '@/components/common/ListControls';
 import {
+  attachUeToPromotionRequest,
   addMatiereRequest,
   addProfesseurRequest,
   authMeRequest,
@@ -11,6 +13,7 @@ import {
   deleteUeRequest,
   getPromotionDashboardRequest,
   listAccessiblePromotionsRequest,
+  listUeCatalogRequest,
   listUesRequest,
   logoutRequest,
   setReferentRequest,
@@ -21,7 +24,7 @@ import {
   type UeItem,
 } from '@/services/api';
 
-type DelegateTab = 'general' | 'matieres' | 'professeurs' | 'resultats';
+type DelegateTab = 'general' | 'ues' | 'matieres' | 'professeurs' | 'resultats';
 
 type Feedback = {
   type: '' | 'success' | 'error';
@@ -64,6 +67,11 @@ export function DelegatePage() {
   const [resultSession, setResultSession] = useState('1');
   const [resultValue, setResultValue] = useState('0');
   const [resultCoef, setResultCoef] = useState('1');
+  const [ueSearch, setUeSearch] = useState('');
+  const [ueSort, setUeSort] = useState<'asc' | 'desc'>('asc');
+  const [ueSemesterFilter, setUeSemesterFilter] = useState<string>('all');
+  const [ueCatalogItems, setUeCatalogItems] = useState<UeItem[]>([]);
+  const [attachUeId, setAttachUeId] = useState('');
 
   const isAdmin = roles.includes('admin');
 
@@ -136,8 +144,20 @@ export function DelegatePage() {
         const ueData = (await uesRes.json()) as UeItem[];
         setUes(ueData);
         setSelectedUeId((prev) => prev || ueData[0]?.id || '');
+        const catalogRes = await listUeCatalogRequest(promoId);
+        if (catalogRes.ok) {
+          const catalog = (await catalogRes.json()) as Array<UeItem & { linked_to_promo: boolean }>;
+          const attachables = catalog.filter((item) => !item.linked_to_promo);
+          setUeCatalogItems(attachables);
+          setAttachUeId((prev) => prev || attachables[0]?.id || '');
+        } else {
+          setUeCatalogItems([]);
+          setAttachUeId('');
+        }
       } else {
         setUes([]);
+        setUeCatalogItems([]);
+        setAttachUeId('');
       }
     } catch {
       setErrorMessage('Erreur reseau. Reessayez.');
@@ -192,6 +212,29 @@ export function DelegatePage() {
     return `${promotion.nom} (${promotion.annee_arrivee}-${promotion.annee_depart})`;
   }, [promotions, selectedPromoId]);
 
+  const filteredUes = useMemo(() => {
+    const query = ueSearch.trim().toLowerCase();
+    const semesterValue = ueSemesterFilter === 'all' ? null : Number(ueSemesterFilter);
+    const filtered = ues.filter((ue) => {
+      const bySearch =
+        !query || ue.id.toLowerCase().includes(query) || String(ue.semestre).includes(query);
+      const bySemester = semesterValue === null || ue.semestre === semesterValue;
+      return bySearch && bySemester;
+    });
+    return filtered.sort((a, b) => {
+      if (a.semestre !== b.semestre) {
+        return ueSort === 'asc' ? a.semestre - b.semestre : b.semestre - a.semestre;
+      }
+      const cmp = a.id.localeCompare(b.id);
+      return ueSort === 'asc' ? cmp : -cmp;
+    });
+  }, [ues, ueSearch, ueSort, ueSemesterFilter]);
+
+  const ueSemesters = useMemo(
+    () => Array.from(new Set(ues.map((ue) => ue.semestre))).sort((a, b) => a - b),
+    [ues]
+  );
+
   return (
     <main className="min-h-screen bg-[linear-gradient(180deg,#f7f0e5,#f1e7d8)] p-3 sm:p-4 md:p-8">
       <section className="mx-auto max-w-[1280px] w-full space-y-4">
@@ -200,6 +243,7 @@ export function DelegatePage() {
             {(
               [
                 ['general', 'Vue generale'],
+                ['ues', 'UE'],
                 ['matieres', 'Matieres'],
                 ['professeurs', 'Professeurs'],
                 ['resultats', 'Resultats'],
@@ -215,6 +259,7 @@ export function DelegatePage() {
                 ].join(' ')}
               >
                 {value === 'general' && <Home className="h-4 w-4" />}
+                {value === 'ues' && <Layers className="h-4 w-4" />}
                 {value === 'matieres' && <BookOpen className="h-4 w-4" />}
                 {value === 'professeurs' && <Users className="h-4 w-4" />}
                 {value === 'resultats' && <Shield className="h-4 w-4" />}
@@ -315,7 +360,7 @@ export function DelegatePage() {
             </div>
           )}
 
-          {activeTab === 'matieres' && selectedPromoId && (
+          {activeTab === 'ues' && selectedPromoId && (
             <div className="mt-4 space-y-4">
               <div className="grid gap-3 md:grid-cols-3">
                 <input
@@ -337,13 +382,64 @@ export function DelegatePage() {
                   Creer UE
                 </Button>
               </div>
+              <div className="grid gap-3 md:grid-cols-3">
+                <select
+                  value={attachUeId}
+                  onChange={(e) => setAttachUeId(e.target.value)}
+                  className="h-11 rounded-xl border border-zinc-300 px-3 md:col-span-2"
+                >
+                  <option value="">Lier une UE existante</option>
+                  {ueCatalogItems.map((ue) => (
+                    <option key={ue.id} value={ue.id}>
+                      UE {ue.id.slice(0, 8)} - semestre {ue.semestre}
+                    </option>
+                  ))}
+                </select>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-11 rounded-xl"
+                  disabled={!attachUeId}
+                  onClick={() =>
+                    void runAction(
+                      () => attachUeToPromotionRequest(selectedPromoId, attachUeId),
+                      'UE liee a la promotion.'
+                    )
+                  }
+                >
+                  Lier UE existante
+                </Button>
+              </div>
 
               <div className="space-y-2 rounded-xl border border-zinc-200 bg-zinc-50 p-3">
                 <p className="text-sm font-semibold text-zinc-800">UE de la promotion</p>
-                {ues.length === 0 && (
+                <ListControls
+                  className="mt-2"
+                  searchValue={ueSearch}
+                  onSearchChange={setUeSearch}
+                  searchPlaceholder="Rechercher (id UE, semestre)"
+                  sortValue={ueSort}
+                  onSortChange={setUeSort}
+                  resultCount={filteredUes.length}
+                />
+                <div className="mt-2">
+                  <select
+                    value={ueSemesterFilter}
+                    onChange={(e) => setUeSemesterFilter(e.target.value)}
+                    className="h-10 rounded-xl border border-zinc-300 bg-white px-3 text-sm"
+                  >
+                    <option value="all">Tous les semestres</option>
+                    {ueSemesters.map((semester) => (
+                      <option key={semester} value={String(semester)}>
+                        Semestre {semester}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {filteredUes.length === 0 && (
                   <p className="text-xs text-zinc-600">Aucune UE liee a cette promotion.</p>
                 )}
-                {ues.map((ue) => (
+                {filteredUes.map((ue) => (
                   <div
                     key={ue.id}
                     className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-zinc-200 bg-white p-2"
@@ -395,7 +491,11 @@ export function DelegatePage() {
                   </div>
                 ))}
               </div>
+            </div>
+          )}
 
+          {activeTab === 'matieres' && selectedPromoId && (
+            <div className="mt-4 space-y-4">
               <div className="grid gap-3 sm:grid-cols-2">
                 <input
                   value={matiereCode}

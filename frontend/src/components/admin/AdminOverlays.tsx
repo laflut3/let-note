@@ -52,6 +52,15 @@ export function AdminOverlays({ controller }: Props) {
     confirmDialogAction,
   } = controller;
 
+  const isSelectedStudentInPromo = promoStudents.some(
+    (student) => student.id === selectedStudentForPromo
+  );
+  const selectedDelegue = promoStudents.find((student) => student.id === selectedDelegueId);
+  const canAssignDelegue = Boolean(
+    selectedDelegueId && selectedDelegue && !selectedDelegue.is_delegue
+  );
+  const canRemoveDelegue = Boolean(selectedDelegueId && selectedDelegue?.is_delegue);
+
   return (
     <>
       <Modal
@@ -204,6 +213,7 @@ export function AdminOverlays({ controller }: Props) {
               type="button"
               variant="outline"
               className="h-10 rounded-xl"
+              disabled={!canRemoveDelegue}
               onClick={() => {
                 setSelectedPromoId(studentsPopupPromoId);
                 void handleAssignDelegue(true);
@@ -214,6 +224,7 @@ export function AdminOverlays({ controller }: Props) {
             <Button
               type="button"
               className="h-10 rounded-xl bg-violet-700 text-white hover:bg-violet-800"
+              disabled={!canAssignDelegue}
               onClick={() => {
                 setSelectedPromoId(studentsPopupPromoId);
                 void handleAssignDelegue(false);
@@ -245,10 +256,11 @@ export function AdminOverlays({ controller }: Props) {
               </option>
             ))}
           </select>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
             <Button
               type="button"
               className="h-10 rounded-xl bg-violet-700 text-white hover:bg-violet-800"
+              disabled={!selectedStudentForPromo || isSelectedStudentInPromo}
               onClick={() => {
                 if (selectedStudentForPromo) {
                   void runAction(
@@ -264,10 +276,16 @@ export function AdminOverlays({ controller }: Props) {
             >
               Ajouter
             </Button>
+            {isSelectedStudentInPromo && (
+              <p className="text-xs text-zinc-600">
+                Deja dans la promo: vous pouvez seulement modifier son role.
+              </p>
+            )}
             <Button
               type="button"
               variant="outline"
               className="h-10 rounded-xl"
+              disabled={!selectedStudentForPromo || !isSelectedStudentInPromo}
               onClick={() => {
                 if (selectedStudentForPromo) {
                   void runAction(
@@ -276,12 +294,12 @@ export function AdminOverlays({ controller }: Props) {
                         studentsPopupPromoId,
                         selectedStudentForPromo
                       ),
-                    'Eleve retire.'
+                    'Eleve retire de la promo.'
                   );
                 }
               }}
             >
-              Retirer
+              Retirer de la promo
             </Button>
           </div>
         </div>
@@ -290,7 +308,8 @@ export function AdminOverlays({ controller }: Props) {
           <ul className="mt-2 space-y-1 text-sm text-zinc-700">
             {promoStudents.map((student) => (
               <li key={student.id}>
-                {student.prenom} {student.nom} ({student.numero_etudiant ?? 'sans numero'})
+                {student.prenom} {student.nom} ({student.numero_etudiant ?? 'sans numero'}){' '}
+                {student.is_delegue ? '- delegue' : ''}
               </li>
             ))}
           </ul>
@@ -304,7 +323,7 @@ export function AdminOverlays({ controller }: Props) {
             <option value="">Delegue</option>
             {promoStudents.map((student) => (
               <option key={student.id} value={student.id}>
-                {student.prenom} {student.nom}
+                {student.prenom} {student.nom} {student.is_delegue ? '(delegue)' : ''}
               </option>
             ))}
           </select>

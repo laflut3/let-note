@@ -54,6 +54,12 @@ CREATE TABLE IF NOT EXISTS ue (
   semestre INTEGER NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS promo_ue (
+  id_promo UUID NOT NULL REFERENCES promotion(id) ON DELETE CASCADE,
+  id_ue UUID NOT NULL REFERENCES ue(id) ON DELETE CASCADE,
+  PRIMARY KEY (id_promo, id_ue)
+);
+
 CREATE TABLE IF NOT EXISTS matiere (
   code_matiere TEXT PRIMARY KEY,
   nom_matiere TEXT NOT NULL,

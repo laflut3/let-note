@@ -37,7 +37,9 @@ export type CreatePromotionPayload = {
   etudiant_ids: string[];
 };
 
-export type PromotionStudent = AdminUser;
+export type PromotionStudent = AdminUser & {
+  is_delegue: boolean;
+};
 
 export type PromotionScope = {
   id: string;
@@ -159,6 +161,12 @@ export type AdminMatiereResource = {
 export type UeItem = {
   id: string;
   semestre: number;
+};
+
+export type UeCatalogItem = {
+  id: string;
+  semestre: number;
+  linked_to_promo: boolean;
 };
 
 export type AuthMePayload = {
@@ -474,6 +482,10 @@ export async function listUesRequest(promoId: string): Promise<Response> {
   return jsonRequest(`/promotions/${promoId}/ues`, { method: 'GET' });
 }
 
+export async function listUeCatalogRequest(promoId: string): Promise<Response> {
+  return jsonRequest(`/promotions/${promoId}/ues/catalog`, { method: 'GET' });
+}
+
 export async function updatePromotionIcalRequest(
   promoId: string,
   icalUrl: string
@@ -559,6 +571,12 @@ export async function updateUeRequest(
 export async function deleteUeRequest(promoId: string, ueId: string): Promise<Response> {
   return jsonRequest(`/promotions/${promoId}/ues/${ueId}`, {
     method: 'DELETE',
+  });
+}
+
+export async function attachUeToPromotionRequest(promoId: string, ueId: string): Promise<Response> {
+  return jsonRequest(`/promotions/${promoId}/ues/${ueId}/attach`, {
+    method: 'POST',
   });
 }
 
