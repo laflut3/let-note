@@ -332,9 +332,73 @@ export function DashboardPage() {
 
                 <section className="rounded-2xl border border-zinc-300 bg-white p-4">
                   <h3 className="text-sm font-semibold">Profils etudiant</h3>
-                  <p className="mt-2 text-sm text-zinc-600">
-                    {controller.dashboard?.etudiants.length ?? 0} etudiant(s)
-                  </p>
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                    <input
+                      value={controller.profileForm.numero_etudiant}
+                      onChange={(event) =>
+                        controller.setProfileForm((prev) => ({
+                          ...prev,
+                          numero_etudiant: event.target.value,
+                        }))
+                      }
+                      className="rounded-md border border-zinc-300 px-2 py-1 text-sm"
+                      placeholder="Numero etudiant"
+                    />
+                    <input
+                      type="date"
+                      value={controller.profileForm.date_naissance}
+                      onChange={(event) =>
+                        controller.setProfileForm((prev) => ({
+                          ...prev,
+                          date_naissance: event.target.value,
+                        }))
+                      }
+                      className="rounded-md border border-zinc-300 px-2 py-1 text-sm"
+                    />
+                    <input
+                      value={controller.profileForm.prenom}
+                      onChange={(event) =>
+                        controller.setProfileForm((prev) => ({
+                          ...prev,
+                          prenom: event.target.value,
+                        }))
+                      }
+                      className="rounded-md border border-zinc-300 px-2 py-1 text-sm"
+                      placeholder="Prenom"
+                    />
+                    <input
+                      value={controller.profileForm.nom}
+                      onChange={(event) =>
+                        controller.setProfileForm((prev) => ({ ...prev, nom: event.target.value }))
+                      }
+                      className="rounded-md border border-zinc-300 px-2 py-1 text-sm"
+                      placeholder="Nom"
+                    />
+                    <input
+                      value={controller.profileForm.email}
+                      onChange={(event) =>
+                        controller.setProfileForm((prev) => ({
+                          ...prev,
+                          email: event.target.value,
+                        }))
+                      }
+                      className="sm:col-span-2 rounded-md border border-zinc-300 px-2 py-1 text-sm"
+                      placeholder="Email"
+                    />
+                  </div>
+                  <div className="mt-3 flex items-center gap-3">
+                    <Button
+                      type="button"
+                      onClick={controller.saveProfile}
+                      disabled={controller.isSavingProfile}
+                      className="h-8 rounded-md bg-zinc-900 px-3 text-xs text-white hover:bg-zinc-700"
+                    >
+                      {controller.isSavingProfile ? 'Enregistrement...' : 'Enregistrer'}
+                    </Button>
+                    {controller.profileMessage ? (
+                      <p className="text-xs text-zinc-600">{controller.profileMessage}</p>
+                    ) : null}
+                  </div>
                 </section>
               </div>
             </div>

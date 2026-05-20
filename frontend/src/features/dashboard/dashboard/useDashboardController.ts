@@ -2,11 +2,14 @@ import { useEffect, useMemo, useState } from 'react';
 import type { NavigateFunction } from 'react-router-dom';
 import {
   authMeRequest,
+  getMyProfileRequest,
   getPromotionIcalRequest,
   getPromotionDashboardRequest,
   listAccessiblePromotionsRequest,
   logoutRequest,
+  updateMyProfileRequest,
   type AuthMePayload,
+  type MyProfilePayload,
   type PromotionDashboardPayload,
   type PromotionScope,
 } from '@/features/auth/api';
@@ -38,6 +41,16 @@ export function useDashboardController(navigate: NavigateFunction) {
   const [scheduleError, setScheduleError] = useState('');
   const [todayEvents, setTodayEvents] = useState<ScheduleEvent[]>([]);
   const [allEvents, setAllEvents] = useState<ScheduleEvent[]>([]);
+  const [profile, setProfile] = useState<MyProfilePayload | null>(null);
+  const [profileForm, setProfileForm] = useState({
+    numero_etudiant: '',
+    nom: '',
+    prenom: '',
+    email: '',
+    date_naissance: '',
+  });
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [profileMessage, setProfileMessage] = useState('');
 
   const isAdmin = roles.includes('admin');
   const hasDelegueScope = promotions.some((promotion) => promotion.can_manage);
@@ -139,8 +152,30 @@ export function useDashboardController(navigate: NavigateFunction) {
     }
   };
 
+  const loadProfile = async () => {
+    try {
+      const response = await getMyProfileRequest();
+      if (!response.ok) {
+        return;
+      }
+
+      const data = (await response.json()) as MyProfilePayload;
+      setProfile(data);
+      setProfileForm({
+        numero_etudiant: data.numero_etudiant ?? '',
+        nom: data.nom,
+        prenom: data.prenom,
+        email: data.email,
+        date_naissance: data.date_naissance,
+      });
+    } catch {
+      // keep dashboard usable
+    }
+  };
+
   useEffect(() => {
     void loadBaseData();
+    void loadProfile();
   }, []);
 
   useEffect(() => {
@@ -160,6 +195,41 @@ export function useDashboardController(navigate: NavigateFunction) {
     } finally {
       navigate('/', { replace: true });
       setIsLoggingOut(false);
+    }
+  };
+
+  const saveProfile = async () => {
+    setIsSavingProfile(true);
+    setProfileMessage('');
+
+    try {
+      const response = await updateMyProfileRequest({
+        numero_etudiant: profileForm.numero_etudiant,
+        nom: profileForm.nom,
+        prenom: profileForm.prenom,
+        email: profileForm.email,
+        date_naissance: profileForm.date_naissance,
+      });
+
+      if (!response.ok) {
+        setProfileMessage(await extractError(response, 'Impossible de mettre a jour le profil.'));
+        return;
+      }
+
+      const updated = (await response.json()) as MyProfilePayload;
+      setProfile(updated);
+      setProfileForm({
+        numero_etudiant: updated.numero_etudiant ?? '',
+        nom: updated.nom,
+        prenom: updated.prenom,
+        email: updated.email,
+        date_naissance: updated.date_naissance,
+      });
+      setProfileMessage('Profil mis a jour.');
+    } catch {
+      setProfileMessage('Erreur reseau lors de la mise a jour du profil.');
+    } finally {
+      setIsSavingProfile(false);
     }
   };
 
@@ -187,6 +257,12 @@ export function useDashboardController(navigate: NavigateFunction) {
     scheduleError,
     todayEvents,
     allEvents,
+    profile,
+    profileForm,
+    setProfileForm,
+    isSavingProfile,
+    profileMessage,
+    saveProfile,
     isAdmin,
     hasDelegueScope,
     handleLogout,
