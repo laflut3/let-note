@@ -7,5 +7,6 @@ resources:
 - 03-postgres-config.yaml
 - 20-backend.yaml
 - 10-postgres.yaml
+- 12-seaweedfs.yaml
 - 23-front.yaml
 - 30-ingress.yaml

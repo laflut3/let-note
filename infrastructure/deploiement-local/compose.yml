@@ -67,6 +67,11 @@ services:
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-Admin123456!}
       ADMIN_PRENOM: ${ADMIN_PRENOM:-Super}
       ADMIN_NOM: ${ADMIN_NOM:-Admin}
+      S3_ENDPOINT: ${S3_ENDPOINT:-http://seaweed-s3:8333}
+      S3_REGION: ${S3_REGION:-us-east-1}
+      S3_BUCKET: ${S3_BUCKET:-let-note-files}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-seaweedfs}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-seaweedfs}
     ports:
       - "${BACKEND_PORT:-8081}:8080"
 
@@ -90,6 +95,56 @@ services:
       - "${FRONTEND_PORT:-5173}:80"
     depends_on:
       - backend
+      - seaweed-s3
+
+  seaweed-master:
+    image: chrislusf/seaweedfs:latest
+    user: "0:0"
+    command: "master -ip=seaweed-master -mdir=/data"
+    restart: unless-stopped
+    ports:
+      - "9333:9333"
+    volumes:
+      - seaweed_master_data:/data
+
+  seaweed-volume:
+    image: chrislusf/seaweedfs:latest
+    user: "0:0"
+    command: "volume -mserver=seaweed-master:9333 -ip=seaweed-volume -port=8080 -dir=/data"
+    restart: unless-stopped
+    depends_on:
+      - seaweed-master
+    ports:
+      - "8080:8080"
+    volumes:
+      - seaweed_volume_data:/data
+
+  seaweed-filer:
+    image: chrislusf/seaweedfs:latest
+    user: "0:0"
+    command: "filer -master=seaweed-master:9333 -ip=seaweed-filer -port=8888"
+    restart: unless-stopped
+    depends_on:
+      - seaweed-master
+      - seaweed-volume
+    ports:
+      - "8888:8888"
+
+  seaweed-s3:
+    image: chrislusf/seaweedfs:latest
+    user: "0:0"
+    environment:
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY:-seaweedfs}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-seaweedfs}
+    command: "s3 -filer=seaweed-filer:8888 -port=8333 -allowEmptyFolder=false -config=/etc/seaweedfs/s3.conf"
+    depends_on:
+      - seaweed-filer
+    ports:
+      - "${S3_PORT:-8333}:8333"
+    volumes:
+      - ./seaweed/s3.conf:/etc/seaweedfs/s3.conf:ro
 
 volumes:
   db_data:
+  seaweed_master_data:
+  seaweed_volume_data:

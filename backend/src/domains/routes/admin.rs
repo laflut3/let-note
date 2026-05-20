@@ -71,11 +71,30 @@ pub fn admin_routes(db: PgPool) -> Router<PgPool> {
     )
     .route(
       "/matieres",
-      middleware::right_admin(get(list_matieres), db.clone()),
+      middleware::right_admin(get(list_matieres).post(create_matiere), db.clone()),
     )
     .route(
       "/matieres/{code_matiere}",
       middleware::right_admin(put(update_matiere).delete(delete_matiere), db.clone()),
+    )
+    .route(
+      "/matieres/{code_matiere}/link-all",
+      middleware::right_admin(post(link_matiere_all_promotions), db.clone()),
+    )
+    .route(
+      "/matieres/{code_matiere}/link-promotion",
+      middleware::right_admin(post(link_matiere_promotion), db.clone()),
+    )
+    .route(
+      "/matieres/{code_matiere}/resources",
+      middleware::right_admin(
+        get(list_matiere_resources).post(create_matiere_resource),
+        db.clone(),
+      ),
+    )
+    .route(
+      "/matieres/resources/{resource_id}",
+      middleware::right_admin(axum::routing::delete(delete_matiere_resource), db.clone()),
     )
     .route(
       "/promotions/{promo_id}/delegues/{etu_id}",
@@ -209,6 +228,16 @@ async fn list_matieres(State(db): State<PgPool>) -> impl IntoResponse {
   }
 }
 
+async fn create_matiere(
+  State(db): State<PgPool>,
+  Json(payload): Json<admin_service::CreateMatiereInput>,
+) -> impl IntoResponse {
+  match admin_service::create_matiere(&db, payload).await {
+    Ok(ack) => (StatusCode::CREATED, Json(ack)).into_response(),
+    Err(error) => error.into_response(),
+  }
+}
+
 async fn update_matiere(
   State(db): State<PgPool>,
   Path(code_matiere): Path<String>,
@@ -220,12 +249,71 @@ async fn update_matiere(
   }
 }
 
+async fn list_matiere_resources(
+  State(db): State<PgPool>,
+  Path(code_matiere): Path<String>,
+) -> impl IntoResponse {
+  match admin_service::list_matiere_resources(&db, &code_matiere).await {
+    Ok(items) => (StatusCode::OK, Json(items)).into_response(),
+    Err(error) => error.into_response(),
+  }
+}
+
+async fn create_matiere_resource(
+  State(db): State<PgPool>,
+  headers: HeaderMap,
+  Path(code_matiere): Path<String>,
+  Json(payload): Json<admin_service::CreateMatiereResourceInput>,
+) -> impl IntoResponse {
+  let auth = match middleware::extract_auth_context(&headers, &db).await {
+    Ok(value) => value,
+    Err(error) => return error.into_response(),
+  };
+
+  match admin_service::create_matiere_resource(&db, &code_matiere, payload, auth.user_id).await {
+    Ok(ack) => (StatusCode::CREATED, Json(ack)).into_response(),
+    Err(error) => error.into_response(),
+  }
+}
+
+async fn delete_matiere_resource(
+  State(db): State<PgPool>,
+  Path(resource_id): Path<Uuid>,
+) -> impl IntoResponse {
+  match admin_service::delete_matiere_resource(&db, resource_id).await {
+    Ok(ack) => (StatusCode::OK, Json(ack)).into_response(),
+    Err(error) => error.into_response(),
+  }
+}
+
 async fn delete_matiere(
   State(db): State<PgPool>,
   Path(code_matiere): Path<String>,
 ) -> impl IntoResponse {
   match admin_service::delete_matiere(&db, &code_matiere).await {
     Ok(deleted) => (StatusCode::OK, Json(deleted)).into_response(),
+    Err(error) => error.into_response(),
+  }
+}
+
+async fn link_matiere_all_promotions(
+  State(db): State<PgPool>,
+  Path(code_matiere): Path<String>,
+  Json(payload): Json<admin_service::LinkMatiereAllPromotionsInput>,
+) -> impl IntoResponse {
+  match admin_service::link_matiere_to_all_promotions(&db, &code_matiere, payload).await {
+    Ok(ack) => (StatusCode::OK, Json(ack)).into_response(),
+    Err(error) => error.into_response(),
+  }
+}
+
+async fn link_matiere_promotion(
+  State(db): State<PgPool>,
+  Path(code_matiere): Path<String>,
+  Json(payload): Json<admin_service::LinkMatierePromotionInput>,
+) -> impl IntoResponse {
+  match admin_service::link_matiere_to_promotion(&db, &code_matiere, payload).await {
+    Ok(ack) => (StatusCode::OK, Json(ack)).into_response(),
     Err(error) => error.into_response(),
   }
 }

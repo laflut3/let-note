@@ -26,6 +26,11 @@ Le Vault est deploie separement via `infrastructure/deploiement-vault`.
 - `PS_BDD_PASS`
 - `JWT_SECRET`
 - `COOKIE_SECURE`
+- `S3_ENDPOINT`
+- `S3_REGION`
+- `S3_BUCKET`
+- `S3_ACCESS_KEY`
+- `S3_SECRET_KEY`
 
 ## Deploy
 

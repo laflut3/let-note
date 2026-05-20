@@ -1,5 +1,9 @@
 DROP INDEX IF EXISTS ix_note_resultat_etu;
 DROP INDEX IF EXISTS ix_note_resultat_mat;
+DROP INDEX IF EXISTS ix_matiere_resource_type;
+DROP INDEX IF EXISTS ix_matiere_resource_promo;
+DROP INDEX IF EXISTS ix_matiere_resource_mat;
+DROP TABLE IF EXISTS matiere_resource;
 DROP TABLE IF EXISTS note_resultat;
 DROP TABLE IF EXISTS referent_matiere_promo;
 DROP TABLE IF EXISTS prof_promo;
@@ -16,3 +20,4 @@ DROP TABLE IF EXISTS promotion;
 DROP TABLE IF EXISTS professeur;
 DROP INDEX IF EXISTS ux_etudiant_numero_etudiant;
 DROP TABLE IF EXISTS etudiant;
+DROP TYPE IF EXISTS resource_type_metier;

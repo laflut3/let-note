@@ -1,5 +1,6 @@
 use chrono::{NaiveDate, Utc};
 use sqlx::PgPool;
+use std::collections::HashMap;
 use uuid::Uuid;
 
 use crate::domains::{error::ApiError, middleware::AuthContext};
@@ -21,6 +22,7 @@ pub struct CreateMatiereInput {
   pub nom_matiere: String,
   pub ue_id: Uuid,
   pub coef_ue: Option<f32>,
+  pub referent_prof_id: Uuid,
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
@@ -86,7 +88,7 @@ pub struct PromoStudent {
   pub email: String,
 }
 
-#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct MatiereDashboardItem {
   pub code_matiere: String,
   pub nom_matiere: String,
@@ -97,6 +99,36 @@ pub struct MatiereDashboardItem {
   pub referent_prof_nom: Option<String>,
   pub referent_prof_prenom: Option<String>,
   pub referent_prof_email: Option<String>,
+  pub resources: Vec<MatiereResourceDashboardItem>,
+}
+
+#[derive(Debug, Clone, sqlx::FromRow)]
+struct MatiereDashboardRow {
+  pub code_matiere: String,
+  pub nom_matiere: String,
+  pub ue_id: Option<Uuid>,
+  pub ue_semestre: Option<i32>,
+  pub coef_ue: Option<f32>,
+  pub referent_prof_id: Option<Uuid>,
+  pub referent_prof_nom: Option<String>,
+  pub referent_prof_prenom: Option<String>,
+  pub referent_prof_email: Option<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+pub struct MatiereResourceDashboardItem {
+  pub id: Uuid,
+  pub id_mat: String,
+  pub id_promo: Option<Uuid>,
+  pub type_metier: String,
+  pub title: String,
+  pub description: Option<String>,
+  pub s3_bucket: String,
+  pub s3_key: String,
+  pub url: Option<String>,
+  pub content_type: Option<String>,
+  pub size_bytes: Option<i64>,
+  pub created_at: chrono::DateTime<chrono::Utc>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
@@ -214,7 +246,7 @@ pub async fn get_promotion_dashboard(
   .await
   .map_err(map_schema_error("unable to load students"))?;
 
-  let matieres = sqlx::query_as::<_, MatiereDashboardItem>(
+  let matieres_rows = sqlx::query_as::<_, MatiereDashboardRow>(
     r#"
     SELECT
       m.code_matiere,
@@ -240,6 +272,50 @@ pub async fn get_promotion_dashboard(
   .fetch_all(db)
   .await
   .map_err(map_schema_error("unable to load subjects"))?;
+
+  let mut matieres = matieres_rows
+    .into_iter()
+    .map(|row| MatiereDashboardItem {
+      code_matiere: row.code_matiere,
+      nom_matiere: row.nom_matiere,
+      ue_id: row.ue_id,
+      ue_semestre: row.ue_semestre,
+      coef_ue: row.coef_ue,
+      referent_prof_id: row.referent_prof_id,
+      referent_prof_nom: row.referent_prof_nom,
+      referent_prof_prenom: row.referent_prof_prenom,
+      referent_prof_email: row.referent_prof_email,
+      resources: Vec::new(),
+    })
+    .collect::<Vec<_>>();
+
+  let resources = sqlx::query_as::<_, MatiereResourceDashboardItem>(
+    r#"
+    SELECT id, id_mat, id_promo, type_metier::text AS type_metier, title, description,
+           s3_bucket, s3_key, url, content_type, size_bytes, created_at
+    FROM matiere_resource
+    WHERE id_promo = $1
+    ORDER BY created_at DESC
+    "#,
+  )
+  .bind(promo_id)
+  .fetch_all(db)
+  .await
+  .map_err(map_schema_error("unable to load subject resources"))?;
+
+  let mut resources_by_mat: HashMap<String, Vec<MatiereResourceDashboardItem>> = HashMap::new();
+  for resource in resources {
+    resources_by_mat
+      .entry(resource.id_mat.clone())
+      .or_default()
+      .push(resource);
+  }
+
+  for matiere in &mut matieres {
+    matiere.resources = resources_by_mat
+      .remove(&matiere.code_matiere)
+      .unwrap_or_default();
+  }
 
   let professeurs = sqlx::query_as::<_, ProfesseurDashboardItem>(
     r#"
@@ -417,6 +493,26 @@ pub async fn add_matiere_to_promo(
     return Err(ApiError::bad_request("UE does not exist"));
   }
 
+  let prof_exists = sqlx::query_scalar::<_, i64>(
+    r#"
+    SELECT COUNT(*)
+    FROM prof_promo
+    WHERE id_prof = $1 AND id_promo = $2
+    "#,
+  )
+  .bind(payload.referent_prof_id)
+  .bind(promo_id)
+  .fetch_one(db)
+  .await
+  .map_err(map_schema_error("unable to validate professor"))?
+    > 0;
+
+  if !prof_exists {
+    return Err(ApiError::bad_request(
+      "referent professor must be attached to this promotion",
+    ));
+  }
+
   let matiere_year = NaiveDate::from_ymd_opt(annee_arrivee, 1, 1)
     .ok_or_else(|| ApiError::bad_request("invalid promotion arrival year"))?;
 
@@ -467,6 +563,21 @@ pub async fn add_matiere_to_promo(
   .execute(&mut *tx)
   .await
   .map_err(map_schema_error("unable to link subject to UE"))?;
+
+  sqlx::query(
+    r#"
+    INSERT INTO referent_matiere_promo (id_mat, id_promo, id_prof)
+    VALUES ($1, $2, $3)
+    ON CONFLICT (id_mat, id_promo)
+    DO UPDATE SET id_prof = EXCLUDED.id_prof
+    "#,
+  )
+  .bind(&code)
+  .bind(promo_id)
+  .bind(payload.referent_prof_id)
+  .execute(&mut *tx)
+  .await
+  .map_err(map_schema_error("unable to set subject referent"))?;
 
   tx.commit()
     .await

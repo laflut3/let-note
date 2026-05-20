@@ -1,5 +1,6 @@
 import { BookOpen, GraduationCap, User, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { adminUi } from '@/features/dashboard/admin/lib/ui';
 import type { AdminController, AdminTab } from '@/features/dashboard/admin/useAdminController';
 
 type Props = {
@@ -18,7 +19,7 @@ export function AdminNav({ controller, onDashboard }: Props) {
   const { activeTab, setActiveTab, isLoggingOut, handleLogout } = controller;
 
   return (
-    <nav className="flex flex-wrap items-center justify-between gap-3 rounded-3xl border border-black/10 bg-white/90 p-4 shadow-[0_20px_60px_rgba(26,18,8,0.12)]">
+    <nav className={`${adminUi.panel} flex flex-wrap items-center justify-between gap-3`}>
       <div className="flex flex-wrap gap-2">
         {tabs.map(([value, label, Icon]) => (
           <button
@@ -28,8 +29,8 @@ export function AdminNav({ controller, onDashboard }: Props) {
             className={[
               'rounded-xl border px-3 py-2 text-sm transition flex items-center gap-2',
               activeTab === value
-                ? 'border-zinc-900 bg-zinc-900 text-white'
-                : 'border-zinc-300 bg-white text-zinc-700 hover:border-zinc-500',
+                ? 'border-violet-700 bg-violet-700 text-white'
+                : 'border-violet-200 bg-violet-50/50 text-violet-900 hover:border-violet-400',
             ].join(' ')}
           >
             <Icon className="h-4 w-4" />
@@ -39,14 +40,19 @@ export function AdminNav({ controller, onDashboard }: Props) {
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <Button type="button" onClick={onDashboard} variant="outline" className="h-10 rounded-xl">
+        <Button
+          type="button"
+          onClick={onDashboard}
+          variant="outline"
+          className="h-10 rounded-xl border-violet-300"
+        >
           Dashboard
         </Button>
         <Button
           type="button"
           onClick={handleLogout}
           disabled={isLoggingOut}
-          className="h-10 rounded-xl bg-zinc-900 px-5 text-white hover:bg-zinc-800"
+          className="h-10 rounded-xl bg-violet-900 px-5 text-white hover:bg-violet-950"
         >
           {isLoggingOut ? 'Deconnexion...' : 'Logout'}
         </Button>

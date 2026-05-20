@@ -63,6 +63,20 @@ export type MatiereDashboardItem = {
   referent_prof_nom: string | null;
   referent_prof_prenom: string | null;
   referent_prof_email: string | null;
+  resources: {
+    id: string;
+    id_mat: string;
+    id_promo: string | null;
+    type_metier: 'cours' | 'td' | 'tp' | 'exam';
+    title: string;
+    description: string | null;
+    s3_bucket: string;
+    s3_key: string;
+    url: string | null;
+    content_type: string | null;
+    size_bytes: number | null;
+    created_at: string;
+  }[];
 };
 
 export type ProfesseurDashboardItem = {
@@ -125,6 +139,21 @@ export type AdminMatiere = {
   code_matiere: string;
   nom_matiere: string;
   promotion_count: number;
+};
+
+export type AdminMatiereResource = {
+  id: string;
+  id_mat: string;
+  id_promo: string | null;
+  type_metier: 'cours' | 'td' | 'tp' | 'exam';
+  title: string;
+  description: string | null;
+  s3_bucket: string;
+  s3_key: string;
+  url: string | null;
+  content_type: string | null;
+  size_bytes: number | null;
+  created_at: string;
 };
 
 export type UeItem = {
@@ -347,6 +376,19 @@ export async function adminListMatieresRequest(): Promise<Response> {
   return jsonRequest('/admin/matieres', { method: 'GET' });
 }
 
+export async function adminCreateMatiereRequest(payload: {
+  code_matiere: string;
+  nom_matiere: string;
+}): Promise<Response> {
+  return jsonRequest('/admin/matieres', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function adminUpdateMatiereRequest(
   codeMatiere: string,
   payload: {
@@ -364,6 +406,37 @@ export async function adminUpdateMatiereRequest(
 
 export async function adminDeleteMatiereRequest(codeMatiere: string): Promise<Response> {
   return jsonRequest(`/admin/matieres/${codeMatiere}`, { method: 'DELETE' });
+}
+
+export async function adminListMatiereResourcesRequest(codeMatiere: string): Promise<Response> {
+  return jsonRequest(`/admin/matieres/${codeMatiere}/resources`, { method: 'GET' });
+}
+
+export async function adminCreateMatiereResourceRequest(
+  codeMatiere: string,
+  payload: {
+    id_promo?: string;
+    type_metier: 'cours' | 'td' | 'tp' | 'exam';
+    title: string;
+    description?: string;
+    s3_bucket: string;
+    s3_key: string;
+    url?: string;
+    content_type?: string;
+    size_bytes?: number;
+  }
+): Promise<Response> {
+  return jsonRequest(`/admin/matieres/${codeMatiere}/resources`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function adminDeleteMatiereResourceRequest(resourceId: string): Promise<Response> {
+  return jsonRequest(`/admin/matieres/resources/${resourceId}`, { method: 'DELETE' });
 }
 
 export async function listAccessiblePromotionsRequest(): Promise<Response> {
@@ -397,7 +470,13 @@ export async function updatePromotionIcalRequest(
 
 export async function addMatiereRequest(
   promoId: string,
-  payload: { code_matiere: string; nom_matiere: string; ue_id: string; coef_ue?: number }
+  payload: {
+    code_matiere: string;
+    nom_matiere: string;
+    ue_id: string;
+    coef_ue?: number;
+    referent_prof_id: string;
+  }
 ): Promise<Response> {
   return jsonRequest(`/promotions/${promoId}/matieres`, {
     method: 'POST',

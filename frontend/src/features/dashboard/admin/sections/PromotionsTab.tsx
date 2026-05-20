@@ -1,6 +1,7 @@
 import { Pencil, Trash2, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { adminDeletePromotionRequest, type AdminPromotionSummary } from '@/features/auth/api';
+import { adminUi } from '@/features/dashboard/admin/lib/ui';
 import type { AdminController } from '@/features/dashboard/admin/useAdminController';
 
 type Props = {
@@ -29,16 +30,21 @@ export function PromotionsTab({ controller }: Props) {
     toggleUser,
     handleCreatePromotion,
     isCreatingPromotion,
-    promotions,
+    filteredPromotions,
     openStudentsPopup,
     openEditPromotionPopup,
     runAction,
+    openConfirmDialog,
+    promotionSearch,
+    setPromotionSearch,
+    promotionSort,
+    setPromotionSort,
   } = controller;
 
   return (
     <>
-      <section className="rounded-3xl border border-black/10 bg-white/90 p-4 sm:p-6 shadow-[0_20px_60px_rgba(26,18,8,0.12)]">
-        <h2 className="text-xl font-semibold text-zinc-900">Creer une promotion</h2>
+      <section className={adminUi.panel}>
+        <h2 className="text-xl font-semibold text-violet-950">Creer une promotion</h2>
         <p className="mt-1 text-sm text-zinc-600">
           Nom, image, annees, prof referent et etudiants.
         </p>
@@ -48,36 +54,36 @@ export function PromotionsTab({ controller }: Props) {
             value={promoName}
             onChange={(e) => setPromoName(e.target.value)}
             placeholder="Nom de la promotion"
-            className="h-11 rounded-xl border border-zinc-300 px-3 sm:col-span-2"
+            className={`${adminUi.input} sm:col-span-2`}
           />
           <input
             value={anneeArrivee}
             onChange={(e) => setAnneeArrivee(e.target.value)}
             placeholder="Annee d'arrivee"
-            className="h-11 rounded-xl border border-zinc-300 px-3"
+            className={adminUi.input}
           />
           <input
             value={anneeDepart}
             onChange={(e) => setAnneeDepart(e.target.value)}
             placeholder="Annee de depart"
-            className="h-11 rounded-xl border border-zinc-300 px-3"
+            className={adminUi.input}
           />
           <input
             value={imageUrl}
             onChange={(e) => setImageUrl(e.target.value)}
             placeholder="Image URL"
-            className="h-11 rounded-xl border border-zinc-300 px-3"
+            className={adminUi.input}
           />
           <input
             value={icalUrl}
             onChange={(e) => setIcalUrl(e.target.value)}
             placeholder="URL iCal (optionnel)"
-            className="h-11 rounded-xl border border-zinc-300 px-3"
+            className={adminUi.input}
           />
           <select
             value={referentProfId}
             onChange={(e) => setReferentProfId(e.target.value)}
-            className="h-11 rounded-xl border border-zinc-300 px-3 sm:col-span-2"
+            className={`${adminUi.select} sm:col-span-2`}
           >
             <option value="">Selectionner le professeur referent</option>
             {professeurs.map((prof) => (
@@ -126,16 +132,33 @@ export function PromotionsTab({ controller }: Props) {
           type="button"
           onClick={handleCreatePromotion}
           disabled={isCreatingPromotion}
-          className="mt-5 h-11 rounded-xl bg-zinc-900 px-5 text-white hover:bg-zinc-800"
+          className={`mt-5 ${adminUi.primaryBtn}`}
         >
           {isCreatingPromotion ? 'Creation...' : 'Creer la promotion'}
         </Button>
       </section>
 
-      <section className="rounded-3xl border border-black/10 bg-white/90 p-4 sm:p-6 shadow-[0_20px_60px_rgba(26,18,8,0.12)]">
-        <h2 className="text-xl font-semibold text-zinc-900">Liste des promotions</h2>
+      <section className={adminUi.panel}>
+        <h2 className="text-xl font-semibold text-violet-950">Liste des promotions</h2>
+        <div className="mt-3 grid gap-2 sm:grid-cols-3">
+          <input
+            value={promotionSearch}
+            onChange={(e) => setPromotionSearch(e.target.value)}
+            placeholder="Rechercher (nom, annee, delegue)"
+            className="sm:col-span-2 h-10 rounded-xl border border-violet-200 bg-violet-50/40 px-3"
+          />
+          <select
+            value={promotionSort}
+            onChange={(e) => setPromotionSort(e.target.value as 'asc' | 'desc')}
+            className="h-10 rounded-xl border border-violet-200 bg-violet-50/40 px-3"
+          >
+            <option value="asc">Tri: A → Z</option>
+            <option value="desc">Tri: Z → A</option>
+          </select>
+        </div>
+        <p className="mt-2 text-xs text-zinc-600">{filteredPromotions.length} resultat(s)</p>
         <div className="mt-4 space-y-3">
-          {promotions.map((promotion: AdminPromotionSummary) => (
+          {filteredPromotions.map((promotion: AdminPromotionSummary) => (
             <div
               key={promotion.id}
               className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between rounded-xl border border-zinc-200 bg-zinc-50 p-3"
@@ -172,12 +195,18 @@ export function PromotionsTab({ controller }: Props) {
                   variant="outline"
                   className="h-9 w-9 rounded-lg p-0 sm:h-9 sm:w-auto sm:px-3"
                   onClick={() => {
-                    if (window.confirm('Supprimer cette promotion ?')) {
-                      void runAction(
-                        () => adminDeletePromotionRequest(promotion.id),
-                        'Promotion supprimee.'
-                      );
-                    }
+                    openConfirmDialog({
+                      title: 'Supprimer la promotion',
+                      description: `Confirmer la suppression de ${promotion.nom} ?`,
+                      confirmLabel: 'Supprimer',
+                      isDanger: true,
+                      onConfirm: () => {
+                        void runAction(
+                          () => adminDeletePromotionRequest(promotion.id),
+                          'Promotion supprimee.'
+                        );
+                      },
+                    });
                   }}
                 >
                   <Trash2 className="h-4 w-4" />

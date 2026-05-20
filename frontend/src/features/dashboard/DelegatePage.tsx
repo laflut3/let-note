@@ -376,6 +376,7 @@ export function DelegatePage() {
                           nom_matiere: matiereName,
                           ue_id: selectedUeId,
                           coef_ue: Number(matiereCoef),
+                          referent_prof_id: referentProf,
                         }),
                       'Matiere ajoutee.'
                     )

@@ -1,5 +1,12 @@
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'resource_type_metier') THEN
+    CREATE TYPE resource_type_metier AS ENUM ('cours', 'td', 'tp', 'exam');
+  END IF;
+END$$;
+
 CREATE TABLE IF NOT EXISTS etudiant (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   numero_etudiant VARCHAR(8),
@@ -131,3 +138,23 @@ CREATE TABLE IF NOT EXISTS note_resultat (
 
 CREATE INDEX IF NOT EXISTS ix_note_resultat_mat ON note_resultat(id_mat);
 CREATE INDEX IF NOT EXISTS ix_note_resultat_etu ON note_resultat(id_etu);
+
+CREATE TABLE IF NOT EXISTS matiere_resource (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id_mat TEXT NOT NULL REFERENCES matiere(code_matiere) ON DELETE CASCADE,
+  id_promo UUID REFERENCES promotion(id) ON DELETE CASCADE,
+  type_metier resource_type_metier NOT NULL,
+  title TEXT NOT NULL,
+  description TEXT,
+  s3_bucket TEXT NOT NULL,
+  s3_key TEXT NOT NULL,
+  url TEXT,
+  content_type TEXT,
+  size_bytes BIGINT,
+  created_by UUID REFERENCES etudiant(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS ix_matiere_resource_mat ON matiere_resource(id_mat);
+CREATE INDEX IF NOT EXISTS ix_matiere_resource_promo ON matiere_resource(id_promo);
+CREATE INDEX IF NOT EXISTS ix_matiere_resource_type ON matiere_resource(type_metier);

@@ -1,12 +1,13 @@
 import { Button } from '@/components/ui/button';
 import { adminUpdateUserRequest } from '@/features/auth/api';
+import { adminUi } from '@/features/dashboard/admin/lib/ui';
 import type { AdminController } from '@/features/dashboard/admin/useAdminController';
 
 type Props = { controller: AdminController };
 
 export function StudentsTab({ controller }: Props) {
   const {
-    studentsDetails,
+    filteredStudents,
     expandedStudentId,
     toggleStudentDetails,
     editStudentNumero,
@@ -20,13 +21,34 @@ export function StudentsTab({ controller }: Props) {
     editStudentEmail,
     setEditStudentEmail,
     runAction,
+    studentSearch,
+    setStudentSearch,
+    studentSort,
+    setStudentSort,
   } = controller;
 
   return (
-    <section className="rounded-3xl border border-black/10 bg-white/90 p-4 sm:p-6 shadow-[0_20px_60px_rgba(26,18,8,0.12)]">
-      <h2 className="text-xl font-semibold text-zinc-900">Liste des etudiants</h2>
+    <section className={adminUi.panel}>
+      <h2 className="text-xl font-semibold text-violet-950">Liste des etudiants</h2>
+      <div className="mt-3 grid gap-2 sm:grid-cols-3">
+        <input
+          value={studentSearch}
+          onChange={(e) => setStudentSearch(e.target.value)}
+          placeholder="Rechercher (nom, prenom, email, numero)"
+          className="sm:col-span-2 h-10 rounded-xl border border-violet-200 bg-violet-50/40 px-3"
+        />
+        <select
+          value={studentSort}
+          onChange={(e) => setStudentSort(e.target.value as 'asc' | 'desc')}
+          className="h-10 rounded-xl border border-violet-200 bg-violet-50/40 px-3"
+        >
+          <option value="asc">Tri: A → Z</option>
+          <option value="desc">Tri: Z → A</option>
+        </select>
+      </div>
+      <p className="mt-2 text-xs text-zinc-600">{filteredStudents.length} resultat(s)</p>
       <div className="mt-4 space-y-2">
-        {studentsDetails.map((student) => (
+        {filteredStudents.map((student) => (
           <div key={student.id} className="rounded-xl border border-zinc-200 bg-zinc-50 p-3">
             <button
               type="button"
@@ -48,36 +70,36 @@ export function StudentsTab({ controller }: Props) {
                     value={editStudentNumero}
                     onChange={(e) => setEditStudentNumero(e.target.value)}
                     placeholder="Numero etudiant"
-                    className="h-10 rounded-lg border border-zinc-300 px-3"
+                    className={adminUi.input}
                   />
                   <input
                     value={editStudentBirthDate}
                     onChange={(e) => setEditStudentBirthDate(e.target.value)}
                     type="date"
-                    className="h-10 rounded-lg border border-zinc-300 px-3"
+                    className={adminUi.input}
                   />
                   <input
                     value={editStudentPrenom}
                     onChange={(e) => setEditStudentPrenom(e.target.value)}
                     placeholder="Prenom"
-                    className="h-10 rounded-lg border border-zinc-300 px-3"
+                    className={adminUi.input}
                   />
                   <input
                     value={editStudentNom}
                     onChange={(e) => setEditStudentNom(e.target.value)}
                     placeholder="Nom"
-                    className="h-10 rounded-lg border border-zinc-300 px-3"
+                    className={adminUi.input}
                   />
                   <input
                     value={editStudentEmail}
                     onChange={(e) => setEditStudentEmail(e.target.value)}
                     placeholder="Email"
-                    className="h-10 rounded-lg border border-zinc-300 px-3 sm:col-span-2"
+                    className={`${adminUi.input} sm:col-span-2`}
                   />
                 </div>
                 <Button
                   type="button"
-                  className="h-10 rounded-lg bg-zinc-900 text-white"
+                  className="h-10 rounded-lg bg-violet-700 text-white hover:bg-violet-800"
                   onClick={() =>
                     void runAction(
                       () =>

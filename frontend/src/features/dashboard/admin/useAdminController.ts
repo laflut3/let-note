@@ -2,8 +2,12 @@ import { useEffect, useMemo, useState } from 'react';
 import type { NavigateFunction } from 'react-router-dom';
 import {
   adminAssignDelegueRequest,
+  adminCreateMatiereRequest,
+  adminCreateMatiereResourceRequest,
   adminCreateProfesseurRequest,
+  adminDeleteMatiereResourceRequest,
   adminCreatePromotionRequest,
+  adminListMatiereResourcesRequest,
   adminListPromotionStudentsRequest,
   adminListMatieresRequest,
   adminListProfesseursRequest,
@@ -13,6 +17,7 @@ import {
   adminRemoveDelegueRequest,
   logoutRequest,
   type AdminMatiere,
+  type AdminMatiereResource,
   type AdminProfesseur,
   type AdminPromotionSummary,
   type AdminStudentDetails,
@@ -26,6 +31,17 @@ export type Feedback = {
   type: '' | 'success' | 'error';
   message: string;
 };
+
+export type ConfirmDialog = {
+  open: boolean;
+  title: string;
+  description: string;
+  confirmLabel: string;
+  isDanger?: boolean;
+  onConfirm?: () => void;
+};
+
+type SortDirection = 'asc' | 'desc';
 
 async function extractErrorMessage(response: Response, fallback: string): Promise<string> {
   const data = (await response.json().catch(() => null)) as { message?: string } | null;
@@ -80,6 +96,14 @@ export function useAdminController(navigate: NavigateFunction) {
 
   const [selectedMatiereCode, setSelectedMatiereCode] = useState('');
   const [editMatiereNom, setEditMatiereNom] = useState('');
+  const [newMatiereCode, setNewMatiereCode] = useState('');
+  const [newMatiereNom, setNewMatiereNom] = useState('');
+  const [matiereResources, setMatiereResources] = useState<AdminMatiereResource[]>([]);
+  const [resourceType, setResourceType] = useState<'cours' | 'td' | 'tp' | 'exam'>('cours');
+  const [resourceTitle, setResourceTitle] = useState('');
+  const [resourceBucket, setResourceBucket] = useState('let-note-files');
+  const [resourceKey, setResourceKey] = useState('');
+  const [resourceUrl, setResourceUrl] = useState('');
 
   const [selectedDelegueId, setSelectedDelegueId] = useState('');
   const [editStudentNumero, setEditStudentNumero] = useState('');
@@ -89,6 +113,20 @@ export function useAdminController(navigate: NavigateFunction) {
   const [editStudentBirthDate, setEditStudentBirthDate] = useState('');
 
   const [feedback, setFeedback] = useState<Feedback>({ type: '', message: '' });
+  const [confirmDialog, setConfirmDialog] = useState<ConfirmDialog>({
+    open: false,
+    title: '',
+    description: '',
+    confirmLabel: 'Confirmer',
+  });
+  const [promotionSearch, setPromotionSearch] = useState('');
+  const [promotionSort, setPromotionSort] = useState<SortDirection>('asc');
+  const [profSearch, setProfSearch] = useState('');
+  const [profSort, setProfSort] = useState<SortDirection>('asc');
+  const [studentSearch, setStudentSearch] = useState('');
+  const [studentSort, setStudentSort] = useState<SortDirection>('asc');
+  const [matiereSearch, setMatiereSearch] = useState('');
+  const [matiereSort, setMatiereSort] = useState<SortDirection>('asc');
 
   const selectedCount = selectedUserIds.length;
   const canCreatePromotion = useMemo(() => {
@@ -100,6 +138,71 @@ export function useAdminController(navigate: NavigateFunction) {
       selectedCount > 0
     );
   }, [anneeArrivee, anneeDepart, imageUrl, promoName, selectedCount]);
+
+  const filteredPromotions = useMemo(() => {
+    const query = promotionSearch.trim().toLowerCase();
+    const filtered = promotions.filter((item) => {
+      if (!query) return true;
+      return (
+        item.nom.toLowerCase().includes(query) ||
+        String(item.annee_arrivee).includes(query) ||
+        String(item.annee_depart).includes(query) ||
+        item.delegues.join(' ').toLowerCase().includes(query)
+      );
+    });
+    return filtered.sort((a, b) => {
+      const cmp = a.nom.localeCompare(b.nom, 'fr');
+      return promotionSort === 'asc' ? cmp : -cmp;
+    });
+  }, [promotions, promotionSearch, promotionSort]);
+
+  const filteredProfesseurs = useMemo(() => {
+    const query = profSearch.trim().toLowerCase();
+    const filtered = professeurs.filter((item) => {
+      if (!query) return true;
+      return (
+        item.prenom.toLowerCase().includes(query) ||
+        item.nom.toLowerCase().includes(query) ||
+        item.email.toLowerCase().includes(query)
+      );
+    });
+    return filtered.sort((a, b) => {
+      const cmp = `${a.nom} ${a.prenom}`.localeCompare(`${b.nom} ${b.prenom}`, 'fr');
+      return profSort === 'asc' ? cmp : -cmp;
+    });
+  }, [professeurs, profSearch, profSort]);
+
+  const filteredStudents = useMemo(() => {
+    const query = studentSearch.trim().toLowerCase();
+    const filtered = studentsDetails.filter((item) => {
+      if (!query) return true;
+      return (
+        item.prenom.toLowerCase().includes(query) ||
+        item.nom.toLowerCase().includes(query) ||
+        item.email.toLowerCase().includes(query) ||
+        (item.numero_etudiant ?? '').toLowerCase().includes(query)
+      );
+    });
+    return filtered.sort((a, b) => {
+      const cmp = `${a.nom} ${a.prenom}`.localeCompare(`${b.nom} ${b.prenom}`, 'fr');
+      return studentSort === 'asc' ? cmp : -cmp;
+    });
+  }, [studentsDetails, studentSearch, studentSort]);
+
+  const filteredMatieres = useMemo(() => {
+    const query = matiereSearch.trim().toLowerCase();
+    const filtered = matieres.filter((item) => {
+      if (!query) return true;
+      return (
+        item.nom_matiere.toLowerCase().includes(query) ||
+        item.code_matiere.toLowerCase().includes(query)
+      );
+    });
+    return filtered.sort((a, b) => {
+      const cmp = a.nom_matiere.localeCompare(b.nom_matiere, 'fr');
+      return matiereSort === 'asc' ? cmp : -cmp;
+    });
+  }, [matieres, matiereSearch, matiereSort]);
 
   const loadAdminData = async () => {
     setIsLoading(true);
@@ -206,6 +309,30 @@ export function useAdminController(navigate: NavigateFunction) {
 
     setEditMatiereNom(matiere.nom_matiere);
   }, [matieres, selectedMatiereCode]);
+
+  useEffect(() => {
+    setEditingPromoId('');
+    setEditingProfId('');
+    setStudentsPopupPromoId('');
+    setConfirmDialog((prev) => ({ ...prev, open: false, onConfirm: undefined }));
+  }, [activeTab]);
+
+  useEffect(() => {
+    const loadResources = async () => {
+      if (!selectedMatiereCode) {
+        setMatiereResources([]);
+        return;
+      }
+      const response = await adminListMatiereResourcesRequest(selectedMatiereCode);
+      if (!response.ok) {
+        setMatiereResources([]);
+        return;
+      }
+      setMatiereResources((await response.json()) as AdminMatiereResource[]);
+    };
+
+    void loadResources();
+  }, [selectedMatiereCode]);
 
   const runAction = async (
     action: () => Promise<Response>,
@@ -338,6 +465,70 @@ export function useAdminController(navigate: NavigateFunction) {
     );
   };
 
+  const handleCreateMatiere = async () => {
+    if (!newMatiereCode.trim() || !newMatiereNom.trim()) {
+      setFeedback({ type: 'error', message: 'Code et nom de matiere requis.' });
+      return;
+    }
+
+    await runAction(
+      () =>
+        adminCreateMatiereRequest({
+          code_matiere: newMatiereCode.trim().toUpperCase(),
+          nom_matiere: newMatiereNom.trim(),
+        }),
+      'Matiere creee avec succes.'
+    );
+    setNewMatiereCode('');
+    setNewMatiereNom('');
+  };
+
+  const handleCreateMatiereResource = async () => {
+    if (
+      !selectedMatiereCode ||
+      !resourceTitle.trim() ||
+      !resourceBucket.trim() ||
+      !resourceKey.trim()
+    ) {
+      setFeedback({ type: 'error', message: 'Matiere, titre, bucket et key S3 sont requis.' });
+      return;
+    }
+
+    await runAction(
+      () =>
+        adminCreateMatiereResourceRequest(selectedMatiereCode, {
+          type_metier: resourceType,
+          title: resourceTitle.trim(),
+          s3_bucket: resourceBucket.trim(),
+          s3_key: resourceKey.trim(),
+          url: resourceUrl.trim() || undefined,
+        }),
+      'Fichier de matiere ajoute.',
+      false
+    );
+
+    const refreshed = await adminListMatiereResourcesRequest(selectedMatiereCode);
+    if (refreshed.ok) {
+      setMatiereResources((await refreshed.json()) as AdminMatiereResource[]);
+    }
+    setResourceTitle('');
+    setResourceKey('');
+    setResourceUrl('');
+  };
+
+  const handleDeleteMatiereResource = async (resourceId: string) => {
+    await runAction(
+      () => adminDeleteMatiereResourceRequest(resourceId),
+      'Fichier de matiere supprime.',
+      false
+    );
+    if (!selectedMatiereCode) return;
+    const refreshed = await adminListMatiereResourcesRequest(selectedMatiereCode);
+    if (refreshed.ok) {
+      setMatiereResources((await refreshed.json()) as AdminMatiereResource[]);
+    }
+  };
+
   const handleLogout = async () => {
     setIsLoggingOut(true);
     try {
@@ -348,6 +539,20 @@ export function useAdminController(navigate: NavigateFunction) {
     }
   };
 
+  const openConfirmDialog = (dialog: Omit<ConfirmDialog, 'open'>) => {
+    setConfirmDialog({ ...dialog, open: true });
+  };
+
+  const closeConfirmDialog = () => {
+    setConfirmDialog((prev) => ({ ...prev, open: false, onConfirm: undefined }));
+  };
+
+  const confirmDialogAction = () => {
+    const action = confirmDialog.onConfirm;
+    closeConfirmDialog();
+    action?.();
+  };
+
   return {
     activeTab,
     setActiveTab,
@@ -356,8 +561,12 @@ export function useAdminController(navigate: NavigateFunction) {
     studentsDetails,
     expandedStudentId,
     promotions,
+    filteredPromotions,
     professeurs,
+    filteredProfesseurs,
     matieres,
+    filteredMatieres,
+    filteredStudents,
     isLoading,
     loadingError,
     promoName,
@@ -418,6 +627,21 @@ export function useAdminController(navigate: NavigateFunction) {
     setSelectedMatiereCode,
     editMatiereNom,
     setEditMatiereNom,
+    newMatiereCode,
+    setNewMatiereCode,
+    newMatiereNom,
+    setNewMatiereNom,
+    matiereResources,
+    resourceType,
+    setResourceType,
+    resourceTitle,
+    setResourceTitle,
+    resourceBucket,
+    setResourceBucket,
+    resourceKey,
+    setResourceKey,
+    resourceUrl,
+    setResourceUrl,
     selectedDelegueId,
     setSelectedDelegueId,
     editStudentNumero,
@@ -431,6 +655,23 @@ export function useAdminController(navigate: NavigateFunction) {
     editStudentBirthDate,
     setEditStudentBirthDate,
     feedback,
+    confirmDialog,
+    promotionSearch,
+    setPromotionSearch,
+    promotionSort,
+    setPromotionSort,
+    profSearch,
+    setProfSearch,
+    profSort,
+    setProfSort,
+    studentSearch,
+    setStudentSearch,
+    studentSort,
+    setStudentSort,
+    matiereSearch,
+    setMatiereSearch,
+    matiereSort,
+    setMatiereSort,
     selectedCount,
     canCreatePromotion,
     runAction,
@@ -441,7 +682,13 @@ export function useAdminController(navigate: NavigateFunction) {
     handleCreateProfessor,
     handleCreatePromotion,
     handleAssignDelegue,
+    handleCreateMatiere,
+    handleCreateMatiereResource,
+    handleDeleteMatiereResource,
     handleLogout,
+    openConfirmDialog,
+    closeConfirmDialog,
+    confirmDialogAction,
   };
 }
 
