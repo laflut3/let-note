@@ -37,6 +37,12 @@ export function SubjectsTab({ controller }: Props) {
     linkUes,
     linkUeId,
     setLinkUeId,
+    newLinkUeSemestre,
+    setNewLinkUeSemestre,
+    editLinkUeId,
+    setEditLinkUeId,
+    editLinkUeSemestre,
+    setEditLinkUeSemestre,
     linkReferentProfId,
     setLinkReferentProfId,
     linkCoef,
@@ -44,6 +50,9 @@ export function SubjectsTab({ controller }: Props) {
     handleCreateMatiereResource,
     handleDeleteMatiereResource,
     handleLinkMatiereToPromotion,
+    handleCreateUeForLinkPromo,
+    handleUpdateUeForLinkPromo,
+    handleDeleteUeForLinkPromo,
     selectedMatiereCode,
     setSelectedMatiereCode,
     filteredMatieres,
@@ -283,6 +292,70 @@ export function SubjectsTab({ controller }: Props) {
             placeholder="Coefficient UE (ex: 1)"
             className={adminUi.input}
           />
+        </div>
+        <div className="mt-4 rounded-xl border border-violet-200 p-3">
+          <p className="text-sm font-semibold text-violet-950">Gestion des UE de la promo</p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <input
+              value={newLinkUeSemestre}
+              onChange={(e) => setNewLinkUeSemestre(e.target.value)}
+              placeholder="Semestre (1-12)"
+              className="h-9 w-40 rounded-lg border border-violet-200 px-2 text-sm"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              className="h-9 rounded-lg"
+              onClick={() => void handleCreateUeForLinkPromo()}
+              disabled={!linkPromoId}
+            >
+              Ajouter UE
+            </Button>
+          </div>
+          <div className="mt-3 space-y-2">
+            {linkUes.map((ue) => (
+              <div
+                key={ue.id}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-zinc-200 bg-white p-2"
+              >
+                <p className="text-sm text-zinc-700">
+                  UE {ue.id.slice(0, 8)} - semestre {ue.semestre}
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    value={editLinkUeId === ue.id ? editLinkUeSemestre : String(ue.semestre)}
+                    onChange={(e) => {
+                      setEditLinkUeId(ue.id);
+                      setEditLinkUeSemestre(e.target.value);
+                    }}
+                    className="h-9 w-28 rounded-lg border border-zinc-300 px-2 text-sm"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-9 rounded-lg"
+                    onClick={() => {
+                      setEditLinkUeId(ue.id);
+                      void handleUpdateUeForLinkPromo();
+                    }}
+                  >
+                    Modifier UE
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-9 rounded-lg border-rose-300 text-rose-700 hover:bg-rose-50"
+                    onClick={() => void handleDeleteUeForLinkPromo(ue.id)}
+                  >
+                    Supprimer UE
+                  </Button>
+                </div>
+              </div>
+            ))}
+            {linkUes.length === 0 && (
+              <p className="text-xs text-zinc-600">Aucune UE pour cette promotion.</p>
+            )}
+          </div>
         </div>
         <p className="mt-2 text-xs text-zinc-600">
           L’admin peut lier cette matiere a n’importe quelle promo. Le professeur referent doit etre

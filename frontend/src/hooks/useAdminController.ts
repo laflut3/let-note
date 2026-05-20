@@ -16,8 +16,11 @@ import {
   adminListUsersDetailsRequest,
   adminListUsersRequest,
   adminRemoveDelegueRequest,
+  createUeRequest,
+  deleteUeRequest,
   listUesRequest,
   logoutRequest,
+  updateUeRequest,
   type AdminMatiere,
   type AdminMatiereResource,
   type AdminProfesseur,
@@ -104,6 +107,9 @@ export function useAdminController(navigate: NavigateFunction) {
   const [linkPromoId, setLinkPromoId] = useState('');
   const [linkUes, setLinkUes] = useState<UeItem[]>([]);
   const [linkUeId, setLinkUeId] = useState('');
+  const [newLinkUeSemestre, setNewLinkUeSemestre] = useState('1');
+  const [editLinkUeId, setEditLinkUeId] = useState('');
+  const [editLinkUeSemestre, setEditLinkUeSemestre] = useState('1');
   const [linkReferentProfId, setLinkReferentProfId] = useState('');
   const [linkCoef, setLinkCoef] = useState('1');
   const [resourceType, setResourceType] = useState<'cours' | 'td' | 'tp' | 'exam'>('cours');
@@ -577,6 +583,53 @@ export function useAdminController(navigate: NavigateFunction) {
     );
   };
 
+  const refreshLinkUes = async () => {
+    if (!linkPromoId) return;
+    const response = await listUesRequest(linkPromoId);
+    if (!response.ok) return;
+    const data = (await response.json()) as UeItem[];
+    setLinkUes(data);
+    setLinkUeId((prev) => prev || data[0]?.id || '');
+  };
+
+  const handleCreateUeForLinkPromo = async () => {
+    if (!linkPromoId) {
+      setFeedback({ type: 'error', message: 'Selectionnez une promotion.' });
+      return;
+    }
+    await runAction(
+      () =>
+        createUeRequest(linkPromoId, {
+          semestre: Number(newLinkUeSemestre) || 1,
+        }),
+      'UE creee.',
+      false
+    );
+    await refreshLinkUes();
+  };
+
+  const handleUpdateUeForLinkPromo = async () => {
+    if (!linkPromoId || !editLinkUeId) {
+      setFeedback({ type: 'error', message: 'Selectionnez une UE.' });
+      return;
+    }
+    await runAction(
+      () =>
+        updateUeRequest(linkPromoId, editLinkUeId, {
+          semestre: Number(editLinkUeSemestre) || 1,
+        }),
+      'UE modifiee.',
+      false
+    );
+    await refreshLinkUes();
+  };
+
+  const handleDeleteUeForLinkPromo = async (ueId: string) => {
+    if (!linkPromoId) return;
+    await runAction(() => deleteUeRequest(linkPromoId, ueId), 'UE supprimee.', false);
+    await refreshLinkUes();
+  };
+
   const handleLogout = async () => {
     setIsLoggingOut(true);
     try {
@@ -695,6 +748,12 @@ export function useAdminController(navigate: NavigateFunction) {
     linkUes,
     linkUeId,
     setLinkUeId,
+    newLinkUeSemestre,
+    setNewLinkUeSemestre,
+    editLinkUeId,
+    setEditLinkUeId,
+    editLinkUeSemestre,
+    setEditLinkUeSemestre,
     linkReferentProfId,
     setLinkReferentProfId,
     linkCoef,
@@ -743,6 +802,9 @@ export function useAdminController(navigate: NavigateFunction) {
     handleCreateMatiereResource,
     handleDeleteMatiereResource,
     handleLinkMatiereToPromotion,
+    handleCreateUeForLinkPromo,
+    handleUpdateUeForLinkPromo,
+    handleDeleteUeForLinkPromo,
     handleLogout,
     openConfirmDialog,
     closeConfirmDialog,

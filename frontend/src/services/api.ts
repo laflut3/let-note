@@ -542,6 +542,26 @@ export async function createUeRequest(
   });
 }
 
+export async function updateUeRequest(
+  promoId: string,
+  ueId: string,
+  payload: { semestre: number }
+): Promise<Response> {
+  return jsonRequest(`/promotions/${promoId}/ues/${ueId}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteUeRequest(promoId: string, ueId: string): Promise<Response> {
+  return jsonRequest(`/promotions/${promoId}/ues/${ueId}`, {
+    method: 'DELETE',
+  });
+}
+
 export async function createResultatRequest(
   promoId: string,
   matiereId: string,

@@ -10,6 +10,11 @@ pub struct CreateUeInput {
   pub semestre: i32,
 }
 
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct UpdateUeInput {
+  pub semestre: i32,
+}
+
 #[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
 pub struct UePayload {
   pub id: Uuid,
@@ -443,6 +448,133 @@ pub async fn create_ue_for_promo(
     semestre: row.1,
   })
   .map_err(map_schema_error("unable to create UE"))
+}
+
+pub async fn update_ue_for_promo(
+  db: &PgPool,
+  promo_id: Uuid,
+  ue_id: Uuid,
+  payload: UpdateUeInput,
+) -> Result<UePayload, ApiError> {
+  if !(1..=12).contains(&payload.semestre) {
+    return Err(ApiError::bad_request("invalid semestre"));
+  }
+
+  ensure_promotion_exists(db, promo_id).await?;
+  ensure_ue_attached_to_promo(db, promo_id, ue_id).await?;
+
+  sqlx::query_as::<_, UePayload>(
+    r#"
+    UPDATE ue
+    SET semestre = $2
+    WHERE id = $1
+    RETURNING id, semestre
+    "#,
+  )
+  .bind(ue_id)
+  .bind(payload.semestre)
+  .fetch_optional(db)
+  .await
+  .map_err(map_schema_error("unable to update UE"))?
+  .ok_or_else(|| ApiError::bad_request("UE not found"))
+}
+
+pub async fn delete_ue_for_promo(
+  db: &PgPool,
+  promo_id: Uuid,
+  ue_id: Uuid,
+) -> Result<MutationAck, ApiError> {
+  ensure_promotion_exists(db, promo_id).await?;
+  ensure_ue_attached_to_promo(db, promo_id, ue_id).await?;
+
+  let used_outside_target = sqlx::query_scalar::<_, i64>(
+    r#"
+    SELECT COUNT(*)
+    FROM matiere_ue mu
+    JOIN mat_promo mp ON mp.id_mat = mu.id_matiere
+    WHERE mu.id_ue = $1 AND mp.id_promo <> $2
+    "#,
+  )
+  .bind(ue_id)
+  .bind(promo_id)
+  .fetch_one(db)
+  .await
+  .map_err(map_schema_error("unable to delete UE"))?
+    > 0;
+
+  if used_outside_target {
+    return Err(ApiError::bad_request(
+      "UE is used by other promotions and cannot be deleted from this promotion context",
+    ));
+  }
+
+  let used_in_target = sqlx::query_scalar::<_, i64>(
+    r#"
+    SELECT COUNT(*)
+    FROM matiere_ue mu
+    JOIN mat_promo mp ON mp.id_mat = mu.id_matiere
+    WHERE mu.id_ue = $1 AND mp.id_promo = $2
+    "#,
+  )
+  .bind(ue_id)
+  .bind(promo_id)
+  .fetch_one(db)
+  .await
+  .map_err(map_schema_error("unable to delete UE"))?;
+
+  if used_in_target > 0 {
+    return Err(ApiError::bad_request(
+      "remove subject links from this UE before deleting it",
+    ));
+  }
+
+  let deleted = sqlx::query(
+    r#"
+    DELETE FROM ue
+    WHERE id = $1
+    "#,
+  )
+  .bind(ue_id)
+  .execute(db)
+  .await
+  .map_err(map_schema_error("unable to delete UE"))?
+  .rows_affected();
+
+  if deleted == 0 {
+    return Err(ApiError::bad_request("UE not found"));
+  }
+
+  Ok(MutationAck {
+    message: "UE deleted",
+  })
+}
+
+async fn ensure_ue_attached_to_promo(
+  db: &PgPool,
+  promo_id: Uuid,
+  ue_id: Uuid,
+) -> Result<(), ApiError> {
+  let attached = sqlx::query_scalar::<_, i64>(
+    r#"
+    SELECT COUNT(*)
+    FROM matiere_ue mu
+    JOIN mat_promo mp ON mp.id_mat = mu.id_matiere
+    WHERE mu.id_ue = $1 AND mp.id_promo = $2
+    "#,
+  )
+  .bind(ue_id)
+  .bind(promo_id)
+  .fetch_one(db)
+  .await
+  .map_err(map_schema_error("unable to validate UE"))?
+    > 0;
+
+  if !attached {
+    return Err(ApiError::bad_request(
+      "UE is not attached to this promotion",
+    ));
+  }
+  Ok(())
 }
 
 pub async fn add_matiere_to_promo(

@@ -8,11 +8,13 @@ import {
   authMeRequest,
   createResultatRequest,
   createUeRequest,
+  deleteUeRequest,
   getPromotionDashboardRequest,
   listAccessiblePromotionsRequest,
   listUesRequest,
   logoutRequest,
   setReferentRequest,
+  updateUeRequest,
   type AuthMePayload,
   type PromotionDashboardPayload,
   type PromotionScope,
@@ -44,6 +46,8 @@ export function DelegatePage() {
   const [feedback, setFeedback] = useState<Feedback>({ type: '', message: '' });
 
   const [newUeSemestre, setNewUeSemestre] = useState('1');
+  const [editingUeId, setEditingUeId] = useState('');
+  const [editingUeSemestre, setEditingUeSemestre] = useState('1');
   const [matiereCode, setMatiereCode] = useState('');
   const [matiereName, setMatiereName] = useState('');
   const [selectedUeId, setSelectedUeId] = useState('');
@@ -332,6 +336,64 @@ export function DelegatePage() {
                 >
                   Creer UE
                 </Button>
+              </div>
+
+              <div className="space-y-2 rounded-xl border border-zinc-200 bg-zinc-50 p-3">
+                <p className="text-sm font-semibold text-zinc-800">UE de la promotion</p>
+                {ues.length === 0 && (
+                  <p className="text-xs text-zinc-600">Aucune UE liee a cette promotion.</p>
+                )}
+                {ues.map((ue) => (
+                  <div
+                    key={ue.id}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-zinc-200 bg-white p-2"
+                  >
+                    <div className="text-sm text-zinc-700">
+                      UE {ue.id.slice(0, 8)} - semestre {ue.semestre}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <input
+                        value={editingUeId === ue.id ? editingUeSemestre : String(ue.semestre)}
+                        onChange={(e) => {
+                          setEditingUeId(ue.id);
+                          setEditingUeSemestre(e.target.value);
+                        }}
+                        className="h-9 w-28 rounded-lg border border-zinc-300 px-2 text-sm"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="h-9 rounded-lg"
+                        onClick={() =>
+                          void runAction(
+                            () =>
+                              updateUeRequest(selectedPromoId, ue.id, {
+                                semestre:
+                                  Number(editingUeId === ue.id ? editingUeSemestre : ue.semestre) ||
+                                  ue.semestre,
+                              }),
+                            'UE modifiee.'
+                          )
+                        }
+                      >
+                        Modifier
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="h-9 rounded-lg border-rose-300 text-rose-700 hover:bg-rose-50"
+                        onClick={() =>
+                          void runAction(
+                            () => deleteUeRequest(selectedPromoId, ue.id),
+                            'UE supprimee.'
+                          )
+                        }
+                      >
+                        Supprimer
+                      </Button>
+                    </div>
+                  </div>
+                ))}
               </div>
 
               <div className="grid gap-3 sm:grid-cols-2">
