@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { NavigateFunction } from 'react-router-dom';
 import {
   authMeRequest,
+  getPromotionIcalRequest,
   getPromotionDashboardRequest,
   listAccessiblePromotionsRequest,
   logoutRequest,
@@ -9,6 +10,12 @@ import {
   type PromotionDashboardPayload,
   type PromotionScope,
 } from '@/features/auth/api';
+import {
+  getTodayBounds,
+  isInRange,
+  parseIcsEvents,
+  type ScheduleEvent,
+} from '@/features/dashboard/dashboard/schedule';
 
 export type DashboardTab = 'accueil' | 'edt' | 'notes';
 
@@ -27,6 +34,10 @@ export function useDashboardController(navigate: NavigateFunction) {
   const [isLoadingDashboard, setIsLoadingDashboard] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [isLoadingSchedule, setIsLoadingSchedule] = useState(false);
+  const [scheduleError, setScheduleError] = useState('');
+  const [todayEvents, setTodayEvents] = useState<ScheduleEvent[]>([]);
+  const [allEvents, setAllEvents] = useState<ScheduleEvent[]>([]);
 
   const isAdmin = roles.includes('admin');
   const hasDelegueScope = promotions.some((promotion) => promotion.can_manage);
@@ -95,6 +106,39 @@ export function useDashboardController(navigate: NavigateFunction) {
     }
   };
 
+  const loadSchedule = async (promoId: string) => {
+    if (!promoId) {
+      setTodayEvents([]);
+      setAllEvents([]);
+      setScheduleError('');
+      return;
+    }
+
+    setIsLoadingSchedule(true);
+    setScheduleError('');
+
+    try {
+      const response = await getPromotionIcalRequest(promoId);
+      if (!response.ok) {
+        throw new Error('iCal request failed');
+      }
+
+      const rawIcs = await response.text();
+      const events = parseIcsEvents(rawIcs);
+      const now = new Date();
+      const today = getTodayBounds(now);
+
+      setTodayEvents(events.filter((event) => isInRange(event, today.start, today.end)));
+      setAllEvents(events);
+    } catch {
+      setTodayEvents([]);
+      setAllEvents([]);
+      setScheduleError('Impossible de charger l emploi du temps iCal.');
+    } finally {
+      setIsLoadingSchedule(false);
+    }
+  };
+
   useEffect(() => {
     void loadBaseData();
   }, []);
@@ -103,6 +147,10 @@ export function useDashboardController(navigate: NavigateFunction) {
     if (selectedPromoId) {
       void loadDashboard(selectedPromoId);
     }
+  }, [selectedPromoId]);
+
+  useEffect(() => {
+    void loadSchedule(selectedPromoId);
   }, [selectedPromoId]);
 
   const handleLogout = async () => {
@@ -135,6 +183,10 @@ export function useDashboardController(navigate: NavigateFunction) {
     isLoadingDashboard,
     errorMessage,
     isLoggingOut,
+    isLoadingSchedule,
+    scheduleError,
+    todayEvents,
+    allEvents,
     isAdmin,
     hasDelegueScope,
     handleLogout,

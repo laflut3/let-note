@@ -642,6 +642,32 @@ pub async fn update_promotion_ical_url(
   })
 }
 
+pub async fn fetch_promotion_ical(
+  db: &PgPool,
+  auth: &AuthContext,
+  promo_id: Uuid,
+) -> Result<String, ApiError> {
+  let promotion = get_accessible_promotion(db, auth, promo_id).await?;
+  let ical_url = promotion
+    .ical_url
+    .map(|value| value.trim().to_string())
+    .filter(|value| !value.is_empty())
+    .ok_or_else(|| ApiError::bad_request("promotion does not have an iCal URL"))?;
+
+  let response = reqwest::get(&ical_url)
+    .await
+    .map_err(|_| ApiError::internal("unable to fetch remote iCal"))?;
+
+  if !response.status().is_success() {
+    return Err(ApiError::bad_request("unable to fetch remote iCal"));
+  }
+
+  response
+    .text()
+    .await
+    .map_err(|_| ApiError::internal("unable to read remote iCal response"))
+}
+
 pub async fn create_resultat_for_matiere(
   db: &PgPool,
   auth: &AuthContext,

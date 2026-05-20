@@ -137,6 +137,15 @@ export type AuthMePayload = {
   roles: string[];
 };
 
+export type MyProfilePayload = {
+  id: string;
+  numero_etudiant: string | null;
+  nom: string;
+  prenom: string;
+  email: string;
+  date_naissance: string;
+};
+
 async function jsonRequest(path: string, options: RequestInit): Promise<Response> {
   return fetch(`${API_BASE_URL}${path}`, {
     credentials: 'include',
@@ -160,6 +169,24 @@ export async function logoutRequest(): Promise<Response> {
 
 export async function authMeRequest(): Promise<Response> {
   return jsonRequest('/auth/me', { method: 'GET' });
+}
+
+export async function getMyProfileRequest(): Promise<Response> {
+  return jsonRequest('/etudiant/me', { method: 'GET' });
+}
+
+export async function updateMyProfileRequest(payload: {
+  numero_etudiant?: string;
+  nom?: string;
+  prenom?: string;
+  email?: string;
+  date_naissance?: string;
+}): Promise<Response> {
+  return jsonRequest('/etudiant/me', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function registerRequest(fields: AuthFields): Promise<Response> {
@@ -345,6 +372,10 @@ export async function listAccessiblePromotionsRequest(): Promise<Response> {
 
 export async function getPromotionDashboardRequest(promoId: string): Promise<Response> {
   return jsonRequest(`/promotions/${promoId}/dashboard`, { method: 'GET' });
+}
+
+export async function getPromotionIcalRequest(promoId: string): Promise<Response> {
+  return jsonRequest(`/promotions/${promoId}/ical`, { method: 'GET' });
 }
 
 export async function listUesRequest(promoId: string): Promise<Response> {

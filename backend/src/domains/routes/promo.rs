@@ -2,6 +2,7 @@ use axum::{
   Json, Router,
   extract::{Path, State},
   http::HeaderMap,
+  http::header,
   response::IntoResponse,
   routing::{get, post, put},
 };
@@ -14,6 +15,7 @@ pub fn promo_routes(db: PgPool) -> Router<PgPool> {
   Router::new()
     .route("/promotions", get(list_accessible_promotions))
     .route("/promotions/{promo_id}/dashboard", get(get_promo_dashboard))
+    .route("/promotions/{promo_id}/ical", get(get_promo_ical))
     .route("/promotions/{promo_id}/ues", get(list_ues_for_promo))
     .route(
       "/promotions/{promo_id}/ical-url",
@@ -88,6 +90,26 @@ async fn list_ues_for_promo(
 
   match promo_service::list_ues_for_promo(&db, &auth, promo_id).await {
     Ok(data) => axum::Json(data).into_response(),
+    Err(error) => error.into_response(),
+  }
+}
+
+async fn get_promo_ical(
+  State(db): State<PgPool>,
+  headers: HeaderMap,
+  Path(promo_id): Path<Uuid>,
+) -> impl IntoResponse {
+  let auth = match middleware::extract_auth_context(&headers, &db).await {
+    Ok(value) => value,
+    Err(error) => return error.into_response(),
+  };
+
+  match promo_service::fetch_promotion_ical(&db, &auth, promo_id).await {
+    Ok(ical) => (
+      [(header::CONTENT_TYPE, "text/calendar; charset=utf-8")],
+      ical,
+    )
+      .into_response(),
     Err(error) => error.into_response(),
   }
 }
