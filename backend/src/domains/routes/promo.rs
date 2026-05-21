@@ -1,6 +1,7 @@
 use axum::{
   Json, Router,
-  extract::{Path, State},
+  body::Body,
+  extract::{Path, Query, State},
   http::HeaderMap,
   http::header,
   response::IntoResponse,
@@ -13,6 +14,7 @@ use crate::domains::{middleware, services::promo_service};
 
 pub fn promo_routes(db: PgPool) -> Router<PgPool> {
   Router::new()
+    .route("/resources/{resource_id}/file", get(get_resource_file))
     .route("/ues", get(list_ues).post(create_ue))
     .route("/ues/{ue_id}", put(update_ue).delete(delete_ue))
     .route("/ues/{ue_id}/promotions", get(list_ue_promotions))
@@ -81,6 +83,11 @@ pub fn promo_routes(db: PgPool) -> Router<PgPool> {
       "/promotions/{promo_id}/resultats/{resultat_id}",
       put(update_resultat),
     )
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+struct ResourceFileQuery {
+  download: Option<bool>,
 }
 
 async fn list_accessible_promotions(
@@ -423,6 +430,38 @@ async fn update_resultat(
 
   match promo_service::update_resultat(&db, &auth, promo_id, resultat_id, payload).await {
     Ok(data) => axum::Json(data).into_response(),
+    Err(error) => error.into_response(),
+  }
+}
+
+async fn get_resource_file(
+  State(db): State<PgPool>,
+  headers: HeaderMap,
+  Path(resource_id): Path<Uuid>,
+  Query(query): Query<ResourceFileQuery>,
+) -> impl IntoResponse {
+  let auth = match middleware::extract_auth_context(&headers, &db).await {
+    Ok(value) => value,
+    Err(error) => return error.into_response(),
+  };
+
+  match promo_service::get_resource_file_for_user(&db, &auth, resource_id).await {
+    Ok((bytes, content_type, title)) => {
+      let disposition = if query.download.unwrap_or(false) {
+        format!("attachment; filename=\"{}\"", title.replace('"', "_"))
+      } else {
+        format!("inline; filename=\"{}\"", title.replace('"', "_"))
+      };
+      (
+        [
+          (header::CONTENT_TYPE, content_type),
+          (header::CONTENT_DISPOSITION, disposition),
+          (header::CACHE_CONTROL, "no-store".to_string()),
+        ],
+        Body::from(bytes),
+      )
+        .into_response()
+    }
     Err(error) => error.into_response(),
   }
 }

@@ -10,6 +10,7 @@ use crate::domains::{
   entities::etudiant::{CreateEtudiant, GetEtudiant},
   error::ApiError,
 };
+use crate::infrastructure::s3;
 
 pub async fn create_etudiant(
   db: &PgPool,
@@ -83,10 +84,46 @@ pub struct UpdateMyProfileInput {
   pub date_naissance: Option<NaiveDate>,
 }
 
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+pub struct MyProfilePayload {
+  pub id: Uuid,
+  pub numero_etudiant: Option<String>,
+  pub nom: String,
+  pub prenom: String,
+  pub email: String,
+  pub date_naissance: NaiveDate,
+  pub photo_url: Option<String>,
+}
+
 pub async fn get_etudiant_by_id(db: &PgPool, etu_id: Uuid) -> Result<GetEtudiant, ApiError> {
   sqlx::query_as::<_, GetEtudiant>(
     r#"
     SELECT id, numero_etudiant, nom, prenom, email, date_naissance
+    FROM etudiant
+    WHERE id = $1
+    "#,
+  )
+  .bind(etu_id)
+  .fetch_optional(db)
+  .await
+  .map_err(|_| ApiError::internal("unable to load profile"))?
+  .ok_or_else(|| ApiError::bad_request("student not found"))
+}
+
+pub async fn get_my_profile_by_id(db: &PgPool, etu_id: Uuid) -> Result<MyProfilePayload, ApiError> {
+  sqlx::query_as::<_, MyProfilePayload>(
+    r#"
+    SELECT
+      id,
+      numero_etudiant,
+      nom,
+      prenom,
+      email,
+      date_naissance,
+      CASE
+        WHEN photo_s3_key IS NOT NULL AND photo_s3_bucket IS NOT NULL THEN '/api/etudiant/me/photo'
+        ELSE NULL
+      END AS photo_url
     FROM etudiant
     WHERE id = $1
     "#,
@@ -160,6 +197,90 @@ pub async fn update_etudiant_by_id(
   .map_err(map_create_error)
 }
 
+pub async fn update_my_profile_by_id(
+  db: &PgPool,
+  etu_id: Uuid,
+  payload: UpdateMyProfileInput,
+) -> Result<MyProfilePayload, ApiError> {
+  let _ = update_etudiant_by_id(db, etu_id, payload).await?;
+  get_my_profile_by_id(db, etu_id).await
+}
+
+pub async fn upload_profile_photo(
+  db: &PgPool,
+  etu_id: Uuid,
+  file_name: &str,
+  content_type: Option<&str>,
+  bytes: Vec<u8>,
+) -> Result<MyProfilePayload, ApiError> {
+  if bytes.is_empty() {
+    return Err(ApiError::bad_request("file is required"));
+  }
+  if bytes.len() > 8 * 1024 * 1024 {
+    return Err(ApiError::bad_request("photo is too large (max 8MB)"));
+  }
+
+  let cfg = s3::read_s3_config().map_err(|_| ApiError::internal("unable to read S3 config"))?;
+  let safe_name = sanitize_file_name(file_name);
+  let key = format!("profiles/{}/{}", etu_id, safe_name);
+
+  s3::upload_bytes(&key, bytes, content_type)
+    .await
+    .map_err(|_| ApiError::internal("unable to upload profile photo"))?;
+
+  sqlx::query(
+    r#"
+    UPDATE etudiant
+    SET photo_s3_bucket = $2, photo_s3_key = $3, photo_content_type = $4
+    WHERE id = $1
+    "#,
+  )
+  .bind(etu_id)
+  .bind(cfg.bucket)
+  .bind(key)
+  .bind(content_type.map(str::to_string))
+  .execute(db)
+  .await
+  .map_err(|_| ApiError::internal("unable to save profile photo"))?;
+
+  get_my_profile_by_id(db, etu_id).await
+}
+
+pub async fn get_profile_photo_blob(
+  db: &PgPool,
+  etu_id: Uuid,
+) -> Result<(Vec<u8>, String), ApiError> {
+  let photo = sqlx::query_as::<_, (Option<String>, Option<String>, Option<String>)>(
+    r#"
+    SELECT photo_s3_bucket, photo_s3_key, photo_content_type
+    FROM etudiant
+    WHERE id = $1
+    "#,
+  )
+  .bind(etu_id)
+  .fetch_optional(db)
+  .await
+  .map_err(|_| ApiError::internal("unable to load profile photo"))?
+  .ok_or_else(|| ApiError::bad_request("student not found"))?;
+
+  let bucket = photo
+    .0
+    .ok_or_else(|| ApiError::bad_request("profile photo not found"))?;
+  let key = photo
+    .1
+    .ok_or_else(|| ApiError::bad_request("profile photo not found"))?;
+
+  let (bytes, downloaded_ct) = s3::download_bytes(&bucket, &key)
+    .await
+    .map_err(|_| ApiError::internal("unable to load profile photo"))?;
+
+  let content_type = photo
+    .2
+    .or(downloaded_ct)
+    .unwrap_or_else(|| "application/octet-stream".to_string());
+  Ok((bytes, content_type))
+}
+
 fn map_create_error(error: sqlx::Error) -> ApiError {
   match error {
     sqlx::Error::Database(db_err) if db_err.code().as_deref() == Some("23505") => {
@@ -184,4 +305,21 @@ fn hash_password(password: &str) -> Result<String, argon2::password_hash::Error>
   Argon2::default()
     .hash_password(password.as_bytes(), &salt)
     .map(|hash| hash.to_string())
+}
+
+fn sanitize_file_name(name: &str) -> String {
+  let candidate = name.trim();
+  if candidate.is_empty() {
+    return "photo.bin".to_string();
+  }
+  candidate
+    .chars()
+    .map(|c| {
+      if c.is_ascii_alphanumeric() || c == '.' || c == '-' || c == '_' {
+        c
+      } else {
+        '_'
+      }
+    })
+    .collect()
 }

@@ -121,9 +121,8 @@ export function useAdminController(navigate: NavigateFunction) {
   const [linkCoef, setLinkCoef] = useState('1');
   const [resourceType, setResourceType] = useState<'cours' | 'td' | 'tp' | 'exam'>('cours');
   const [resourceTitle, setResourceTitle] = useState('');
-  const [resourceBucket, setResourceBucket] = useState('let-note-files');
-  const [resourceKey, setResourceKey] = useState('');
-  const [resourceUrl, setResourceUrl] = useState('');
+  const [resourceDescription, setResourceDescription] = useState('');
+  const [resourceFile, setResourceFile] = useState<File | null>(null);
 
   const [selectedDelegueId, setSelectedDelegueId] = useState('');
   const [editStudentNumero, setEditStudentNumero] = useState('');
@@ -542,13 +541,8 @@ export function useAdminController(navigate: NavigateFunction) {
   };
 
   const handleCreateMatiereResource = async () => {
-    if (
-      !selectedMatiereCode ||
-      !resourceTitle.trim() ||
-      !resourceBucket.trim() ||
-      !resourceKey.trim()
-    ) {
-      setFeedback({ type: 'error', message: 'Matiere, titre, bucket et key S3 sont requis.' });
+    if (!selectedMatiereCode || !resourceTitle.trim() || !resourceFile) {
+      setFeedback({ type: 'error', message: 'Matiere, titre et fichier sont requis.' });
       return;
     }
 
@@ -557,9 +551,8 @@ export function useAdminController(navigate: NavigateFunction) {
         adminCreateMatiereResourceRequest(selectedMatiereCode, {
           type_metier: resourceType,
           title: resourceTitle.trim(),
-          s3_bucket: resourceBucket.trim(),
-          s3_key: resourceKey.trim(),
-          url: resourceUrl.trim() || undefined,
+          description: resourceDescription.trim() || undefined,
+          file: resourceFile,
         }),
       'Fichier de matiere ajoute.',
       false
@@ -570,8 +563,8 @@ export function useAdminController(navigate: NavigateFunction) {
       setMatiereResources((await refreshed.json()) as AdminMatiereResource[]);
     }
     setResourceTitle('');
-    setResourceKey('');
-    setResourceUrl('');
+    setResourceDescription('');
+    setResourceFile(null);
   };
 
   const handleDeleteMatiereResource = async (resourceId: string) => {
@@ -833,12 +826,10 @@ export function useAdminController(navigate: NavigateFunction) {
     setResourceType,
     resourceTitle,
     setResourceTitle,
-    resourceBucket,
-    setResourceBucket,
-    resourceKey,
-    setResourceKey,
-    resourceUrl,
-    setResourceUrl,
+    resourceDescription,
+    setResourceDescription,
+    resourceFile,
+    setResourceFile,
     linkPromoId,
     setLinkPromoId,
     linkUes,

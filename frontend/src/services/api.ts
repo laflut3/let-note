@@ -205,6 +205,7 @@ export type MyProfilePayload = {
   prenom: string;
   email: string;
   date_naissance: string;
+  photo_url: string | null;
 };
 
 async function jsonRequest(path: string, options: RequestInit): Promise<Response> {
@@ -248,6 +249,20 @@ export async function updateMyProfileRequest(payload: {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
+}
+
+export async function uploadMyProfilePhotoRequest(file: File): Promise<Response> {
+  const formData = new FormData();
+  formData.append('file', file);
+  return jsonRequest('/etudiant/me/photo', {
+    method: 'POST',
+    body: formData,
+  });
+}
+
+export function getResourceFileUrl(resourceId: string, download = false): string {
+  const suffix = download ? '?download=true' : '';
+  return `${API_BASE_URL}/resources/${resourceId}/file${suffix}`;
 }
 
 export async function registerRequest(fields: AuthFields): Promise<Response> {
@@ -470,19 +485,19 @@ export async function adminCreateMatiereResourceRequest(
     type_metier: 'cours' | 'td' | 'tp' | 'exam';
     title: string;
     description?: string;
-    s3_bucket: string;
-    s3_key: string;
-    url?: string;
-    content_type?: string;
-    size_bytes?: number;
+    file: File;
   }
 ): Promise<Response> {
+  const formData = new FormData();
+  formData.append('type_metier', payload.type_metier);
+  formData.append('title', payload.title);
+  if (payload.id_promo) formData.append('id_promo', payload.id_promo);
+  if (payload.description) formData.append('description', payload.description);
+  formData.append('file', payload.file);
+
   return jsonRequest(`/admin/matieres/${codeMatiere}/resources`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload),
+    body: formData,
   });
 }
 

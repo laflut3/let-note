@@ -1,7 +1,7 @@
-import { Calendar, Home, LogOut, Shield, Users } from 'lucide-react';
+import { Calendar, Home, LogOut, Shield, UserCircle, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
-export type DashboardTab = 'accueil' | 'edt' | 'notes';
+export type DashboardTab = 'accueil' | 'edt' | 'notes' | 'profil';
 
 type TopNavProps = {
   activeTab: DashboardTab;
@@ -32,6 +32,7 @@ export function TopNav({
             ['accueil', 'Accueil'],
             ['edt', 'EDT'],
             ['notes', 'Notes'],
+            ['profil', 'Profil'],
           ] as const
         ).map(([key, label]) => (
           <button
@@ -46,6 +47,7 @@ export function TopNav({
             {key === 'accueil' && <Home className="h-4 w-4" />}
             {key === 'edt' && <Calendar className="h-4 w-4" />}
             {key === 'notes' && <Users className="h-4 w-4" />}
+            {key === 'profil' && <UserCircle className="h-4 w-4" />}
             <span className="hidden sm:inline">{label}</span>
           </button>
         ))}

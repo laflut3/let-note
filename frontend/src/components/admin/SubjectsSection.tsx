@@ -26,12 +26,10 @@ export function SubjectsTab({ controller }: Props) {
     setResourceType,
     resourceTitle,
     setResourceTitle,
-    resourceBucket,
-    setResourceBucket,
-    resourceKey,
-    setResourceKey,
-    resourceUrl,
-    setResourceUrl,
+    resourceDescription,
+    setResourceDescription,
+    resourceFile,
+    setResourceFile,
     linkPromoId,
     setLinkPromoId,
     linkUes,
@@ -400,11 +398,11 @@ export function SubjectsTab({ controller }: Props) {
             </Button>
             <Button
               type="button"
-              disabled={!selectedMatiereCode}
+              disabled={!selectedMatiereCode || !resourceFile}
               className="h-10 rounded-xl bg-violet-700 px-4 text-white hover:bg-violet-800"
               onClick={() => void handleCreateMatiereResource()}
             >
-              Ajouter fichier metadonnee
+              Uploader le fichier
             </Button>
           </>
         }
@@ -427,22 +425,15 @@ export function SubjectsTab({ controller }: Props) {
             className={adminUi.input}
           />
           <input
-            value={resourceBucket}
-            onChange={(e) => setResourceBucket(e.target.value)}
-            placeholder="S3 bucket"
+            value={resourceDescription}
+            onChange={(e) => setResourceDescription(e.target.value)}
+            placeholder="Description (optionnelle)"
             className={adminUi.input}
           />
           <input
-            value={resourceKey}
-            onChange={(e) => setResourceKey(e.target.value)}
-            placeholder="S3 key (path/fichier.pdf)"
+            type="file"
             className={adminUi.input}
-          />
-          <input
-            value={resourceUrl}
-            onChange={(e) => setResourceUrl(e.target.value)}
-            placeholder="URL (optionnelle)"
-            className={`${adminUi.input} sm:col-span-2`}
+            onChange={(e) => setResourceFile(e.target.files?.[0] ?? null)}
           />
         </div>
 

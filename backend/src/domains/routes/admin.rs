@@ -1,6 +1,6 @@
 use axum::{
   Json, Router,
-  extract::{Path, State},
+  extract::{Multipart, Path, State},
   http::{HeaderMap, StatusCode},
   response::IntoResponse,
   routing::{get, post, put},
@@ -9,7 +9,9 @@ use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::domains::{entities::promotion::CreatePromotion, middleware, services::admin_service};
+use crate::domains::{
+  entities::promotion::CreatePromotion, error::ApiError, middleware, services::admin_service,
+};
 
 #[derive(Serialize)]
 struct AdminStatus {
@@ -263,14 +265,84 @@ async fn create_matiere_resource(
   State(db): State<PgPool>,
   headers: HeaderMap,
   Path(code_matiere): Path<String>,
-  Json(payload): Json<admin_service::CreateMatiereResourceInput>,
+  mut multipart: Multipart,
 ) -> impl IntoResponse {
   let auth = match middleware::extract_auth_context(&headers, &db).await {
     Ok(value) => value,
     Err(error) => return error.into_response(),
   };
 
-  match admin_service::create_matiere_resource(&db, &code_matiere, payload, auth.user_id).await {
+  let mut id_promo: Option<Uuid> = None;
+  let mut type_metier = String::new();
+  let mut title = String::new();
+  let mut description: Option<String> = None;
+  let mut file_name = String::new();
+  let mut content_type: Option<String> = None;
+  let mut bytes: Vec<u8> = Vec::new();
+
+  loop {
+    let next = match multipart.next_field().await {
+      Ok(field) => field,
+      Err(_) => return ApiError::bad_request("invalid multipart payload").into_response(),
+    };
+    let Some(field) = next else { break };
+    let name = field.name().unwrap_or("").to_string();
+    match name.as_str() {
+      "id_promo" => {
+        let value = match field.text().await {
+          Ok(v) => v,
+          Err(_) => return ApiError::bad_request("invalid id_promo").into_response(),
+        };
+        let trimmed = value.trim();
+        if !trimmed.is_empty() {
+          id_promo = match Uuid::parse_str(trimmed) {
+            Ok(v) => Some(v),
+            Err(_) => return ApiError::bad_request("invalid id_promo").into_response(),
+          };
+        }
+      }
+      "type_metier" => match field.text().await {
+        Ok(v) => type_metier = v,
+        Err(_) => return ApiError::bad_request("invalid type_metier").into_response(),
+      },
+      "title" => match field.text().await {
+        Ok(v) => title = v,
+        Err(_) => return ApiError::bad_request("invalid title").into_response(),
+      },
+      "description" => match field.text().await {
+        Ok(v) => description = Some(v),
+        Err(_) => return ApiError::bad_request("invalid description").into_response(),
+      },
+      "file" => {
+        file_name = field.file_name().unwrap_or("file.bin").to_string();
+        content_type = field.content_type().map(str::to_string);
+        bytes = match field.bytes().await {
+          Ok(v) => v.to_vec(),
+          Err(_) => return ApiError::bad_request("invalid file").into_response(),
+        };
+      }
+      _ => {}
+    }
+  }
+
+  let payload = admin_service::CreateMatiereResourceUploadInput {
+    id_promo,
+    type_metier,
+    title,
+    description,
+    file_name,
+    content_type,
+    bytes,
+  };
+
+  match admin_service::create_matiere_resource_from_upload(
+    &db,
+    &code_matiere,
+    payload,
+    auth.user_id,
+  )
+  .await
+  {
     Ok(ack) => (StatusCode::CREATED, Json(ack)).into_response(),
     Err(error) => error.into_response(),
   }

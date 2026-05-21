@@ -1,0 +1,4 @@
+ALTER TABLE etudiant
+ADD COLUMN IF NOT EXISTS photo_s3_bucket TEXT,
+ADD COLUMN IF NOT EXISTS photo_s3_key TEXT,
+ADD COLUMN IF NOT EXISTS photo_content_type TEXT;

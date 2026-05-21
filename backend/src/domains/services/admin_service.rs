@@ -6,6 +6,7 @@ use crate::domains::{
   entities::{etudiant::GetEtudiant, professeur::CreateProfesseur, promotion::CreatePromotion},
   error::ApiError,
 };
+use crate::infrastructure::s3;
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct CreatedPromotion {
@@ -163,6 +164,17 @@ pub struct CreateMatiereResourceInput {
   pub url: Option<String>,
   pub content_type: Option<String>,
   pub size_bytes: Option<i64>,
+}
+
+#[derive(Debug, Clone)]
+pub struct CreateMatiereResourceUploadInput {
+  pub id_promo: Option<Uuid>,
+  pub type_metier: String,
+  pub title: String,
+  pub description: Option<String>,
+  pub file_name: String,
+  pub content_type: Option<String>,
+  pub bytes: Vec<u8>,
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
@@ -534,6 +546,65 @@ pub async fn create_matiere_resource(
   })
 }
 
+pub async fn create_matiere_resource_from_upload(
+  db: &PgPool,
+  code_matiere: &str,
+  payload: CreateMatiereResourceUploadInput,
+  created_by: Uuid,
+) -> Result<MutationAck, ApiError> {
+  let code = code_matiere.trim().to_uppercase();
+  if code.is_empty() || payload.type_metier.trim().is_empty() || payload.title.trim().is_empty() {
+    return Err(ApiError::bad_request(
+      "id_mat, type_metier and title are required",
+    ));
+  }
+  if payload.bytes.is_empty() {
+    return Err(ApiError::bad_request("file is required"));
+  }
+
+  let s3_config =
+    s3::read_s3_config().map_err(|_| ApiError::internal("unable to read S3 config"))?;
+  let resource_id = Uuid::new_v4();
+  let object_key = format!(
+    "matieres/{}/{}/{}_{}",
+    code,
+    payload.type_metier.trim().to_lowercase(),
+    resource_id,
+    sanitize_file_name(&payload.file_name)
+  );
+
+  let content_size = i64::try_from(payload.bytes.len()).unwrap_or(i64::MAX);
+  s3::upload_bytes(&object_key, payload.bytes, payload.content_type.as_deref())
+    .await
+    .map_err(|_| ApiError::internal("unable to upload file to S3"))?;
+
+  sqlx::query(
+    r#"
+    INSERT INTO matiere_resource
+      (id, id_mat, id_promo, type_metier, title, description, s3_bucket, s3_key, url, content_type, size_bytes, created_by)
+    VALUES ($1, $2, $3, $4::resource_type_metier, $5, $6, $7, $8, NULL, $9, $10, $11)
+    "#,
+  )
+  .bind(resource_id)
+  .bind(code)
+  .bind(payload.id_promo)
+  .bind(payload.type_metier.trim().to_lowercase())
+  .bind(payload.title.trim())
+  .bind(payload.description.map(|v| v.trim().to_string()))
+  .bind(s3_config.bucket)
+  .bind(object_key)
+  .bind(payload.content_type.map(|v| v.trim().to_string()))
+  .bind(content_size)
+  .bind(created_by)
+  .execute(db)
+  .await
+  .map_err(map_schema_error("unable to create subject resource"))?;
+
+  Ok(MutationAck {
+    message: "subject resource created",
+  })
+}
+
 pub async fn delete_matiere_resource(
   db: &PgPool,
   resource_id: Uuid,
@@ -594,13 +665,12 @@ pub async fn link_matiere_to_all_promotions(
     return Err(ApiError::bad_request("no promotion found"));
   }
 
-  let nom = payload
+  let provided_nom = payload
     .nom_matiere
     .as_deref()
     .map(str::trim)
     .filter(|value| !value.is_empty())
-    .unwrap_or(&code)
-    .to_string();
+    .map(str::to_string);
 
   let mut tx = db
     .begin()
@@ -615,12 +685,13 @@ pub async fn link_matiere_to_all_promotions(
     INSERT INTO matiere (code_matiere, nom_matiere, annee)
     VALUES ($1, $2, $3)
     ON CONFLICT (code_matiere)
-    DO UPDATE SET nom_matiere = EXCLUDED.nom_matiere
+    DO UPDATE SET nom_matiere = COALESCE($4, matiere.nom_matiere)
     "#,
   )
   .bind(&code)
-  .bind(&nom)
+  .bind(provided_nom.as_deref().unwrap_or(&code))
   .bind(annee)
+  .bind(provided_nom.as_deref())
   .execute(&mut *tx)
   .await
   .map_err(map_schema_error("unable to upsert subject"))?;
@@ -749,13 +820,12 @@ pub async fn link_matiere_to_promotion(
     return Err(ApiError::bad_request("UE does not exist"));
   }
 
-  let nom = payload
+  let provided_nom = payload
     .nom_matiere
     .as_deref()
     .map(str::trim)
     .filter(|value| !value.is_empty())
-    .unwrap_or(&code)
-    .to_string();
+    .map(str::to_string);
   let annee = NaiveDate::from_ymd_opt(Utc::now().year(), 1, 1)
     .ok_or_else(|| ApiError::internal("unable to compute subject year"))?;
 
@@ -769,12 +839,13 @@ pub async fn link_matiere_to_promotion(
     INSERT INTO matiere (code_matiere, nom_matiere, annee)
     VALUES ($1, $2, $3)
     ON CONFLICT (code_matiere)
-    DO UPDATE SET nom_matiere = EXCLUDED.nom_matiere
+    DO UPDATE SET nom_matiere = COALESCE($4, matiere.nom_matiere)
     "#,
   )
   .bind(&code)
-  .bind(&nom)
+  .bind(provided_nom.as_deref().unwrap_or(&code))
   .bind(annee)
+  .bind(provided_nom.as_deref())
   .execute(&mut *tx)
   .await
   .map_err(map_schema_error("unable to upsert subject"))?;
@@ -1610,4 +1681,21 @@ fn map_schema_error(message: &'static str) -> impl Fn(sqlx::Error) -> ApiError {
     }
     _ => ApiError::internal(message),
   }
+}
+
+fn sanitize_file_name(name: &str) -> String {
+  let candidate = name.trim();
+  if candidate.is_empty() {
+    return "file.bin".to_string();
+  }
+  candidate
+    .chars()
+    .map(|c| {
+      if c.is_ascii_alphanumeric() || c == '.' || c == '-' || c == '_' {
+        c
+      } else {
+        '_'
+      }
+    })
+    .collect()
 }

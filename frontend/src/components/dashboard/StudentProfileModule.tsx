@@ -7,12 +7,14 @@ type ProfileForm = {
   prenom: string;
   email: string;
   date_naissance: string;
+  photo_url: string;
 };
 
 type StudentProfileModuleProps = {
   profileForm: ProfileForm;
   setProfileForm: Dispatch<SetStateAction<ProfileForm>>;
   saveProfile: () => Promise<void>;
+  uploadProfilePhoto: (file: File) => Promise<void>;
   isSavingProfile: boolean;
   profileMessage: string;
 };
@@ -21,12 +23,34 @@ export function StudentProfileModule({
   profileForm,
   setProfileForm,
   saveProfile,
+  uploadProfilePhoto,
   isSavingProfile,
   profileMessage,
 }: StudentProfileModuleProps) {
   return (
-    <section className="rounded-2xl border border-zinc-300 bg-white p-4">
-      <h3 className="text-sm font-semibold">Profils etudiant</h3>
+    <section className="rounded-2xl border border-zinc-300 bg-gradient-to-br from-white to-zinc-50 p-4 shadow-sm">
+      <h3 className="text-base font-semibold text-zinc-900">Profil etudiant</h3>
+      <div className="mt-3 flex items-center gap-3 rounded-xl border border-zinc-200 bg-white p-3">
+        <img
+          src={profileForm.photo_url || '/favicon.ico'}
+          alt="Photo de profil"
+          className="h-16 w-16 rounded-xl border border-zinc-200 object-cover"
+        />
+        <div className="space-y-2">
+          <p className="text-xs text-zinc-600">Photo (optionnelle)</p>
+          <input
+            type="file"
+            accept="image/*"
+            className="max-w-xs rounded-md border border-zinc-300 px-2 py-1 text-xs"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) {
+                void uploadProfilePhoto(file);
+              }
+            }}
+          />
+        </div>
+      </div>
       <div className="mt-3 grid gap-2 sm:grid-cols-2">
         <input
           value={profileForm.numero_etudiant}

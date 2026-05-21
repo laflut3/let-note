@@ -7,6 +7,7 @@ import {
   getPromotionDashboardRequest,
   listAccessiblePromotionsRequest,
   logoutRequest,
+  uploadMyProfilePhotoRequest,
   updateMyProfileRequest,
   type AuthMePayload,
   type MyProfilePayload,
@@ -20,7 +21,7 @@ import {
   type ScheduleEvent,
 } from '@/lib/dashboard/schedule';
 
-export type DashboardTab = 'accueil' | 'edt' | 'notes';
+export type DashboardTab = 'accueil' | 'edt' | 'notes' | 'profil';
 
 async function extractError(response: Response, fallback: string): Promise<string> {
   const data = (await response.json().catch(() => null)) as { message?: string } | null;
@@ -48,6 +49,7 @@ export function useDashboardController(navigate: NavigateFunction) {
     prenom: '',
     email: '',
     date_naissance: '',
+    photo_url: '',
   });
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [profileMessage, setProfileMessage] = useState('');
@@ -167,6 +169,7 @@ export function useDashboardController(navigate: NavigateFunction) {
         prenom: data.prenom,
         email: data.email,
         date_naissance: data.date_naissance,
+        photo_url: data.photo_url ?? '',
       });
     } catch {
       // keep dashboard usable
@@ -224,10 +227,38 @@ export function useDashboardController(navigate: NavigateFunction) {
         prenom: updated.prenom,
         email: updated.email,
         date_naissance: updated.date_naissance,
+        photo_url: updated.photo_url ?? '',
       });
       setProfileMessage('Profil mis a jour.');
     } catch {
       setProfileMessage('Erreur reseau lors de la mise a jour du profil.');
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
+
+  const uploadProfilePhoto = async (file: File) => {
+    setIsSavingProfile(true);
+    setProfileMessage('');
+    try {
+      const response = await uploadMyProfilePhotoRequest(file);
+      if (!response.ok) {
+        setProfileMessage(await extractError(response, 'Impossible d uploader la photo.'));
+        return;
+      }
+      const updated = (await response.json()) as MyProfilePayload;
+      setProfile(updated);
+      setProfileForm({
+        numero_etudiant: updated.numero_etudiant ?? '',
+        nom: updated.nom,
+        prenom: updated.prenom,
+        email: updated.email,
+        date_naissance: updated.date_naissance,
+        photo_url: updated.photo_url ?? '',
+      });
+      setProfileMessage('Photo de profil mise a jour.');
+    } catch {
+      setProfileMessage('Erreur reseau lors de l upload de la photo.');
     } finally {
       setIsSavingProfile(false);
     }
@@ -269,6 +300,7 @@ export function useDashboardController(navigate: NavigateFunction) {
     isSavingProfile,
     profileMessage,
     saveProfile,
+    uploadProfilePhoto,
     refreshDashboard,
     isAdmin,
     hasDelegueScope,

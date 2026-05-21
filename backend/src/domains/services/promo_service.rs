@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use uuid::Uuid;
 
 use crate::domains::{error::ApiError, middleware::AuthContext};
+use crate::infrastructure::s3;
 
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct CreateUeInput {
@@ -217,6 +218,15 @@ pub struct MutationAck {
   pub message: &'static str,
 }
 
+#[derive(Debug, Clone, sqlx::FromRow)]
+struct ResourceFileRow {
+  id_promo: Option<Uuid>,
+  s3_bucket: String,
+  s3_key: String,
+  content_type: Option<String>,
+  title: String,
+}
+
 pub async fn list_accessible_promotions(
   db: &PgPool,
   auth: &AuthContext,
@@ -353,7 +363,7 @@ pub async fn get_promotion_dashboard(
     SELECT id, id_mat, id_promo, type_metier::text AS type_metier, title, description,
            s3_bucket, s3_key, url, content_type, size_bytes, created_at
     FROM matiere_resource
-    WHERE id_promo = $1
+    WHERE id_promo = $1 OR id_promo IS NULL
     ORDER BY created_at DESC
     "#,
   )
@@ -457,6 +467,58 @@ pub async fn get_promotion_dashboard(
     devoirs,
     resultats,
   })
+}
+
+pub async fn get_resource_file_for_user(
+  db: &PgPool,
+  auth: &AuthContext,
+  resource_id: Uuid,
+) -> Result<(Vec<u8>, String, String), ApiError> {
+  let resource = sqlx::query_as::<_, ResourceFileRow>(
+    r#"
+    SELECT id_promo, s3_bucket, s3_key, content_type, title
+    FROM matiere_resource
+    WHERE id = $1
+    "#,
+  )
+  .bind(resource_id)
+  .fetch_optional(db)
+  .await
+  .map_err(map_schema_error("unable to load resource"))?
+  .ok_or_else(|| ApiError::bad_request("resource not found"))?;
+
+  let allowed = if auth.roles.iter().any(|r| r == "admin") {
+    true
+  } else if let Some(promo_id) = resource.id_promo {
+    let count = sqlx::query_scalar::<_, i64>(
+      r#"
+      SELECT COUNT(*)
+      FROM etu_promo
+      WHERE id_etu = $1 AND id_promo = $2
+      "#,
+    )
+    .bind(auth.user_id)
+    .bind(promo_id)
+    .fetch_one(db)
+    .await
+    .map_err(map_schema_error("unable to validate permissions"))?;
+    count > 0
+  } else {
+    false
+  };
+
+  if !allowed {
+    return Err(ApiError::forbidden("you cannot access this resource"));
+  }
+
+  let (bytes, downloaded_ct) = s3::download_bytes(&resource.s3_bucket, &resource.s3_key)
+    .await
+    .map_err(|_| ApiError::internal("unable to read resource file"))?;
+  let content_type = resource
+    .content_type
+    .or(downloaded_ct)
+    .unwrap_or_else(|| "application/octet-stream".to_string());
+  Ok((bytes, content_type, resource.title))
 }
 
 pub async fn list_ues_for_promo(

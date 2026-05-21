@@ -62,19 +62,12 @@ export function DashboardPage() {
 
               <div className="space-y-4">
                 <SubjectsModule dashboard={controller.dashboard} />
-                <StudentProfileModule
-                  profileForm={controller.profileForm}
-                  setProfileForm={controller.setProfileForm}
-                  saveProfile={controller.saveProfile}
-                  isSavingProfile={controller.isSavingProfile}
-                  profileMessage={controller.profileMessage}
-                />
               </div>
             </div>
           </section>
         )}
 
-        {controller.activeTab !== 'accueil' && (
+        {controller.activeTab !== 'accueil' && controller.activeTab !== 'profil' && (
           <div className="grid gap-4 lg:grid-cols-[270px_1fr]">
             <PromotionListSidebar
               promotions={controller.promotions}
@@ -100,6 +93,19 @@ export function DashboardPage() {
               )}
             </section>
           </div>
+        )}
+
+        {controller.activeTab === 'profil' && (
+          <section className="mx-auto w-full max-w-3xl">
+            <StudentProfileModule
+              profileForm={controller.profileForm}
+              setProfileForm={controller.setProfileForm}
+              saveProfile={controller.saveProfile}
+              uploadProfilePhoto={controller.uploadProfilePhoto}
+              isSavingProfile={controller.isSavingProfile}
+              profileMessage={controller.profileMessage}
+            />
+          </section>
         )}
       </section>
     </main>
