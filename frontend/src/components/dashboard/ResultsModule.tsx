@@ -6,6 +6,8 @@ import {
   type PromotionDashboardPayload,
 } from '@/services/api';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { NumberInput } from '@/components/ui/number-input';
 
 type ResultsModuleProps = {
   dashboard: PromotionDashboardPayload | null;
@@ -27,10 +29,10 @@ export function ResultsModule({
   const [createMatiereId, setCreateMatiereId] = useState('');
   const [createMatiereName, setCreateMatiereName] = useState('');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [libelle, setLibelle] = useState('Note');
-  const [session, setSession] = useState('1');
+  const [libelle, setLibelle] = useState('');
+  const [session, setSession] = useState('');
   const [note, setNote] = useState('');
-  const [coef, setCoef] = useState('1');
+  const [coef, setCoef] = useState('');
   const [message, setMessage] = useState('');
   const [editingId, setEditingId] = useState('');
   const [editingLibelle, setEditingLibelle] = useState('');
@@ -131,10 +133,10 @@ export function ResultsModule({
       setMessage('Impossible d enregistrer la note.');
       return;
     }
-    setLibelle('Note');
-    setSession('1');
+    setLibelle('');
+    setSession('');
     setNote('');
-    setCoef('1');
+    setCoef('');
     setIsCreateModalOpen(false);
     setMessage('Note enregistree.');
     await onSaved();
@@ -144,10 +146,10 @@ export function ResultsModule({
     setCreateMatiereId(matiereId);
     setCreateMatiereName(matiereNom);
     setIsCreateModalOpen(true);
-    setLibelle('Note');
-    setSession('1');
+    setLibelle('');
+    setSession('');
     setNote('');
-    setCoef('1');
+    setCoef('');
   };
 
   const computeMatiereAverage = (
@@ -189,16 +191,16 @@ export function ResultsModule({
   };
 
   return (
-    <div className="rounded-2xl border border-black/10 bg-white/90 p-5 shadow-[0_14px_34px_rgba(26,18,8,0.12)]">
-      <h2 className="text-lg font-semibold text-zinc-900">Notes et resultats</h2>
+    <div className="rounded-2xl border border-[var(--surface-border)] bg-[var(--surface-2)] p-4 shadow-[0_14px_34px_rgba(26,18,8,0.12)] sm:p-5">
+      <h2 className="text-lg font-semibold text-foreground">Notes et resultats</h2>
       {!dashboard ? (
-        <p className="mt-3 text-sm text-zinc-500">Aucun resultat.</p>
+        <p className="mt-3 text-sm text-muted-foreground">Aucun resultat.</p>
       ) : (
         <div className="mt-4 space-y-3">
           <select
             value={semester}
             onChange={(event) => setSemester(event.target.value)}
-            className="h-10 rounded-xl border border-zinc-300 bg-white px-3 text-sm"
+            className="h-10 rounded-xl border border-[var(--surface-border)] bg-[var(--surface-2)] px-3 text-sm text-foreground"
           >
             <option value="all">Tous les semestres</option>
             {semesters.map((item) => (
@@ -209,7 +211,10 @@ export function ResultsModule({
           </select>
 
           {resultGroups.map((ue) => (
-            <section key={ue.id} className="rounded-xl border border-zinc-200 bg-zinc-50 p-3">
+            <section
+              key={ue.id}
+              className="rounded-xl border border-[var(--surface-border)] bg-[var(--surface-muted)] p-3"
+            >
               {(() => {
                 const ueParts = Array.from(ue.matieres.entries())
                   .map(([code, matiere]) => {
@@ -224,17 +229,20 @@ export function ResultsModule({
                     ? ueParts.reduce((acc, item) => acc + item.avg * item.coef, 0) / ueCoef
                     : null;
                 return (
-                  <h3 className="text-sm font-semibold text-zinc-900">
+                  <h3 className="text-sm font-semibold text-foreground">
                     {ue.nom} - semestre {ue.semestre}{' '}
-                    <span className="text-zinc-500">
+                    <span className="text-muted-foreground">
                       | moyenne UE: {ueAvg === null ? '-' : ueAvg.toFixed(2)}
                     </span>
                   </h3>
                 );
               })()}
-              <div className="mt-3 space-y-3 pl-4">
+              <div className="mt-3 space-y-3">
                 {Array.from(ue.matieres.entries()).map(([code, matiere]) => (
-                  <div key={code} className="rounded-lg border border-zinc-200 bg-white p-3">
+                  <div
+                    key={code}
+                    className="rounded-lg border border-[var(--surface-border)] bg-[var(--surface-2)] p-3"
+                  >
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <button
                         type="button"
@@ -242,8 +250,8 @@ export function ResultsModule({
                         className={[
                           'rounded-md px-2 py-1 text-left text-sm font-medium transition',
                           selectedMatiereId === code
-                            ? 'bg-[#6d2745] text-white'
-                            : 'text-zinc-800 hover:bg-zinc-100',
+                            ? 'bg-[var(--surface-strong)] text-white dark:text-zinc-900'
+                            : 'text-foreground hover:bg-[var(--surface-muted)]',
                         ].join(' ')}
                       >
                         {matiere.nom}{' '}
@@ -255,19 +263,19 @@ export function ResultsModule({
                         <Button
                           type="button"
                           onClick={() => openCreateModal(code, matiere.nom)}
-                          className="h-8 rounded-lg bg-[#6d2745] px-3 text-xs text-white hover:bg-[#4f1730]"
+                          className="h-8 rounded-lg bg-[var(--surface-strong)] px-3 text-xs text-white hover:bg-[var(--surface-strong-hover)] dark:text-zinc-900"
                         >
                           Ajouter une note
                         </Button>
                       )}
                     </div>
-                    <div className="mt-2 overflow-x-auto">
-                      <table className="min-w-full text-sm">
+                    <div className="mt-2 hidden overflow-x-auto md:block">
+                      <table className="min-w-full text-sm text-foreground">
                         <tbody>
                           {matiere.resultats.map((resultat) => (
                             <tr
                               key={resultat.id}
-                              className="border-t border-zinc-100 first:border-t-0"
+                              className="border-t border-[var(--surface-soft-border)] first:border-t-0"
                             >
                               <td className="px-2 py-2">
                                 {resultat.etu_prenom} {resultat.etu_nom}
@@ -282,33 +290,40 @@ export function ResultsModule({
                                 {!canManageResultat(resultat.id_etu) ? null : editingId ===
                                   resultat.id ? (
                                   <div className="flex flex-wrap items-center gap-1">
-                                    <input
+                                    <Input
                                       value={editingLibelle}
                                       onChange={(event) => setEditingLibelle(event.target.value)}
-                                      className="h-8 rounded border border-zinc-300 px-2 text-xs"
+                                      className="h-8 text-xs"
                                       placeholder="Libelle"
                                     />
-                                    <input
+                                    <NumberInput
                                       value={editingSession}
                                       onChange={(event) => setEditingSession(event.target.value)}
-                                      className="h-8 w-16 rounded border border-zinc-300 px-2 text-xs"
+                                      className="h-8 w-16 text-xs"
                                       placeholder="S"
+                                      min="1"
+                                      step="1"
                                     />
-                                    <input
+                                    <NumberInput
                                       value={editingNote}
                                       onChange={(event) => setEditingNote(event.target.value)}
-                                      className="h-8 w-16 rounded border border-zinc-300 px-2 text-xs"
+                                      className="h-8 w-16 text-xs"
                                       placeholder="Note"
+                                      min="0"
+                                      max="20"
+                                      step="0.01"
                                     />
-                                    <input
+                                    <NumberInput
                                       value={editingCoef}
                                       onChange={(event) => setEditingCoef(event.target.value)}
-                                      className="h-8 w-16 rounded border border-zinc-300 px-2 text-xs"
+                                      className="h-8 w-16 text-xs"
                                       placeholder="Coef"
+                                      min="0"
+                                      step="0.1"
                                     />
                                     <Button
                                       type="button"
-                                      className="h-8 rounded bg-zinc-900 px-2 text-xs text-white"
+                                      className="h-8 rounded bg-[var(--surface-strong)] px-2 text-xs text-white hover:bg-[var(--surface-strong-hover)] dark:text-zinc-900"
                                       onClick={() => void saveEdit(resultat.id)}
                                     >
                                       OK
@@ -343,7 +358,7 @@ export function ResultsModule({
                                     <Button
                                       type="button"
                                       variant="outline"
-                                      className="h-8 rounded border-rose-300 px-2 text-xs text-rose-700"
+                                      className="h-8 rounded border-rose-400 px-2 text-xs text-rose-700"
                                       onClick={() => void removeResult(resultat.id)}
                                     >
                                       Supprimer
@@ -355,11 +370,113 @@ export function ResultsModule({
                           ))}
                           {matiere.resultats.length === 0 && (
                             <tr>
-                              <td className="px-2 py-2 text-zinc-500">Aucune note.</td>
+                              <td className="px-2 py-2 text-muted-foreground">Aucune note.</td>
                             </tr>
                           )}
                         </tbody>
                       </table>
+                    </div>
+                    <div className="mt-2 space-y-2 md:hidden">
+                      {matiere.resultats.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">Aucune note.</p>
+                      ) : (
+                        matiere.resultats.map((resultat) => (
+                          <article
+                            key={`mobile-${resultat.id}`}
+                            className="rounded-lg border border-[var(--surface-border)] bg-[var(--surface-muted)] p-2"
+                          >
+                            <p className="text-sm font-semibold text-foreground">
+                              {resultat.etu_prenom} {resultat.etu_nom}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {resultat.libelle} | Session {resultat.session ?? '-'} | Note{' '}
+                              {resultat.note.toFixed(2)} | Coef {resultat.coef.toFixed(2)}
+                            </p>
+                            {!canManageResultat(resultat.id_etu) ? null : editingId ===
+                              resultat.id ? (
+                              <div className="mt-2 grid gap-2">
+                                <Input
+                                  value={editingLibelle}
+                                  onChange={(event) => setEditingLibelle(event.target.value)}
+                                  className="h-9 text-xs"
+                                  placeholder="Libelle"
+                                />
+                                <div className="grid grid-cols-3 gap-2">
+                                  <NumberInput
+                                    value={editingSession}
+                                    onChange={(event) => setEditingSession(event.target.value)}
+                                    className="h-9 text-xs"
+                                    placeholder="S"
+                                    min="1"
+                                    step="1"
+                                  />
+                                  <NumberInput
+                                    value={editingNote}
+                                    onChange={(event) => setEditingNote(event.target.value)}
+                                    className="h-9 text-xs"
+                                    placeholder="Note"
+                                    min="0"
+                                    max="20"
+                                    step="0.01"
+                                  />
+                                  <NumberInput
+                                    value={editingCoef}
+                                    onChange={(event) => setEditingCoef(event.target.value)}
+                                    className="h-9 text-xs"
+                                    placeholder="Coef"
+                                    min="0"
+                                    step="0.1"
+                                  />
+                                </div>
+                                <div className="flex gap-2">
+                                  <Button
+                                    type="button"
+                                    className="h-8 rounded bg-[var(--surface-strong)] px-2 text-xs text-white hover:bg-[var(--surface-strong-hover)] dark:text-zinc-900"
+                                    onClick={() => void saveEdit(resultat.id)}
+                                  >
+                                    Enregistrer
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    className="h-8 rounded px-2 text-xs"
+                                    onClick={() => setEditingId('')}
+                                  >
+                                    Annuler
+                                  </Button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="mt-2 flex gap-2">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  className="h-8 rounded px-2 text-xs"
+                                  onClick={() => {
+                                    setEditingId(resultat.id);
+                                    setEditingLibelle(resultat.libelle);
+                                    setEditingSession(
+                                      resultat.session ? String(resultat.session) : ''
+                                    );
+                                    setEditingNote(String(resultat.note));
+                                    setEditingCoef(String(resultat.coef));
+                                  }}
+                                >
+                                  Modifier
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  className="h-8 rounded border-rose-400 px-2 text-xs text-rose-700"
+                                  onClick={() => void removeResult(resultat.id)}
+                                >
+                                  Supprimer
+                                </Button>
+                              </div>
+                            )}
+                          </article>
+                        ))
+                      )}
                     </div>
                   </div>
                 ))}
@@ -367,41 +484,48 @@ export function ResultsModule({
             </section>
           ))}
           {resultGroups.length === 0 && (
-            <p className="text-sm text-zinc-500">Aucun resultat pour ce semestre.</p>
+            <p className="text-sm text-muted-foreground">Aucun resultat pour ce semestre.</p>
           )}
-          {message && <p className="text-sm text-zinc-600">{message}</p>}
+          {message && <p className="text-sm text-muted-foreground">{message}</p>}
         </div>
       )}
 
       {canCreateOwnResult && isCreateModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
-          <div className="w-full max-w-xl rounded-2xl border border-zinc-200 bg-white p-5 shadow-2xl">
-            <h3 className="text-base font-semibold text-zinc-900">Ajouter une note</h3>
-            <p className="mt-1 text-sm text-zinc-600">Matiere: {createMatiereName}</p>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-3 sm:p-4">
+          <div className="w-full max-w-xl rounded-2xl border border-[var(--surface-border)] bg-[var(--surface-2)] p-5 shadow-2xl">
+            <h3 className="text-base font-semibold text-foreground">Ajouter une note</h3>
+            <p className="mt-1 text-sm text-muted-foreground">Matiere: {createMatiereName}</p>
             <div className="mt-4 grid gap-2 sm:grid-cols-2">
-              <input
+              <Input
                 value={libelle}
                 onChange={(event) => setLibelle(event.target.value)}
                 placeholder="Libelle"
-                className="h-10 rounded-lg border border-zinc-300 px-3 text-sm"
+                className="h-10 text-sm"
               />
-              <input
+              <NumberInput
                 value={session}
                 onChange={(event) => setSession(event.target.value)}
                 placeholder="Session"
-                className="h-10 rounded-lg border border-zinc-300 px-3 text-sm"
+                min="1"
+                step="1"
+                className="h-10 text-sm"
               />
-              <input
+              <NumberInput
                 value={note}
                 onChange={(event) => setNote(event.target.value)}
                 placeholder="Note"
-                className="h-10 rounded-lg border border-zinc-300 px-3 text-sm"
+                min="0"
+                max="20"
+                step="0.01"
+                className="h-10 text-sm"
               />
-              <input
+              <NumberInput
                 value={coef}
                 onChange={(event) => setCoef(event.target.value)}
                 placeholder="Coef"
-                className="h-10 rounded-lg border border-zinc-300 px-3 text-sm"
+                min="0"
+                step="0.1"
+                className="h-10 text-sm"
               />
             </div>
             <div className="mt-4 flex items-center justify-end gap-2">
@@ -417,7 +541,7 @@ export function ResultsModule({
                 type="button"
                 disabled={!note}
                 onClick={() => void saveResult()}
-                className="h-10 rounded-lg bg-[#6d2745] text-white hover:bg-[#4f1730]"
+                className="h-10 rounded-lg bg-[var(--surface-strong)] text-white hover:bg-[var(--surface-strong-hover)] dark:text-zinc-900"
               >
                 Enregistrer
               </Button>

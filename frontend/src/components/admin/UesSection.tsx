@@ -6,14 +6,16 @@ type Props = { controller: AdminController };
 
 const adminUeTheme = {
   panel: adminUi.panel,
-  title: 'text-xl font-semibold text-violet-950',
+  title: 'text-xl font-semibold text-foreground',
   input: adminUi.input,
-  select: 'h-10 rounded-xl border border-violet-200 bg-violet-50/40 px-3 text-sm',
+  select:
+    'h-10 rounded-xl border border-[var(--surface-border)] bg-[var(--surface-2)] px-3 text-sm',
   primaryButton: adminUi.primaryBtn,
-  row: 'flex flex-wrap items-center justify-between gap-3 rounded-xl border border-violet-200 bg-violet-50/40 p-4',
+  row: 'flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--surface-border)] bg-[var(--surface-muted)] p-4',
   modalOverlay:
-    'fixed inset-0 z-50 flex items-center justify-center bg-violet-950/35 p-4 backdrop-blur-sm',
-  modal: 'w-full max-w-xl rounded-3xl border border-violet-100 bg-white p-6 shadow-2xl',
+    'fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm',
+  modal:
+    'w-full max-w-xl rounded-3xl border border-[var(--surface-border)] bg-[var(--surface-2)] p-6 shadow-2xl',
 };
 
 export function UesSection({ controller }: Props) {

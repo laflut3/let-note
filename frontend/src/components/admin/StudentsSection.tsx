@@ -30,7 +30,7 @@ export function StudentsTab({ controller }: Props) {
 
   return (
     <section className={adminUi.panel}>
-      <h2 className="text-xl font-semibold text-violet-950">Liste des etudiants</h2>
+      <h2 className="text-xl font-semibold text-foreground">Liste des etudiants</h2>
       <ListControls
         className="mt-3"
         searchValue={studentSearch}
@@ -42,22 +42,25 @@ export function StudentsTab({ controller }: Props) {
       />
       <div className="mt-4 space-y-2">
         {filteredStudents.map((student) => (
-          <div key={student.id} className="rounded-xl border border-zinc-200 bg-zinc-50 p-3">
+          <div
+            key={student.id}
+            className="rounded-xl border border-[var(--surface-border)] bg-[var(--surface-muted)] p-3"
+          >
             <button
               type="button"
               className="flex w-full items-center justify-between text-left"
               onClick={() => toggleStudentDetails(student)}
             >
-              <span className="text-sm text-zinc-800">
+              <span className="text-sm text-foreground">
                 {student.prenom} {student.nom} - roles: {student.roles.join(', ') || 'eleve'}
               </span>
-              <span className="text-xs text-zinc-500">
+              <span className="text-xs text-muted-foreground">
                 {expandedStudentId === student.id ? 'Masquer' : 'Details'}
               </span>
             </button>
 
             {expandedStudentId === student.id && (
-              <div className="mt-3 space-y-3 border-t border-zinc-200 pt-3">
+              <div className="mt-3 space-y-3 border-t border-[var(--surface-border)] pt-3">
                 <div className="grid gap-2 sm:grid-cols-2">
                   <input
                     value={editStudentNumero}
@@ -92,7 +95,7 @@ export function StudentsTab({ controller }: Props) {
                 </div>
                 <Button
                   type="button"
-                  className="h-10 rounded-lg bg-violet-700 text-white hover:bg-violet-800"
+                  className="h-10 rounded-lg bg-[var(--surface-strong)] text-white hover:bg-[var(--surface-strong-hover)] dark:text-zinc-900"
                   onClick={() =>
                     void runAction(
                       () =>
@@ -109,7 +112,7 @@ export function StudentsTab({ controller }: Props) {
                 >
                   Enregistrer les modifications
                 </Button>
-                <div className="text-sm text-zinc-700">
+                <div className="text-sm text-muted-foreground">
                   <p>Promotions:</p>
                   <ul className="ml-4 list-disc">
                     {student.promotions.length === 0 && <li>Aucune promotion</li>}

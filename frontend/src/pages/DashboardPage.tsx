@@ -12,6 +12,7 @@ import { StudentProfileModule } from '@/components/dashboard/StudentProfileModul
 import { WeeklyScheduleModule } from '@/components/dashboard/WeeklyScheduleModule';
 import { ResultsModule } from '@/components/dashboard/ResultsModule';
 import { useDashboardController } from '@/hooks/useDashboardController';
+import { adminUi } from '@/lib/admin-ui';
 
 export function DashboardPage() {
   const navigate = useNavigate();
@@ -22,8 +23,8 @@ export function DashboardPage() {
   const safeTodayEvents = Array.isArray(controller.todayEvents) ? controller.todayEvents : [];
 
   return (
-    <main className="min-h-screen bg-[linear-gradient(160deg,#f6efe1,#f1e7d8)] px-2 py-3 sm:px-3 sm:py-4 md:px-4 md:py-6">
-      <section className="mx-auto max-w-[1780px] space-y-4">
+    <main className={adminUi.pageBg}>
+      <section className={adminUi.shell}>
         <TopNav
           activeTab={controller.activeTab}
           setActiveTab={controller.setActiveTab}
@@ -36,7 +37,7 @@ export function DashboardPage() {
         />
 
         {controller.activeTab === 'accueil' && (
-          <section className="rounded-3xl border border-zinc-300 bg-white/85 p-4">
+          <section className="rounded-3xl border border-[var(--surface-border)] bg-[var(--surface-1)] p-4">
             <PromoHeader
               promoLabel={controller.promoLabel}
               referentPrenom={controller.dashboard?.promotion.referent_prof_prenom}

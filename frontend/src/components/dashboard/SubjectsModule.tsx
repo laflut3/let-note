@@ -10,16 +10,16 @@ export function SubjectsModule({ dashboard }: SubjectsModuleProps) {
   const sectionTypes = ['cours', 'td', 'tp', 'exam'] as const;
 
   return (
-    <section className="rounded-2xl border border-zinc-300 bg-white p-4">
-      <h3 className="text-sm font-semibold">Liste des matieres</h3>
+    <section className="rounded-2xl border border-[var(--surface-border)] bg-[var(--surface-2)] p-4">
+      <h3 className="text-sm font-semibold text-foreground">Liste des matieres</h3>
       <div className="mt-2 space-y-2">
         {(dashboard?.matieres ?? []).map((matiere) => (
           <details
             key={matiere.code_matiere}
-            className="rounded-lg border border-zinc-300 p-2"
+            className="rounded-lg border border-[var(--surface-border)] bg-[var(--surface-muted)] p-2"
             open
           >
-            <summary className="cursor-pointer text-sm font-semibold">
+            <summary className="cursor-pointer text-sm font-semibold text-foreground">
               {matiere.nom_matiere}
             </summary>
             <div className="mt-2 grid gap-3 lg:grid-cols-2">
@@ -30,25 +30,29 @@ export function SubjectsModule({ dashboard }: SubjectsModuleProps) {
                   );
                   return (
                     <div key={`${matiere.code_matiere}-${type}`}>
-                      <p className="text-xs font-semibold uppercase text-zinc-600">{type}</p>
+                      <p className="text-xs font-semibold uppercase text-muted-foreground">
+                        {type}
+                      </p>
                       <div className="mt-1 space-y-1">
                         {resources.length === 0 ? (
-                          <div className="rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-500">
+                          <div className="rounded-md border border-[var(--surface-border)] bg-[var(--surface-2)] px-3 py-2 text-xs text-muted-foreground">
                             Pas de fichier [{type.toUpperCase()}]
                           </div>
                         ) : (
                           resources.map((resource) => (
                             <div
                               key={resource.id}
-                              className="flex items-center justify-between gap-2 rounded-md border border-zinc-300 bg-[#f3e29a] px-3 py-2 text-xs"
+                              className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-[var(--surface-border)] bg-[#d4c78f] px-3 py-2 text-xs dark:bg-[#665a43]"
                             >
-                              <span className="truncate">{resource.title}</span>
+                              <span className="max-w-full truncate text-foreground dark:text-zinc-100">
+                                {resource.title}
+                              </span>
                               <div className="flex items-center gap-2">
                                 <a
                                   href={getResourceFileUrl(resource.id, false)}
                                   target="_blank"
                                   rel="noreferrer"
-                                  className="inline-flex items-center gap-1 rounded-md border border-zinc-500 bg-white/70 px-2 py-1"
+                                  className="inline-flex items-center gap-1 rounded-md border border-zinc-500/80 bg-white/80 px-2 py-1 text-zinc-800 dark:border-zinc-300/40 dark:bg-zinc-900/25 dark:text-zinc-100"
                                   title="Visualiser"
                                 >
                                   <Eye className="h-3.5 w-3.5" />
@@ -56,7 +60,7 @@ export function SubjectsModule({ dashboard }: SubjectsModuleProps) {
                                 </a>
                                 <a
                                   href={getResourceFileUrl(resource.id, true)}
-                                  className="inline-flex items-center gap-1 rounded-md border border-zinc-500 bg-white/70 px-2 py-1"
+                                  className="inline-flex items-center gap-1 rounded-md border border-zinc-500/80 bg-white/80 px-2 py-1 text-zinc-800 dark:border-zinc-300/40 dark:bg-zinc-900/25 dark:text-zinc-100"
                                   title="Telecharger"
                                 >
                                   <Download className="h-3.5 w-3.5" />
@@ -73,7 +77,7 @@ export function SubjectsModule({ dashboard }: SubjectsModuleProps) {
               </div>
 
               <div className="space-y-2">
-                <div className="mt-3 rounded-md border border-zinc-300 bg-zinc-50 p-2 text-xs">
+                <div className="mt-3 rounded-md border border-[var(--surface-border)] bg-[var(--surface-2)] p-2 text-xs text-foreground">
                   info sur le prof referent au cours
                   <br />
                   {matiere.referent_prof_prenom ?? '-'} {matiere.referent_prof_nom ?? ''}
@@ -82,7 +86,7 @@ export function SubjectsModule({ dashboard }: SubjectsModuleProps) {
                 </div>
               </div>
             </div>
-            <div className="mt-2 rounded-md border border-zinc-300 bg-zinc-50 p-2 text-xs">
+            <div className="mt-2 rounded-md border border-[var(--surface-border)] bg-[var(--surface-2)] p-2 text-xs text-foreground">
               referent: {matiere.referent_prof_prenom ?? '-'} {matiere.referent_prof_nom ?? ''}
             </div>
           </details>

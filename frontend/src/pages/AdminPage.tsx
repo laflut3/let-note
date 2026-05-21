@@ -33,11 +33,11 @@ export function AdminPage() {
             onFeedback={controller.setFeedback}
             theme={{
               panel: adminUi.panel,
-              title: 'text-xl font-semibold text-violet-950',
+              title: 'text-xl font-semibold text-foreground',
               input: adminUi.input,
               select: adminUi.select,
               primaryButton: adminUi.primaryBtn,
-              row: 'flex flex-wrap items-center justify-between gap-3 rounded-xl border border-violet-200 bg-violet-50/40 p-4',
+              row: 'flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--surface-border)] bg-[var(--surface-muted)] p-4',
             }}
           />
         )}
@@ -45,7 +45,7 @@ export function AdminPage() {
         <AdminOverlays controller={controller} />
 
         {controller.loadingError && (
-          <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-400/40 dark:bg-rose-950/30 dark:text-rose-200">
             {controller.loadingError}
           </p>
         )}
@@ -54,8 +54,8 @@ export function AdminPage() {
             className={[
               'rounded-xl border px-4 py-3 text-sm',
               controller.feedback.type === 'success'
-                ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                : 'border-rose-200 bg-rose-50 text-rose-700',
+                ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/40 dark:bg-emerald-950/30 dark:text-emerald-200'
+                : 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-400/40 dark:bg-rose-950/30 dark:text-rose-200',
             ].join(' ')}
           >
             {controller.feedback.message}

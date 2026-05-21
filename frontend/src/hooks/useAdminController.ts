@@ -95,7 +95,7 @@ export function useAdminController(navigate: NavigateFunction) {
   const [profPrenom, setProfPrenom] = useState('');
   const [profNom, setProfNom] = useState('');
   const [profEmail, setProfEmail] = useState('');
-  const [profBirthDate, setProfBirthDate] = useState('1980-01-01');
+  const [profBirthDate, setProfBirthDate] = useState('');
   const [isCreatingProf, setIsCreatingProf] = useState(false);
 
   const [selectedProfId, setSelectedProfId] = useState('');
@@ -113,12 +113,12 @@ export function useAdminController(navigate: NavigateFunction) {
   const [linkUes, setLinkUes] = useState<UeItem[]>([]);
   const [linkUeId, setLinkUeId] = useState('');
   const [newLinkUeNom, setNewLinkUeNom] = useState('');
-  const [newLinkUeSemestre, setNewLinkUeSemestre] = useState('1');
+  const [newLinkUeSemestre, setNewLinkUeSemestre] = useState('');
   const [editLinkUeId, setEditLinkUeId] = useState('');
   const [editLinkUeNom, setEditLinkUeNom] = useState('');
-  const [editLinkUeSemestre, setEditLinkUeSemestre] = useState('1');
+  const [editLinkUeSemestre, setEditLinkUeSemestre] = useState('');
   const [linkReferentProfId, setLinkReferentProfId] = useState('');
-  const [linkCoef, setLinkCoef] = useState('1');
+  const [linkCoef, setLinkCoef] = useState('');
   const [resourceType, setResourceType] = useState<'cours' | 'td' | 'tp' | 'exam'>('cours');
   const [resourceTitle, setResourceTitle] = useState('');
   const [resourceDescription, setResourceDescription] = useState('');
@@ -148,10 +148,10 @@ export function useAdminController(navigate: NavigateFunction) {
   const [matiereSort, setMatiereSort] = useState<SortDirection>('asc');
   const [ueItems, setUeItems] = useState<UeItem[]>([]);
   const [newUeNom, setNewUeNom] = useState('');
-  const [newUeSemestre, setNewUeSemestre] = useState('1');
+  const [newUeSemestre, setNewUeSemestre] = useState('');
   const [editUeId, setEditUeId] = useState('');
   const [editUeNom, setEditUeNom] = useState('');
-  const [editUeSemestre, setEditUeSemestre] = useState('1');
+  const [editUeSemestre, setEditUeSemestre] = useState('');
 
   const selectedCount = selectedUserIds.length;
   const canCreatePromotion = useMemo(() => {

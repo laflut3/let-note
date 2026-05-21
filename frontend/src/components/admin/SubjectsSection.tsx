@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { ListControls } from '@/components/common/ListControls';
 import { adminDeleteMatiereRequest, adminUpdateMatiereRequest } from '@/services/api';
 import { Modal } from '@/components/admin/Modal';
+import { NumberInput } from '@/components/ui/number-input';
 import { adminUi } from '@/lib/admin-ui';
 import type { AdminController } from '@/hooks/useAdminController';
 
@@ -70,7 +71,7 @@ export function SubjectsTab({ controller }: Props) {
 
   return (
     <section className={adminUi.panel}>
-      <h2 className="text-xl font-semibold text-violet-950">Gestion des matieres</h2>
+      <h2 className="text-xl font-semibold text-foreground">Gestion des matieres</h2>
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
         <input
           value={newMatiereCode}
@@ -112,16 +113,18 @@ export function SubjectsTab({ controller }: Props) {
             className={[
               'rounded-xl border p-3 sm:p-4',
               selectedMatiereCode === matiere.code_matiere
-                ? 'border-violet-400 bg-violet-50/70'
-                : 'border-zinc-200 bg-zinc-50',
+                ? 'border-[var(--surface-strong)] bg-[var(--surface-muted)]'
+                : 'border-[var(--surface-border)] bg-[var(--surface-muted)]',
             ].join(' ')}
           >
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="text-sm font-semibold text-zinc-900">
+                <p className="text-sm font-semibold text-foreground">
                   {matiere.nom_matiere} ({matiere.code_matiere})
                 </p>
-                <p className="text-xs text-zinc-600">{matiere.promotion_count} promotion(s)</p>
+                <p className="text-xs text-muted-foreground">
+                  {matiere.promotion_count} promotion(s)
+                </p>
               </div>
               <div className="flex flex-wrap gap-2">
                 <Button
@@ -288,27 +291,31 @@ export function SubjectsTab({ controller }: Props) {
               </option>
             ))}
           </select>
-          <input
+          <NumberInput
             value={linkCoef}
             onChange={(e) => setLinkCoef(e.target.value)}
-            placeholder="Coefficient UE (ex: 1)"
+            placeholder="Coefficient UE"
+            min="0"
+            step="0.1"
             className={adminUi.input}
           />
         </div>
-        <div className="mt-4 rounded-xl border border-violet-200 p-3">
-          <p className="text-sm font-semibold text-violet-950">Gestion des UE de la promo</p>
+        <div className="mt-4 rounded-xl border border-[var(--surface-border)] p-3">
+          <p className="text-sm font-semibold text-foreground">Gestion des UE de la promo</p>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <input
               value={newLinkUeNom}
               onChange={(e) => setNewLinkUeNom(e.target.value)}
               placeholder="Nom UE"
-              className="h-9 w-56 rounded-lg border border-violet-200 px-2 text-sm"
+              className="h-9 w-56 rounded-lg border border-[var(--surface-border)] bg-[var(--surface-2)] px-2 text-sm text-foreground"
             />
-            <input
+            <NumberInput
               value={newLinkUeSemestre}
               onChange={(e) => setNewLinkUeSemestre(e.target.value)}
-              placeholder="Semestre (1-12)"
-              className="h-9 w-40 rounded-lg border border-violet-200 px-2 text-sm"
+              placeholder="Semestre"
+              min="1"
+              step="1"
+              className="h-9 w-40 text-sm"
             />
             <Button
               type="button"
@@ -324,9 +331,9 @@ export function SubjectsTab({ controller }: Props) {
             {linkUes.map((ue) => (
               <div
                 key={ue.id}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-zinc-200 bg-white p-2"
+                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[var(--surface-border)] bg-[var(--surface-2)] p-2"
               >
-                <p className="text-sm text-zinc-700">
+                <p className="text-sm text-muted-foreground">
                   <span className="font-semibold">{ue.nom_ue}</span> - semestre {ue.semestre}
                 </p>
                 <div className="flex flex-wrap items-center gap-2">
@@ -336,16 +343,18 @@ export function SubjectsTab({ controller }: Props) {
                       setEditLinkUeId(ue.id);
                       setEditLinkUeNom(e.target.value);
                     }}
-                    className="h-9 w-44 rounded-lg border border-zinc-300 px-2 text-sm"
+                    className="h-9 w-44 rounded-lg border border-[var(--surface-border)] bg-[var(--surface-2)] px-2 text-sm text-foreground"
                   />
-                  <input
+                  <NumberInput
                     value={editLinkUeId === ue.id ? editLinkUeSemestre : String(ue.semestre)}
                     onChange={(e) => {
                       setEditLinkUeId(ue.id);
                       setEditLinkUeNom(editLinkUeId === ue.id ? editLinkUeNom : ue.nom_ue);
                       setEditLinkUeSemestre(e.target.value);
                     }}
-                    className="h-9 w-28 rounded-lg border border-zinc-300 px-2 text-sm"
+                    min="1"
+                    step="1"
+                    className="h-9 w-28 text-sm"
                   />
                   <Button
                     type="button"
@@ -371,11 +380,11 @@ export function SubjectsTab({ controller }: Props) {
               </div>
             ))}
             {linkUes.length === 0 && (
-              <p className="text-xs text-zinc-600">Aucune UE pour cette promotion.</p>
+              <p className="text-xs text-muted-foreground">Aucune UE pour cette promotion.</p>
             )}
           </div>
         </div>
-        <p className="mt-2 text-xs text-zinc-600">
+        <p className="mt-2 text-xs text-muted-foreground">
           L’admin peut lier cette matiere a n’importe quelle promo. Le professeur referent doit etre
           rattache a la promo cible.
         </p>
@@ -399,7 +408,7 @@ export function SubjectsTab({ controller }: Props) {
             <Button
               type="button"
               disabled={!selectedMatiereCode || !resourceFile}
-              className="h-10 rounded-xl bg-violet-700 px-4 text-white hover:bg-violet-800"
+              className="h-10 rounded-xl bg-[var(--surface-strong)] px-4 text-white hover:bg-[var(--surface-strong-hover)] dark:text-zinc-900"
               onClick={() => void handleCreateMatiereResource()}
             >
               Uploader le fichier
@@ -441,7 +450,7 @@ export function SubjectsTab({ controller }: Props) {
           {matiereResources.map((resource) => (
             <div
               key={resource.id}
-              className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-zinc-200 px-3 py-2 text-sm"
+              className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[var(--surface-border)] px-3 py-2 text-sm"
             >
               <p>
                 <strong>{resource.type_metier}</strong> - {resource.title} -{' '}

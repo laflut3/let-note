@@ -1,5 +1,8 @@
 import { Calendar, Home, LogOut, Shield, UserCircle, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { ThemeToggle } from '@/components/auth/ThemeToggle';
+import { useThemeContext } from '@/context/theme-context';
+import { adminUi } from '@/lib/admin-ui';
 
 export type DashboardTab = 'accueil' | 'edt' | 'notes' | 'profil';
 
@@ -24,8 +27,10 @@ export function TopNav({
   onLogout,
   isLoggingOut,
 }: TopNavProps) {
+  const { theme, resolvedTheme, toggleTheme } = useThemeContext();
+
   return (
-    <nav className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--auth-card-border)] bg-[linear-gradient(135deg,#4f1730,#6d2745)] px-4 py-3 text-white shadow-[0_16px_38px_rgba(36,14,30,0.28)]">
+    <nav className={adminUi.topNav}>
       <div className="flex flex-wrap items-center gap-2">
         {(
           [
@@ -40,53 +45,55 @@ export function TopNav({
             type="button"
             onClick={() => setActiveTab(key)}
             className={[
-              'rounded-lg px-3 py-1.5 text-sm transition flex items-center gap-2',
-              activeTab === key ? 'bg-white/20 font-semibold' : 'hover:bg-white/10',
+              adminUi.topNavTab,
+              activeTab === key ? adminUi.topNavTabActive : adminUi.topNavTabIdle,
             ].join(' ')}
           >
             {key === 'accueil' && <Home className="h-4 w-4" />}
             {key === 'edt' && <Calendar className="h-4 w-4" />}
             {key === 'notes' && <Users className="h-4 w-4" />}
             {key === 'profil' && <UserCircle className="h-4 w-4" />}
-            <span className="hidden sm:inline">{label}</span>
+            <span className="hidden md:inline">{label}</span>
           </button>
         ))}
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="ml-auto flex items-center gap-2">
         {hasDelegueScope && (
           <Button
             type="button"
             variant="ghost"
             onClick={onDelegue}
-            className="h-9 rounded-lg bg-white/15 text-white hover:bg-white/25 hover:text-white"
+            className={adminUi.topNavAction}
           >
             <Users className="h-4 w-4" />
-            <span className="hidden sm:inline sm:ml-1">Delegue</span>
+            <span className="ml-1 hidden lg:inline">Delegue</span>
           </Button>
         )}
         {isAdmin && (
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={onAdmin}
-            className="h-9 rounded-lg bg-white/15 text-white hover:bg-white/25 hover:text-white"
-          >
+          <Button type="button" variant="ghost" onClick={onAdmin} className={adminUi.topNavAction}>
             <Shield className="h-4 w-4" />
-            <span className="hidden sm:inline sm:ml-1">Admin</span>
+            <span className="ml-1 hidden lg:inline">Admin</span>
           </Button>
         )}
         <Button
           onClick={onLogout}
           disabled={isLoggingOut}
           variant="ghost"
-          className="h-9 rounded-lg text-white hover:bg-white/12 hover:text-white"
+          className={adminUi.topNavActionGhost}
         >
           <LogOut className="h-4 w-4" />
-          <span className="hidden sm:inline sm:ml-1">
+          <span className="ml-1 hidden lg:inline">
             {isLoggingOut ? 'Deconnexion...' : 'Logout'}
           </span>
         </Button>
+        <ThemeToggle
+          theme={theme}
+          resolvedTheme={resolvedTheme}
+          onToggle={toggleTheme}
+          inline
+          compactOnMobile
+        />
       </div>
     </nav>
   );

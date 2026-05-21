@@ -17,25 +17,32 @@ export function TodayScheduleModule({
   events,
 }: TodayScheduleModuleProps) {
   return (
-    <section className="rounded-2xl border border-zinc-300 bg-white p-4">
-      <h3 className="text-sm font-semibold">Emploi du temps de la promo (journee actuelle)</h3>
+    <section className="rounded-2xl border border-[var(--surface-border)] bg-[var(--surface-2)] p-4">
+      <h3 className="text-sm font-semibold text-foreground">
+        Emploi du temps de la promo (journee actuelle)
+      </h3>
       {isLoadingSchedule ? (
-        <p className="mt-2 text-sm text-zinc-500">Chargement...</p>
+        <p className="mt-2 text-sm text-muted-foreground">Chargement...</p>
       ) : scheduleError ? (
-        <p className="mt-2 rounded-lg bg-rose-100 px-3 py-2 text-sm text-rose-700">
+        <p className="mt-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:border-rose-400/40 dark:bg-rose-950/30 dark:text-rose-200">
           {scheduleError}
         </p>
       ) : events.length === 0 ? (
-        <p className="mt-2 text-sm text-zinc-500">Aucun cours aujourd hui.</p>
+        <p className="mt-2 text-sm text-muted-foreground">Aucun cours aujourd hui.</p>
       ) : (
         <div className="mt-2 space-y-2">
           {events.slice(0, 6).map((event) => (
-            <article key={event.id} className="rounded-lg border border-zinc-300 bg-zinc-50 p-2">
-              <p className="text-xs font-semibold text-zinc-700">
+            <article
+              key={event.id}
+              className="rounded-lg border border-[var(--surface-border)] bg-[var(--surface-muted)] p-2"
+            >
+              <p className="text-xs font-semibold text-muted-foreground">
                 {formatHourRange(event.start, event.end)}
               </p>
-              <p className="text-sm font-semibold text-zinc-900">{event.title}</p>
-              {event.location ? <p className="text-xs text-zinc-600">{event.location}</p> : null}
+              <p className="text-sm font-semibold text-foreground">{event.title}</p>
+              {event.location ? (
+                <p className="text-xs text-muted-foreground">{event.location}</p>
+              ) : null}
             </article>
           ))}
         </div>

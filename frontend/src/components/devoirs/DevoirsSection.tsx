@@ -289,15 +289,15 @@ export function DevoirsSection({
                 </div>
               ) : (
                 <div>
-                  <p className="font-semibold text-violet-950">{devoir.titre}</p>
-                  <p className="text-sm text-zinc-600">
+                  <p className="font-semibold text-foreground">{devoir.titre}</p>
+                  <p className="text-sm text-muted-foreground">
                     {devoir.nom_matiere} ({devoir.id_mat})
                     {devoir.date_rendu
                       ? ` - rendu le ${new Date(devoir.date_rendu).toLocaleString('fr-FR')}`
                       : ''}
                   </p>
                   {devoir.description && (
-                    <p className="mt-1 text-sm text-zinc-500">{devoir.description}</p>
+                    <p className="mt-1 text-sm text-muted-foreground">{devoir.description}</p>
                   )}
                 </div>
               )}
@@ -339,7 +339,7 @@ export function DevoirsSection({
                 <Button
                   type="button"
                   variant="outline"
-                  className="h-10 rounded-xl border-rose-300 text-rose-700 hover:bg-rose-50"
+                  className="h-10 rounded-xl border-rose-300 text-rose-700 hover:bg-rose-50 dark:border-rose-400/50 dark:text-rose-200 dark:hover:bg-rose-950/30"
                   onClick={() => void deleteDevoir(devoir.id)}
                 >
                   Supprimer
@@ -348,7 +348,7 @@ export function DevoirsSection({
             </article>
           );
         })}
-        {filtered.length === 0 && <p className="text-sm text-zinc-500">Aucun devoir.</p>}
+        {filtered.length === 0 && <p className="text-sm text-muted-foreground">Aucun devoir.</p>}
       </div>
     </section>
   );

@@ -28,20 +28,20 @@ export function StudentProfileModule({
   profileMessage,
 }: StudentProfileModuleProps) {
   return (
-    <section className="rounded-2xl border border-zinc-300 bg-gradient-to-br from-white to-zinc-50 p-4 shadow-sm">
-      <h3 className="text-base font-semibold text-zinc-900">Profil etudiant</h3>
-      <div className="mt-3 flex items-center gap-3 rounded-xl border border-zinc-200 bg-white p-3">
+    <section className="rounded-2xl border border-[var(--surface-border)] bg-[var(--surface-2)] p-4 shadow-sm">
+      <h3 className="text-base font-semibold text-foreground">Profil etudiant</h3>
+      <div className="mt-3 flex items-center gap-3 rounded-xl border border-[var(--surface-border)] bg-[var(--surface-muted)] p-3">
         <img
           src={profileForm.photo_url || '/favicon.ico'}
           alt="Photo de profil"
-          className="h-16 w-16 rounded-xl border border-zinc-200 object-cover"
+          className="h-16 w-16 rounded-xl border border-[var(--surface-border)] object-cover"
         />
-        <div className="space-y-2">
-          <p className="text-xs text-zinc-600">Photo (optionnelle)</p>
+        <div className="min-w-0 flex-1 space-y-2">
+          <p className="text-xs text-muted-foreground">Photo (optionnelle)</p>
           <input
             type="file"
             accept="image/*"
-            className="max-w-xs rounded-md border border-zinc-300 px-2 py-1 text-xs"
+            className="w-full max-w-full rounded-md border border-[var(--surface-border)] bg-[var(--surface-2)] px-2 py-1 text-xs text-foreground"
             onChange={(event) => {
               const file = event.target.files?.[0];
               if (file) {
@@ -60,7 +60,7 @@ export function StudentProfileModule({
               numero_etudiant: event.target.value,
             }))
           }
-          className="rounded-md border border-zinc-300 px-2 py-1 text-sm"
+          className="rounded-md border border-[var(--surface-border)] bg-[var(--surface-2)] px-2 py-1 text-sm text-foreground"
           placeholder="Numero etudiant"
         />
         <input
@@ -72,7 +72,7 @@ export function StudentProfileModule({
               date_naissance: event.target.value,
             }))
           }
-          className="rounded-md border border-zinc-300 px-2 py-1 text-sm"
+          className="rounded-md border border-[var(--surface-border)] bg-[var(--surface-2)] px-2 py-1 text-sm text-foreground"
         />
         <input
           value={profileForm.prenom}
@@ -82,13 +82,13 @@ export function StudentProfileModule({
               prenom: event.target.value,
             }))
           }
-          className="rounded-md border border-zinc-300 px-2 py-1 text-sm"
+          className="rounded-md border border-[var(--surface-border)] bg-[var(--surface-2)] px-2 py-1 text-sm text-foreground"
           placeholder="Prenom"
         />
         <input
           value={profileForm.nom}
           onChange={(event) => setProfileForm((prev) => ({ ...prev, nom: event.target.value }))}
-          className="rounded-md border border-zinc-300 px-2 py-1 text-sm"
+          className="rounded-md border border-[var(--surface-border)] bg-[var(--surface-2)] px-2 py-1 text-sm text-foreground"
           placeholder="Nom"
         />
         <input
@@ -99,7 +99,7 @@ export function StudentProfileModule({
               email: event.target.value,
             }))
           }
-          className="sm:col-span-2 rounded-md border border-zinc-300 px-2 py-1 text-sm"
+          className="sm:col-span-2 rounded-md border border-[var(--surface-border)] bg-[var(--surface-2)] px-2 py-1 text-sm text-foreground"
           placeholder="Email"
         />
       </div>
@@ -108,11 +108,11 @@ export function StudentProfileModule({
           type="button"
           onClick={() => void saveProfile()}
           disabled={isSavingProfile}
-          className="h-8 rounded-md bg-zinc-900 px-3 text-xs text-white hover:bg-zinc-700"
+          className="h-8 rounded-md bg-[var(--surface-strong)] px-3 text-xs text-white hover:bg-[var(--surface-strong-hover)] dark:text-zinc-900"
         >
           {isSavingProfile ? 'Enregistrement...' : 'Enregistrer'}
         </Button>
-        {profileMessage ? <p className="text-xs text-zinc-600">{profileMessage}</p> : null}
+        {profileMessage ? <p className="text-xs text-muted-foreground">{profileMessage}</p> : null}
       </div>
     </section>
   );

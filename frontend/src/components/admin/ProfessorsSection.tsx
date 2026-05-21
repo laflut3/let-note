@@ -35,7 +35,7 @@ export function ProfessorsTab({ controller }: Props) {
 
   return (
     <section className={adminUi.panel}>
-      <h2 className="text-xl font-semibold text-violet-950">Gestion des professeurs</h2>
+      <h2 className="text-xl font-semibold text-foreground">Gestion des professeurs</h2>
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         <input
           value={profPrenom}
@@ -71,7 +71,7 @@ export function ProfessorsTab({ controller }: Props) {
         {isCreatingProf ? 'Creation...' : 'Creer professeur'}
       </Button>
 
-      <h3 className="mt-6 text-lg font-semibold text-zinc-900">Liste des professeurs</h3>
+      <h3 className="mt-6 text-lg font-semibold text-foreground">Liste des professeurs</h3>
       <ListControls
         className="mt-3"
         searchValue={profSearch}
@@ -85,9 +85,9 @@ export function ProfessorsTab({ controller }: Props) {
         {filteredProfesseurs.map((prof) => (
           <div
             key={prof.id}
-            className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between rounded-xl border border-zinc-200 bg-zinc-50 p-3"
+            className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between rounded-xl border border-[var(--surface-border)] bg-[var(--surface-muted)] p-3"
           >
-            <p className="text-sm text-zinc-800">
+            <p className="text-sm text-foreground">
               {prof.prenom} {prof.nom} - {prof.email}
             </p>
             <div className="flex gap-2 self-end sm:self-auto">

@@ -41,12 +41,12 @@ function isSameDay(left: Date, right: Date): boolean {
 
 function eventColorClass(title: string): string {
   const palette = [
-    'bg-[#b8dce6] border-[#5ea7bc]',
-    'bg-[#d9c0b0] border-[#b48367]',
-    'bg-[#cfd2e8] border-[#7d88bd]',
-    'bg-[#d4e8bf] border-[#7eaf4d]',
-    'bg-[#ead3d3] border-[#ca9090]',
-    'bg-[#d8d2ea] border-[#9f8cc8]',
+    'bg-[#d7e7ef] border-[#8bb7c8] dark:bg-[#4a5f75] dark:border-[#7f9eb4]',
+    'bg-[#ead7cb] border-[#c39c84] dark:bg-[#695550] dark:border-[#b08f7d]',
+    'bg-[#dde0ef] border-[#9ba6cd] dark:bg-[#4f5472] dark:border-[#8f98be]',
+    'bg-[#deecd0] border-[#9ec37b] dark:bg-[#52674d] dark:border-[#93b474]',
+    'bg-[#efdede] border-[#d8a6a6] dark:bg-[#6a4f60] dark:border-[#b38fa2]',
+    'bg-[#e1dbf1] border-[#ae9ed4] dark:bg-[#5b4f77] dark:border-[#a595cc]',
   ];
 
   let hash = 0;
@@ -108,12 +108,23 @@ export function WeeklyScheduleModule({
     );
   }, [allEvents, weekStart, weekEnd]);
 
+  const dayEventsMap = useMemo(
+    () =>
+      weekDays.map((day) => ({
+        day,
+        events: weekEvents
+          .filter((event) => isSameDay(event.start, day))
+          .sort((a, b) => a.start.getTime() - b.start.getTime()),
+      })),
+    [weekDays, weekEvents]
+  );
+
   return (
-    <div className="rounded-2xl border border-black/10 bg-white/90 p-5 shadow-[0_14px_34px_rgba(26,18,8,0.12)]">
+    <div className="rounded-2xl border border-[var(--surface-border)] bg-[var(--surface-2)] p-4 shadow-[0_14px_34px_rgba(26,18,8,0.12)] sm:p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold text-zinc-900">Emploi du temps de la semaine</h2>
-          <p className="mt-1 text-sm text-zinc-600">
+          <h2 className="text-lg font-semibold text-foreground">Emploi du temps de la semaine</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
             Du {weekStart.toLocaleDateString('fr-FR')} au {weekEnd.toLocaleDateString('fr-FR')}
           </p>
         </div>
@@ -130,14 +141,55 @@ export function WeeklyScheduleModule({
         </div>
       </div>
 
-      <div className="mt-4 overflow-x-auto rounded-xl border border-zinc-300 bg-white p-3">
+      <div className="mt-4 space-y-3 md:hidden">
+        {dayEventsMap.map(({ day, events }) => (
+          <section
+            key={day.toISOString()}
+            className="rounded-xl border border-[var(--surface-border)] bg-[var(--surface-2)] p-3"
+          >
+            <p className="text-sm font-semibold text-foreground">
+              {day.toLocaleDateString('fr-FR', {
+                weekday: 'long',
+                day: '2-digit',
+                month: 'long',
+              })}
+            </p>
+            {events.length === 0 ? (
+              <p className="mt-2 text-sm text-muted-foreground">Aucun cours.</p>
+            ) : (
+              <div className="mt-2 space-y-2">
+                {events.map((event) => (
+                  <article
+                    key={event.id}
+                    className={`rounded-lg border px-3 py-2 text-sm ${eventColorClass(event.title)}`}
+                  >
+                    <p className="font-semibold text-foreground dark:text-zinc-100">
+                      {event.title}
+                    </p>
+                    <p className="text-xs text-foreground/80 dark:text-zinc-200">
+                      {formatHourRange(event.start, event.end)}
+                    </p>
+                    {event.location ? (
+                      <p className="text-xs text-foreground/75 dark:text-zinc-300">
+                        {event.location}
+                      </p>
+                    ) : null}
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
+        ))}
+      </div>
+
+      <div className="mt-4 hidden overflow-x-auto rounded-xl border border-[var(--surface-border)] bg-[var(--surface-2)] p-2 sm:p-3 md:block">
         <div className="min-w-[980px]">
           <div className="grid grid-cols-[70px_repeat(5,minmax(0,1fr))] gap-2">
             <div />
             {weekDays.map((day) => (
               <div
                 key={day.toISOString()}
-                className="rounded-md border border-zinc-300 bg-zinc-50 px-2 py-2 text-center text-sm font-semibold text-zinc-800"
+                className="rounded-md border border-[var(--surface-border)] bg-[var(--surface-muted)] px-2 py-2 text-center text-sm font-semibold text-foreground"
               >
                 {day.toLocaleDateString('fr-FR', {
                   weekday: 'long',
@@ -161,7 +213,7 @@ export function WeeklyScheduleModule({
                 return (
                   <div
                     key={`time-${minutes}`}
-                    className="relative border-t border-zinc-200 text-[11px] text-zinc-600"
+                    className="relative border-t border-[var(--surface-soft-border)] text-[11px] text-muted-foreground"
                   >
                     {isHour ? (
                       <span className="absolute left-1 -translate-y-1/2">
@@ -178,7 +230,7 @@ export function WeeklyScheduleModule({
               return (
                 <div
                   key={day.toISOString()}
-                  className="relative grid rounded-md border border-zinc-300 bg-[#fafafa]"
+                  className="relative grid rounded-md border border-[var(--surface-border)] bg-[var(--surface-muted)]"
                   style={{
                     gridTemplateRows: `repeat(${GRID_ROW_COUNT}, minmax(24px, 1fr))`,
                   }}
@@ -186,7 +238,7 @@ export function WeeklyScheduleModule({
                   {Array.from({ length: GRID_ROW_COUNT }, (_, index) => (
                     <div
                       key={`line-${day.toISOString()}-${index}`}
-                      className="border-t border-zinc-200/80"
+                      className="border-t border-[var(--surface-soft-border)]"
                     />
                   ))}
                   {dayEvents.map((event) => {
@@ -194,7 +246,7 @@ export function WeeklyScheduleModule({
                     return (
                       <article
                         key={event.id}
-                        className={`z-10 mx-1 my-[1px] rounded-md border px-2 py-1 text-center text-[11px] leading-tight text-zinc-900 shadow-sm ${eventColorClass(event.title)}`}
+                        className={`z-10 mx-1 my-[1px] overflow-hidden rounded-md border px-2 py-1 text-center text-[11px] leading-tight text-foreground dark:text-zinc-100 shadow-sm ${eventColorClass(event.title)}`}
                         style={{
                           gridRow: `${placement.rowStart} / span ${placement.rowSpan}`,
                         }}

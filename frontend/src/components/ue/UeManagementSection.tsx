@@ -237,8 +237,8 @@ export function UeManagementSection({
                 </div>
               ) : (
                 <div>
-                  <p className="font-semibold text-violet-950">{ue.nom_ue}</p>
-                  <p className="text-sm text-zinc-600">Semestre {ue.semestre}</p>
+                  <p className="font-semibold text-foreground">{ue.nom_ue}</p>
+                  <p className="text-sm text-muted-foreground">Semestre {ue.semestre}</p>
                 </div>
               )}
 
@@ -286,7 +286,7 @@ export function UeManagementSection({
                 <Button
                   type="button"
                   variant="outline"
-                  className="h-10 rounded-xl border-rose-300 text-rose-700 hover:bg-rose-50"
+                  className="h-10 rounded-xl border-rose-300 text-rose-700 hover:bg-rose-50 dark:border-rose-400/50 dark:text-rose-200 dark:hover:bg-rose-950/30"
                   onClick={() => void onDelete(ue.id)}
                 >
                   Supprimer
@@ -295,7 +295,7 @@ export function UeManagementSection({
             </div>
           );
         })}
-        {filteredUes.length === 0 && <p className="text-sm text-zinc-500">Aucune UE.</p>}
+        {filteredUes.length === 0 && <p className="text-sm text-muted-foreground">Aucune UE.</p>}
       </div>
 
       {attachTarget && (
@@ -303,14 +303,14 @@ export function UeManagementSection({
           <div className={theme.modal} onMouseDown={(event) => event.stopPropagation()}>
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h3 className="text-xl font-semibold text-violet-950">Affecter une UE</h3>
-                <p className="mt-1 text-sm text-zinc-600">
+                <h3 className="text-xl font-semibold text-foreground">Affecter une UE</h3>
+                <p className="mt-1 text-sm text-muted-foreground">
                   {attachTarget.nom_ue} - semestre {attachTarget.semestre}
                 </p>
               </div>
               <button
                 type="button"
-                className="rounded-xl border border-violet-200 px-3 py-2 text-violet-800"
+                className="rounded-xl border border-[var(--surface-border)] bg-[var(--surface-2)] px-3 py-2 text-foreground"
                 onClick={() => setAttachTarget(null)}
               >
                 Fermer
@@ -319,12 +319,12 @@ export function UeManagementSection({
 
             <div className="mt-5 max-h-72 space-y-2 overflow-y-auto">
               {isLoadingLinks ? (
-                <p className="text-sm text-zinc-500">Chargement des affectations...</p>
+                <p className="text-sm text-muted-foreground">Chargement des affectations...</p>
               ) : (
                 promotionLinks.map((promo) => (
                   <div
                     key={promo.id}
-                    className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-violet-100 bg-violet-50/40 px-4 py-3 text-sm"
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--surface-border)] bg-[var(--surface-muted)] px-4 py-3 text-sm"
                   >
                     <label className="flex cursor-pointer items-center gap-3">
                       <input
@@ -333,7 +333,7 @@ export function UeManagementSection({
                         checked={promo.linked || selectedPromotionIds.includes(promo.id)}
                         onChange={() => togglePromotion(promo.id)}
                       />
-                      <span className="font-medium text-violet-950">
+                      <span className="font-medium text-foreground">
                         {promo.nom} ({promo.annee_arrivee}-{promo.annee_depart})
                       </span>
                     </label>
@@ -341,19 +341,19 @@ export function UeManagementSection({
                       <Button
                         type="button"
                         variant="outline"
-                        className="h-9 rounded-lg border-rose-300 text-rose-700 hover:bg-rose-50"
+                        className="h-9 rounded-lg border-rose-300 text-rose-700 hover:bg-rose-50 dark:border-rose-400/50 dark:text-rose-200 dark:hover:bg-rose-950/30"
                         onClick={() => void detach(promo.id)}
                       >
                         Desaffecter
                       </Button>
                     ) : (
-                      <span className="text-xs text-zinc-500">Non liee</span>
+                      <span className="text-xs text-muted-foreground">Non liee</span>
                     )}
                   </div>
                 ))
               )}
               {!isLoadingLinks && promotionLinks.length === 0 && (
-                <p className="text-sm text-zinc-500">Aucune promotion disponible.</p>
+                <p className="text-sm text-muted-foreground">Aucune promotion disponible.</p>
               )}
             </div>
 

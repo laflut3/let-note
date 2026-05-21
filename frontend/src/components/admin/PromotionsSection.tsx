@@ -1,6 +1,7 @@
 import { Pencil, Trash2, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ListControls } from '@/components/common/ListControls';
+import { NumberInput } from '@/components/ui/number-input';
 import { adminDeletePromotionRequest, type AdminPromotionSummary } from '@/services/api';
 import { adminUi } from '@/lib/admin-ui';
 import type { AdminController } from '@/hooks/useAdminController';
@@ -45,8 +46,8 @@ export function PromotionsTab({ controller }: Props) {
   return (
     <>
       <section className={adminUi.panel}>
-        <h2 className="text-xl font-semibold text-violet-950">Creer une promotion</h2>
-        <p className="mt-1 text-sm text-zinc-600">
+        <h2 className="text-xl font-semibold text-foreground">Creer une promotion</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
           Nom, image, annees, prof referent et etudiants.
         </p>
 
@@ -57,16 +58,18 @@ export function PromotionsTab({ controller }: Props) {
             placeholder="Nom de la promotion"
             className={`${adminUi.input} sm:col-span-2`}
           />
-          <input
+          <NumberInput
             value={anneeArrivee}
             onChange={(e) => setAnneeArrivee(e.target.value)}
             placeholder="Annee d'arrivee"
+            step="1"
             className={adminUi.input}
           />
-          <input
+          <NumberInput
             value={anneeDepart}
             onChange={(e) => setAnneeDepart(e.target.value)}
             placeholder="Annee de depart"
+            step="1"
             className={adminUi.input}
           />
           <input
@@ -96,21 +99,23 @@ export function PromotionsTab({ controller }: Props) {
         </div>
 
         <div className="mt-4">
-          <p className="text-sm font-medium text-zinc-800">
+          <p className="text-sm font-medium text-foreground">
             Etudiants ({selectedCount} selectionne{selectedCount > 1 ? 's' : ''})
           </p>
-          <div className="mt-2 max-h-60 overflow-y-auto rounded-xl border border-zinc-200 bg-zinc-50 p-2">
+          <div className="mt-2 max-h-60 overflow-y-auto rounded-xl border border-[var(--surface-border)] bg-[var(--surface-muted)] p-2">
             {isLoading ? (
-              <p className="px-2 py-1 text-sm text-zinc-500">Chargement...</p>
+              <p className="px-2 py-1 text-sm text-muted-foreground">Chargement...</p>
             ) : users.length === 0 ? (
-              <p className="px-2 py-1 text-sm text-zinc-500">Aucun utilisateur disponible.</p>
+              <p className="px-2 py-1 text-sm text-muted-foreground">
+                Aucun utilisateur disponible.
+              </p>
             ) : (
               users.map((user) => {
                 const checked = selectedUserIds.includes(user.id);
                 return (
                   <label
                     key={user.id}
-                    className="flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2 hover:bg-white"
+                    className="flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2 hover:bg-[var(--surface-2)]"
                   >
                     <input
                       type="checkbox"
@@ -118,7 +123,7 @@ export function PromotionsTab({ controller }: Props) {
                       onChange={() => toggleUser(user.id)}
                       className="h-4 w-4 rounded border-zinc-400"
                     />
-                    <span className="text-sm text-zinc-800">
+                    <span className="text-sm text-foreground">
                       {user.prenom} {user.nom} - {user.numero_etudiant ?? 'sans numero'} -{' '}
                       {user.email}
                     </span>
@@ -140,7 +145,7 @@ export function PromotionsTab({ controller }: Props) {
       </section>
 
       <section className={adminUi.panel}>
-        <h2 className="text-xl font-semibold text-violet-950">Liste des promotions</h2>
+        <h2 className="text-xl font-semibold text-foreground">Liste des promotions</h2>
         <ListControls
           className="mt-3"
           searchValue={promotionSearch}
@@ -154,13 +159,13 @@ export function PromotionsTab({ controller }: Props) {
           {filteredPromotions.map((promotion: AdminPromotionSummary) => (
             <div
               key={promotion.id}
-              className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between rounded-xl border border-zinc-200 bg-zinc-50 p-3"
+              className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between rounded-xl border border-[var(--surface-border)] bg-[var(--surface-muted)] p-3"
             >
-              <p className="text-sm text-zinc-800">
+              <p className="text-sm text-foreground">
                 <span className="font-semibold">{promotion.nom}</span> ({promotion.annee_arrivee}-
                 {promotion.annee_depart})
               </p>
-              <p className="text-xs text-zinc-600">
+              <p className="text-xs text-muted-foreground">
                 Delegue(s):{' '}
                 {promotion.delegues.length > 0 ? promotion.delegues.join(', ') : 'aucun'}
               </p>

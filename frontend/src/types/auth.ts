@@ -1,5 +1,5 @@
 export type AuthMode = 'login' | 'register';
-export type ThemeMode = 'light' | 'dark';
+export type ThemeMode = 'light' | 'dark' | 'system';
 export type SubmitStateType = '' | 'success' | 'error';
 
 export type SubmitState = {

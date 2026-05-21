@@ -71,7 +71,7 @@ export function AdminOverlays({ controller }: Props) {
           <>
             <Button
               type="button"
-              className="h-10 rounded-xl bg-violet-700 text-white hover:bg-violet-800"
+              className={adminUi.primaryBtn}
               onClick={() =>
                 void runAction(
                   () =>
@@ -154,7 +154,7 @@ export function AdminOverlays({ controller }: Props) {
           <>
             <Button
               type="button"
-              className="h-10 rounded-xl bg-violet-700 text-white hover:bg-violet-800"
+              className={adminUi.primaryBtn}
               onClick={() =>
                 void runAction(
                   () =>
@@ -223,7 +223,7 @@ export function AdminOverlays({ controller }: Props) {
             </Button>
             <Button
               type="button"
-              className="h-10 rounded-xl bg-violet-700 text-white hover:bg-violet-800"
+              className={adminUi.primaryBtn}
               disabled={!canAssignDelegue}
               onClick={() => {
                 setSelectedPromoId(studentsPopupPromoId);
@@ -259,7 +259,7 @@ export function AdminOverlays({ controller }: Props) {
           <div className="flex items-center gap-2">
             <Button
               type="button"
-              className="h-10 rounded-xl bg-violet-700 text-white hover:bg-violet-800"
+              className={adminUi.primaryBtn}
               disabled={!selectedStudentForPromo || isSelectedStudentInPromo}
               onClick={() => {
                 if (selectedStudentForPromo) {
@@ -277,7 +277,7 @@ export function AdminOverlays({ controller }: Props) {
               Ajouter
             </Button>
             {isSelectedStudentInPromo && (
-              <p className="text-xs text-zinc-600">
+              <p className="text-xs text-muted-foreground">
                 Deja dans la promo: vous pouvez seulement modifier son role.
               </p>
             )}
@@ -304,8 +304,8 @@ export function AdminOverlays({ controller }: Props) {
           </div>
         </div>
         <div className="mt-4">
-          <p className="text-sm text-zinc-700">Eleves actuellement dans la promo:</p>
-          <ul className="mt-2 space-y-1 text-sm text-zinc-700">
+          <p className="text-sm text-muted-foreground">Eleves actuellement dans la promo:</p>
+          <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
             {promoStudents.map((student) => (
               <li key={student.id}>
                 {student.prenom} {student.nom} ({student.numero_etudiant ?? 'sans numero'}){' '}
@@ -351,7 +351,7 @@ export function AdminOverlays({ controller }: Props) {
                 'h-10 rounded-xl text-white',
                 confirmDialog.isDanger
                   ? 'bg-rose-600 hover:bg-rose-700'
-                  : 'bg-violet-700 hover:bg-violet-800',
+                  : 'bg-[var(--surface-strong)] hover:bg-[var(--surface-strong-hover)] dark:text-zinc-900',
               ].join(' ')}
               onClick={confirmDialogAction}
             >
@@ -360,7 +360,7 @@ export function AdminOverlays({ controller }: Props) {
           </>
         }
       >
-        <p className="text-sm text-zinc-700">{confirmDialog.description}</p>
+        <p className="text-sm text-muted-foreground">{confirmDialog.description}</p>
       </Modal>
     </>
   );

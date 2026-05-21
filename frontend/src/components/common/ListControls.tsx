@@ -1,4 +1,5 @@
 import type { SortDirection } from '@/types/common';
+import { Input } from '@/components/ui/input';
 
 type ListControlsProps = {
   searchValue: string;
@@ -22,22 +23,22 @@ export function ListControls({
   return (
     <div className={className}>
       <div className="grid gap-2 sm:grid-cols-3">
-        <input
+        <Input
           value={searchValue}
           onChange={(e) => onSearchChange(e.target.value)}
           placeholder={searchPlaceholder}
-          className="sm:col-span-2 h-10 rounded-xl border border-violet-200 bg-violet-50/40 px-3"
+          className="sm:col-span-2 h-10"
         />
         <select
           value={sortValue}
           onChange={(e) => onSortChange(e.target.value as SortDirection)}
-          className="h-10 rounded-xl border border-violet-200 bg-violet-50/40 px-3"
+          className="h-10 rounded-xl border border-[var(--surface-border)] bg-[var(--surface-2)] px-3 text-sm text-foreground"
         >
           <option value="asc">Tri: A → Z</option>
           <option value="desc">Tri: Z → A</option>
         </select>
       </div>
-      <p className="mt-2 text-xs text-zinc-600">{resultCount} resultat(s)</p>
+      <p className="mt-2 text-xs text-muted-foreground">{resultCount} resultat(s)</p>
     </div>
   );
 }

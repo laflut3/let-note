@@ -2,6 +2,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BookOpen, Home, Layers, LogOut, Shield, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { NumberInput } from '@/components/ui/number-input';
+import { ThemeToggle } from '@/components/auth/ThemeToggle';
+import { useThemeContext } from '@/context/theme-context';
+import { adminUi } from '@/lib/admin-ui';
 import { UeManagementSection } from '@/components/ue/UeManagementSection';
 import { DevoirsSection } from '@/components/devoirs/DevoirsSection';
 import {
@@ -45,6 +50,7 @@ async function extractError(response: Response, fallback: string): Promise<strin
 
 export function DelegatePage() {
   const navigate = useNavigate();
+  const { theme, resolvedTheme, toggleTheme } = useThemeContext();
   const [roles, setRoles] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState<DelegateTab>('general');
   const [promotions, setPromotions] = useState<PromotionScope[]>([]);
@@ -57,14 +63,14 @@ export function DelegatePage() {
   const [feedback, setFeedback] = useState<Feedback>({ type: '', message: '' });
 
   const [newUeNom, setNewUeNom] = useState('');
-  const [newUeSemestre, setNewUeSemestre] = useState('1');
+  const [newUeSemestre, setNewUeSemestre] = useState('');
   const [editingUeId, setEditingUeId] = useState('');
   const [editingUeNom, setEditingUeNom] = useState('');
-  const [editingUeSemestre, setEditingUeSemestre] = useState('1');
+  const [editingUeSemestre, setEditingUeSemestre] = useState('');
   const [matiereCode, setMatiereCode] = useState('');
   const [matiereName, setMatiereName] = useState('');
   const [selectedUeId, setSelectedUeId] = useState('');
-  const [matiereCoef, setMatiereCoef] = useState('1');
+  const [matiereCoef, setMatiereCoef] = useState('');
   const [profNom, setProfNom] = useState('');
   const [profPrenom, setProfPrenom] = useState('');
   const [profEmail, setProfEmail] = useState('');
@@ -73,10 +79,10 @@ export function DelegatePage() {
 
   const [resultMatiereId, setResultMatiereId] = useState('');
   const [resultEtudiantId, setResultEtudiantId] = useState('');
-  const [resultLibelle, setResultLibelle] = useState('Session 1');
-  const [resultSession, setResultSession] = useState('1');
-  const [resultValue, setResultValue] = useState('0');
-  const [resultCoef, setResultCoef] = useState('1');
+  const [resultLibelle, setResultLibelle] = useState('');
+  const [resultSession, setResultSession] = useState('');
+  const [resultValue, setResultValue] = useState('');
+  const [resultCoef, setResultCoef] = useState('');
   const [resultSemester, setResultSemester] = useState('all');
 
   const isAdmin = roles.includes('admin');
@@ -145,7 +151,7 @@ export function DelegatePage() {
       setReferentMatiere(dashboardData.matieres[0]?.code_matiere ?? '');
       setReferentProf(dashboardData.professeurs[0]?.id ?? '');
       setResultMatiereId(dashboardData.matieres[0]?.code_matiere ?? '');
-      setResultEtudiantId(dashboardData.etudiants[0]?.id ?? '');
+      setResultEtudiantId('');
 
       if (uesRes.ok) {
         const ueData = (await uesRes.json()) as UeItem[];
@@ -303,15 +309,18 @@ export function DelegatePage() {
 
   const delegateUeTheme = {
     panel:
-      'mt-4 rounded-2xl border border-[#eadfce] bg-white p-4 shadow-[0_12px_30px_rgba(79,23,48,0.08)] sm:p-6',
-    title: 'text-xl font-semibold text-[#4f1730]',
-    input: 'h-11 rounded-xl border border-[#e7d8c4] bg-white px-3',
-    select: 'h-10 rounded-xl border border-[#e7d8c4] bg-white px-3 text-sm',
-    primaryButton: 'h-10 rounded-xl bg-[#6d2745] text-white hover:bg-[#4f1730]',
-    row: 'flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#eadfce] bg-[#fbf7f0] p-4',
+      'mt-4 rounded-2xl border border-[var(--surface-border)] bg-[var(--surface-2)] p-4 shadow-[0_12px_30px_rgba(79,23,48,0.08)] sm:p-6',
+    title: 'text-xl font-semibold text-foreground',
+    input: 'h-11 rounded-xl border border-[var(--surface-border)] bg-[var(--surface-2)] px-3',
+    select:
+      'h-10 rounded-xl border border-[var(--surface-border)] bg-[var(--surface-2)] px-3 text-sm',
+    primaryButton:
+      'h-10 rounded-xl bg-[var(--surface-strong)] text-white hover:bg-[var(--surface-strong-hover)] dark:text-zinc-900',
+    row: 'flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--surface-border)] bg-[var(--surface-muted)] p-4',
     modalOverlay:
-      'fixed inset-0 z-50 flex items-center justify-center bg-[#4f1730]/35 p-4 backdrop-blur-sm',
-    modal: 'w-full max-w-xl rounded-3xl border border-[#eadfce] bg-white p-6 shadow-2xl',
+      'fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm',
+    modal:
+      'w-full max-w-xl rounded-3xl border border-[var(--surface-border)] bg-[var(--surface-2)] p-6 shadow-2xl',
   };
 
   useEffect(() => {
@@ -324,9 +333,9 @@ export function DelegatePage() {
   }, [resultMatiereId, resultUeGroups]);
 
   return (
-    <main className="min-h-screen bg-[linear-gradient(180deg,#f7f0e5,#f1e7d8)] p-3 sm:p-5 md:p-8">
-      <section className="mx-auto w-full max-w-[1380px] space-y-6 rounded-[28px] border border-[#eadfce] bg-white/82 p-4 shadow-[0_24px_80px_rgba(79,23,48,0.14)] backdrop-blur sm:p-6">
-        <nav className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#e7d8c4] bg-[linear-gradient(135deg,#4f1730,#6d2745)] px-4 py-3 text-white shadow-[0_16px_38px_rgba(36,14,30,0.22)]">
+    <main className={adminUi.pageBg}>
+      <section className={adminUi.shell}>
+        <nav className={adminUi.topNav}>
           <div className="flex flex-wrap items-center gap-2">
             {(
               [
@@ -344,8 +353,8 @@ export function DelegatePage() {
                 type="button"
                 onClick={() => setActiveTab(value)}
                 className={[
-                  'rounded-lg px-3 py-1.5 text-sm transition flex items-center gap-2',
-                  activeTab === value ? 'bg-white/20 font-semibold' : 'hover:bg-white/10',
+                  adminUi.topNavTab,
+                  activeTab === value ? adminUi.topNavTabActive : adminUi.topNavTabIdle,
                 ].join(' ')}
               >
                 {value === 'general' && <Home className="h-4 w-4" />}
@@ -355,50 +364,57 @@ export function DelegatePage() {
                 {value === 'etudiants' && <Users className="h-4 w-4" />}
                 {value === 'devoirs' && <BookOpen className="h-4 w-4" />}
                 {value === 'resultats' && <Shield className="h-4 w-4" />}
-                <span className="hidden sm:inline">{label}</span>
+                <span className="hidden md:inline">{label}</span>
               </button>
             ))}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="ml-auto flex items-center gap-2">
             <Button
               type="button"
               variant="ghost"
               onClick={() => navigate('/dashboard')}
-              className="h-9 rounded-lg bg-white/15 text-white hover:bg-white/25 hover:text-white"
+              className={adminUi.topNavAction}
             >
               <Home className="h-4 w-4" />
-              <span className="hidden sm:inline sm:ml-1">Dashboard</span>
+              <span className="ml-1 hidden lg:inline">Dashboard</span>
             </Button>
             {isAdmin && (
               <Button
                 type="button"
                 variant="ghost"
                 onClick={() => navigate('/admin')}
-                className="h-9 rounded-lg bg-white/15 text-white hover:bg-white/25 hover:text-white"
+                className={adminUi.topNavAction}
               >
                 <Shield className="h-4 w-4" />
-                <span className="hidden sm:inline sm:ml-1">Admin</span>
+                <span className="ml-1 hidden lg:inline">Admin</span>
               </Button>
             )}
-            <Button
-              onClick={handleLogout}
-              variant="ghost"
-              className="h-9 rounded-lg text-white hover:bg-white/12 hover:text-white"
-            >
+            <Button onClick={handleLogout} variant="ghost" className={adminUi.topNavActionGhost}>
               <LogOut className="h-4 w-4" />
-              <span className="hidden sm:inline sm:ml-1">Logout</span>
+              <span className="ml-1 hidden lg:inline">Logout</span>
             </Button>
+            <ThemeToggle
+              theme={theme}
+              resolvedTheme={resolvedTheme}
+              onToggle={toggleTheme}
+              inline
+              compactOnMobile
+            />
           </div>
         </nav>
 
-        <section className="rounded-2xl border border-[#eadfce] bg-white p-4 shadow-[0_12px_30px_rgba(79,23,48,0.08)] sm:p-6">
-          <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">Promotions deleguees</p>
+        <section className="rounded-2xl border border-[var(--surface-border)] bg-[var(--surface-2)] p-4 shadow-[0_12px_30px_rgba(79,23,48,0.08)] sm:p-6">
+          <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
+            Promotions deleguees
+          </p>
           <div className="mt-3 flex flex-wrap gap-2">
             {isLoading ? (
-              <p className="text-sm text-zinc-500">Chargement...</p>
+              <p className="text-sm text-muted-foreground">Chargement...</p>
             ) : promotions.length === 0 ? (
-              <p className="text-sm text-zinc-500">Aucune promotion geree pour ce compte.</p>
+              <p className="text-sm text-muted-foreground">
+                Aucune promotion geree pour ce compte.
+              </p>
             ) : (
               promotions.map((promotion) => {
                 const active = selectedPromoId === promotion.id;
@@ -410,8 +426,8 @@ export function DelegatePage() {
                     className={[
                       'rounded-xl border px-3 py-2 text-sm transition',
                       active
-                        ? 'border-[#6d2745] bg-[#6d2745] text-white'
-                        : 'border-[#e7d8c4] bg-white text-zinc-700 hover:border-[#6d2745]',
+                        ? 'border-[var(--surface-strong)] bg-[var(--surface-strong)] text-white dark:text-zinc-900'
+                        : 'border-[var(--surface-border)] bg-[var(--surface-2)] text-foreground hover:border-[var(--surface-strong)]',
                     ].join(' ')}
                   >
                     {promotion.nom} ({promotion.annee_arrivee}-{promotion.annee_depart})
@@ -422,27 +438,27 @@ export function DelegatePage() {
           </div>
         </section>
 
-        <section className="rounded-2xl border border-[#eadfce] bg-white p-4 shadow-[0_12px_30px_rgba(79,23,48,0.08)] sm:p-6">
-          <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">Espace delegue</p>
-          <h1 className="mt-2 text-2xl font-semibold text-zinc-900 md:text-3xl">{promoLabel}</h1>
+        <section className="rounded-2xl border border-[var(--surface-border)] bg-[var(--surface-2)] p-4 shadow-[0_12px_30px_rgba(79,23,48,0.08)] sm:p-6">
+          <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Espace delegue</p>
+          <h1 className="mt-2 text-2xl font-semibold text-foreground md:text-3xl">{promoLabel}</h1>
           {errorMessage && (
-            <p className="mt-3 rounded-xl bg-rose-100 px-3 py-2 text-sm text-rose-800">
+            <p className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800 dark:border-rose-400/40 dark:bg-rose-950/30 dark:text-rose-200">
               {errorMessage}
             </p>
           )}
 
           {activeTab === 'general' && (
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4">
-                <h2 className="text-base font-semibold text-zinc-900">Resume</h2>
-                <p className="mt-2 text-sm text-zinc-600">
+              <div className="rounded-xl border border-[var(--surface-border)] bg-[var(--surface-muted)] p-4">
+                <h2 className="text-base font-semibold text-foreground">Resume</h2>
+                <p className="mt-2 text-sm text-muted-foreground">
                   {dashboard?.matieres.length ?? 0} matiere(s), {dashboard?.professeurs.length ?? 0}{' '}
                   professeur(s), {dashboard?.etudiants.length ?? 0} etudiant(s).
                 </p>
               </div>
-              <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4">
-                <h2 className="text-base font-semibold text-zinc-900">Prof referent promo</h2>
-                <p className="mt-2 text-sm text-zinc-700">
+              <div className="rounded-xl border border-[var(--surface-border)] bg-[var(--surface-muted)] p-4">
+                <h2 className="text-base font-semibold text-foreground">Prof referent promo</h2>
+                <p className="mt-2 text-sm text-muted-foreground">
                   {dashboard?.promotion.referent_prof_prenom &&
                   dashboard?.promotion.referent_prof_nom
                     ? `${dashboard.promotion.referent_prof_prenom} ${dashboard.promotion.referent_prof_nom}`
@@ -477,22 +493,22 @@ export function DelegatePage() {
           {activeTab === 'matieres' && selectedPromoId && (
             <div className="mt-4 space-y-4">
               <div className="grid gap-3 sm:grid-cols-2">
-                <input
+                <Input
                   value={matiereCode}
                   onChange={(e) => setMatiereCode(e.target.value)}
                   placeholder="Code matiere"
-                  className="h-11 rounded-xl border border-zinc-300 px-3"
+                  className="h-11"
                 />
-                <input
+                <Input
                   value={matiereName}
                   onChange={(e) => setMatiereName(e.target.value)}
                   placeholder="Nom matiere"
-                  className="h-11 rounded-xl border border-zinc-300 px-3"
+                  className="h-11"
                 />
                 <select
                   value={selectedUeId}
                   onChange={(e) => setSelectedUeId(e.target.value)}
-                  className="h-11 rounded-xl border border-zinc-300 px-3"
+                  className="h-11 rounded-xl border border-[var(--surface-border)] bg-[var(--surface-2)] px-3 text-foreground"
                 >
                   {ues.length === 0 && <option value="">Aucune UE disponible</option>}
                   {ues.map((ue) => (
@@ -501,11 +517,13 @@ export function DelegatePage() {
                     </option>
                   ))}
                 </select>
-                <input
+                <NumberInput
                   value={matiereCoef}
                   onChange={(e) => setMatiereCoef(e.target.value)}
-                  placeholder="Coef UE"
-                  className="h-11 rounded-xl border border-zinc-300 px-3"
+                  placeholder="Coefficient UE"
+                  min="0"
+                  step="0.1"
+                  className="h-11"
                 />
                 <Button
                   type="button"
@@ -532,7 +550,7 @@ export function DelegatePage() {
                 <select
                   value={referentMatiere}
                   onChange={(e) => setReferentMatiere(e.target.value)}
-                  className="h-11 rounded-xl border border-zinc-300 px-3"
+                  className="h-11 rounded-xl border border-[var(--surface-border)] bg-[var(--surface-2)] px-3 text-foreground"
                 >
                   <option value="">Selectionner matiere</option>
                   {(dashboard?.matieres ?? []).map((matiere) => (
@@ -544,7 +562,7 @@ export function DelegatePage() {
                 <select
                   value={referentProf}
                   onChange={(e) => setReferentProf(e.target.value)}
-                  className="h-11 rounded-xl border border-zinc-300 px-3"
+                  className="h-11 rounded-xl border border-[var(--surface-border)] bg-[var(--surface-2)] px-3 text-foreground"
                 >
                   <option value="">Selectionner professeur</option>
                   {(dashboard?.professeurs ?? []).map((professeur) => (
@@ -572,23 +590,23 @@ export function DelegatePage() {
           {activeTab === 'professeurs' && selectedPromoId && (
             <div className="mt-4 space-y-4">
               <div className="grid gap-3 sm:grid-cols-2">
-                <input
+                <Input
                   value={profPrenom}
                   onChange={(e) => setProfPrenom(e.target.value)}
                   placeholder="Prenom professeur"
-                  className="h-11 rounded-xl border border-zinc-300 px-3"
+                  className="h-11"
                 />
-                <input
+                <Input
                   value={profNom}
                   onChange={(e) => setProfNom(e.target.value)}
                   placeholder="Nom professeur"
-                  className="h-11 rounded-xl border border-zinc-300 px-3"
+                  className="h-11"
                 />
-                <input
+                <Input
                   value={profEmail}
                   onChange={(e) => setProfEmail(e.target.value)}
                   placeholder="Email professeur"
-                  className="h-11 rounded-xl border border-zinc-300 px-3 sm:col-span-2"
+                  className="h-11 sm:col-span-2"
                 />
                 <Button
                   type="button"
@@ -609,9 +627,9 @@ export function DelegatePage() {
                 </Button>
               </div>
 
-              <div className="overflow-x-auto rounded-xl border border-zinc-200">
+              <div className="overflow-x-auto rounded-xl border border-[var(--surface-border)]">
                 <table className="min-w-full text-sm">
-                  <thead className="bg-zinc-100 text-zinc-800">
+                  <thead className="bg-[var(--surface-muted)] text-foreground">
                     <tr>
                       <th className="px-3 py-2 text-left">Professeur</th>
                       <th className="px-3 py-2 text-left">Email</th>
@@ -619,7 +637,10 @@ export function DelegatePage() {
                   </thead>
                   <tbody>
                     {(dashboard?.professeurs ?? []).map((professeur) => (
-                      <tr key={professeur.id} className="border-t border-zinc-200 bg-white">
+                      <tr
+                        key={professeur.id}
+                        className="border-t border-[var(--surface-border)] bg-[var(--surface-2)]"
+                      >
                         <td className="px-3 py-2">
                           {professeur.prenom} {professeur.nom}
                         </td>
@@ -633,9 +654,9 @@ export function DelegatePage() {
           )}
 
           {activeTab === 'etudiants' && selectedPromoId && (
-            <div className="mt-4 overflow-x-auto rounded-xl border border-zinc-200">
+            <div className="mt-4 overflow-x-auto rounded-xl border border-[var(--surface-border)]">
               <table className="min-w-full text-sm">
-                <thead className="bg-zinc-100 text-zinc-800">
+                <thead className="bg-[var(--surface-muted)] text-foreground">
                   <tr>
                     <th className="px-3 py-2 text-left">Etudiant</th>
                     <th className="px-3 py-2 text-left">Numero</th>
@@ -644,7 +665,10 @@ export function DelegatePage() {
                 </thead>
                 <tbody>
                   {(dashboard?.etudiants ?? []).map((etudiant) => (
-                    <tr key={etudiant.id} className="border-t border-zinc-200 bg-white">
+                    <tr
+                      key={etudiant.id}
+                      className="border-t border-[var(--surface-border)] bg-[var(--surface-2)]"
+                    >
                       <td className="px-3 py-2">
                         {etudiant.prenom} {etudiant.nom}
                       </td>
@@ -653,8 +677,8 @@ export function DelegatePage() {
                     </tr>
                   ))}
                   {(dashboard?.etudiants ?? []).length === 0 && (
-                    <tr className="border-t border-zinc-200 bg-white">
-                      <td className="px-3 py-2 text-zinc-500" colSpan={3}>
+                    <tr className="border-t border-[var(--surface-border)] bg-[var(--surface-2)]">
+                      <td className="px-3 py-2 text-muted-foreground" colSpan={3}>
                         Aucun etudiant dans cette promotion.
                       </td>
                     </tr>
@@ -673,24 +697,27 @@ export function DelegatePage() {
               onFeedback={setFeedback}
               theme={{
                 panel:
-                  'mt-4 rounded-2xl border border-[#eadfce] bg-white p-4 shadow-[0_12px_30px_rgba(79,23,48,0.08)] sm:p-6',
-                title: 'text-xl font-semibold text-[#4f1730]',
-                input: 'h-11 rounded-xl border border-[#e7d8c4] bg-white px-3',
-                select: 'h-11 rounded-xl border border-[#e7d8c4] bg-white px-3',
-                primaryButton: 'h-10 rounded-xl bg-[#6d2745] text-white hover:bg-[#4f1730]',
-                row: 'flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#eadfce] bg-[#fbf7f0] p-4',
+                  'mt-4 rounded-2xl border border-[var(--surface-border)] bg-[var(--surface-2)] p-4 shadow-[0_12px_30px_rgba(79,23,48,0.08)] sm:p-6',
+                title: 'text-xl font-semibold text-foreground',
+                input:
+                  'h-11 rounded-xl border border-[var(--surface-border)] bg-[var(--surface-2)] px-3',
+                select:
+                  'h-11 rounded-xl border border-[var(--surface-border)] bg-[var(--surface-2)] px-3',
+                primaryButton:
+                  'h-10 rounded-xl bg-[var(--surface-strong)] text-white hover:bg-[var(--surface-strong-hover)] dark:text-zinc-900',
+                row: 'flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--surface-border)] bg-[var(--surface-muted)] p-4',
               }}
             />
           )}
 
           {activeTab === 'resultats' && selectedPromoId && (
             <div className="mt-4 space-y-4">
-              <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3">
+              <div className="rounded-xl border border-[var(--surface-border)] bg-[var(--surface-muted)] p-3">
                 <div className="flex flex-wrap items-center gap-2">
                   <select
                     value={resultSemester}
                     onChange={(e) => setResultSemester(e.target.value)}
-                    className="h-11 rounded-xl border border-zinc-300 bg-white px-3"
+                    className="h-11 rounded-xl border border-[var(--surface-border)] bg-[var(--surface-2)] px-3"
                   >
                     <option value="all">Tous les semestres</option>
                     {resultSemesters.map((semester) => (
@@ -702,8 +729,11 @@ export function DelegatePage() {
                 </div>
                 <div className="mt-3 space-y-3">
                   {resultUeGroups.map((ue) => (
-                    <div key={ue.id} className="rounded-lg border border-zinc-200 bg-white p-3">
-                      <p className="text-sm font-semibold text-zinc-900">
+                    <div
+                      key={ue.id}
+                      className="rounded-lg border border-[var(--surface-border)] bg-[var(--surface-2)] p-3"
+                    >
+                      <p className="text-sm font-semibold text-foreground">
                         {ue.nom} - semestre {ue.semestre}
                       </p>
                       <div className="mt-2 space-y-2 pl-4">
@@ -715,8 +745,8 @@ export function DelegatePage() {
                             className={[
                               'block w-full rounded-lg border px-3 py-2 text-left text-sm transition',
                               resultMatiereId === matiere.code_matiere
-                                ? 'border-[#6d2745] bg-[#6d2745] text-white'
-                                : 'border-zinc-200 bg-zinc-50 text-zinc-800 hover:border-[#6d2745]',
+                                ? 'border-[var(--surface-strong)] bg-[var(--surface-strong)] text-white dark:text-zinc-900'
+                                : 'border-[var(--surface-border)] bg-[var(--surface-muted)] text-foreground hover:border-[var(--surface-strong)]',
                             ].join(' ')}
                           >
                             {matiere.nom_matiere}
@@ -726,7 +756,9 @@ export function DelegatePage() {
                     </div>
                   ))}
                   {resultUeGroups.length === 0 && (
-                    <p className="text-sm text-zinc-500">Aucune matiere pour ce semestre.</p>
+                    <p className="text-sm text-muted-foreground">
+                      Aucune matiere pour ce semestre.
+                    </p>
                   )}
                 </div>
               </div>
@@ -735,7 +767,7 @@ export function DelegatePage() {
                 <select
                   value={resultEtudiantId}
                   onChange={(e) => setResultEtudiantId(e.target.value)}
-                  className="h-11 rounded-xl border border-zinc-300 px-3"
+                  className="h-11 rounded-xl border border-[var(--surface-border)] bg-[var(--surface-2)] px-3 text-foreground"
                 >
                   <option value="">Selectionner etudiant</option>
                   {(dashboard?.etudiants ?? []).map((etu) => (
@@ -744,33 +776,40 @@ export function DelegatePage() {
                     </option>
                   ))}
                 </select>
-                <input
+                <Input
                   value={resultLibelle}
                   onChange={(e) => setResultLibelle(e.target.value)}
                   placeholder="Libelle"
-                  className="h-11 rounded-xl border border-zinc-300 px-3"
+                  className="h-11"
                 />
-                <input
+                <NumberInput
                   value={resultSession}
                   onChange={(e) => setResultSession(e.target.value)}
                   placeholder="Session"
-                  className="h-11 rounded-xl border border-zinc-300 px-3"
+                  min="1"
+                  step="1"
+                  className="h-11"
                 />
-                <input
+                <NumberInput
                   value={resultValue}
                   onChange={(e) => setResultValue(e.target.value)}
                   placeholder="Note"
-                  className="h-11 rounded-xl border border-zinc-300 px-3"
+                  min="0"
+                  max="20"
+                  step="0.01"
+                  className="h-11"
                 />
-                <input
+                <NumberInput
                   value={resultCoef}
                   onChange={(e) => setResultCoef(e.target.value)}
                   placeholder="Coef"
-                  className="h-11 rounded-xl border border-zinc-300 px-3"
+                  min="0"
+                  step="0.1"
+                  className="h-11"
                 />
                 <Button
                   type="button"
-                  className="h-10 rounded-xl bg-[#6d2745] text-white hover:bg-[#4f1730] sm:col-span-2"
+                  className="h-10 rounded-xl bg-[var(--surface-strong)] text-white hover:bg-[var(--surface-strong-hover)] dark:text-zinc-900 sm:col-span-2"
                   disabled={!resultMatiereId}
                   onClick={() =>
                     void runAction(
@@ -798,7 +837,7 @@ export function DelegatePage() {
                 'mt-4 rounded-lg px-3 py-2 text-sm',
                 feedback.type === 'success'
                   ? 'bg-emerald-100 text-emerald-800'
-                  : 'bg-rose-100 text-rose-800',
+                  : 'border border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-400/40 dark:bg-rose-950/30 dark:text-rose-200',
               ].join(' ')}
             >
               {feedback.message}
