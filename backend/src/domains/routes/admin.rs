@@ -92,6 +92,7 @@ pub fn admin_routes(db: PgPool) -> Router<PgPool> {
 }
 
 include!("admin_routes/types.rs");
-include!("admin_routes/users_professeurs.rs");
+include!("admin_routes/users.rs");
+include!("admin_routes/professeurs.rs");
 include!("admin_routes/promotions.rs");
 include!("admin_routes/matieres.rs");

@@ -11,49 +11,6 @@ pub async fn list_etudiants(db: &PgPool) -> Result<Vec<GetEtudiant>, ApiError> {
   .map_err(map_schema_error("unable to list students at this time"))
 }
 
-pub async fn list_professeurs(db: &PgPool) -> Result<Vec<AdminProfesseur>, ApiError> {
-  sqlx::query_as::<_, AdminProfesseur>(
-    r#"
-    SELECT id, nom, prenom, email
-    FROM professeur
-    ORDER BY nom, prenom, email
-    "#,
-  )
-  .fetch_all(db)
-  .await
-  .map_err(map_schema_error("unable to list professors at this time"))
-}
-
-pub async fn create_professeur(
-  db: &PgPool,
-  payload: CreateProfesseur,
-) -> Result<AdminProfesseur, ApiError> {
-  let prenom = payload.prenom.trim();
-  let nom = payload.nom.trim();
-  let email = payload.email.trim().to_lowercase();
-
-  if prenom.is_empty() || nom.is_empty() || email.is_empty() {
-    return Err(ApiError::bad_request("prenom, nom and email are required"));
-  }
-
-  sqlx::query_as::<_, AdminProfesseur>(
-    r#"
-    INSERT INTO professeur (prenom, nom, email, date_naissance)
-    VALUES ($1, $2, $3, $4)
-    ON CONFLICT (email)
-    DO UPDATE SET prenom = EXCLUDED.prenom, nom = EXCLUDED.nom
-    RETURNING id, nom, prenom, email
-    "#,
-  )
-  .bind(prenom)
-  .bind(nom)
-  .bind(email)
-  .bind(payload.date_naissance)
-  .fetch_one(db)
-  .await
-  .map_err(map_schema_error("unable to create professor"))
-}
-
 pub async fn list_promotions(db: &PgPool) -> Result<Vec<AdminPromotionSummary>, ApiError> {
   sqlx::query_as::<_, AdminPromotionSummary>(
     r#"

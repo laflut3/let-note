@@ -9,11 +9,7 @@ pub async fn create_resultat_for_matiere(
 
   let target_student = match (can_manage, payload.etudiant_id) {
     (true, Some(id)) => id,
-    (true, None) => {
-      return Err(ApiError::bad_request(
-        "etudiant_id is required for this action",
-      ));
-    }
+    (true, None) => auth.user_id,
     (false, Some(id)) if id == auth.user_id => auth.user_id,
     (false, Some(_)) => {
       return Err(ApiError::forbidden(

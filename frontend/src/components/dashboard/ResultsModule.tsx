@@ -11,11 +11,22 @@ type ResultsModuleProps = {
   dashboard: PromotionDashboardPayload | null;
   promoId: string;
   onSaved: () => Promise<void>;
+  canManagePromotion: boolean;
+  currentUserId: string;
 };
 
-export function ResultsModule({ dashboard, promoId, onSaved }: ResultsModuleProps) {
+export function ResultsModule({
+  dashboard,
+  promoId,
+  onSaved,
+  canManagePromotion,
+  currentUserId,
+}: ResultsModuleProps) {
   const [semester, setSemester] = useState('all');
   const [selectedMatiereId, setSelectedMatiereId] = useState('');
+  const [createMatiereId, setCreateMatiereId] = useState('');
+  const [createMatiereName, setCreateMatiereName] = useState('');
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [libelle, setLibelle] = useState('Note');
   const [session, setSession] = useState('1');
   const [note, setNote] = useState('');
@@ -97,10 +108,20 @@ export function ResultsModule({ dashboard, promoId, onSaved }: ResultsModuleProp
     }
   }, [selectedMatiereId, visibleMatieres]);
 
+  const canCreateOwnResult = useMemo(
+    () =>
+      Boolean(currentUserId) &&
+      (dashboard?.etudiants ?? []).some((etu) => etu.id === currentUserId),
+    [currentUserId, dashboard?.etudiants]
+  );
+
+  const canManageResultat = (studentId: string) =>
+    canManagePromotion || studentId === currentUserId;
+
   const saveResult = async () => {
-    if (!promoId || !selectedMatiereId) return;
+    if (!promoId || !createMatiereId) return;
     setMessage('');
-    const response = await createResultatRequest(promoId, selectedMatiereId, {
+    const response = await createResultatRequest(promoId, createMatiereId, {
       libelle,
       session: session ? Number(session) : undefined,
       note: Number(note),
@@ -110,9 +131,23 @@ export function ResultsModule({ dashboard, promoId, onSaved }: ResultsModuleProp
       setMessage('Impossible d enregistrer la note.');
       return;
     }
+    setLibelle('Note');
+    setSession('1');
     setNote('');
+    setCoef('1');
+    setIsCreateModalOpen(false);
     setMessage('Note enregistree.');
     await onSaved();
+  };
+
+  const openCreateModal = (matiereId: string, matiereNom: string) => {
+    setCreateMatiereId(matiereId);
+    setCreateMatiereName(matiereNom);
+    setIsCreateModalOpen(true);
+    setLibelle('Note');
+    setSession('1');
+    setNote('');
+    setCoef('1');
   };
 
   const computeMatiereAverage = (
@@ -200,21 +235,32 @@ export function ResultsModule({ dashboard, promoId, onSaved }: ResultsModuleProp
               <div className="mt-3 space-y-3 pl-4">
                 {Array.from(ue.matieres.entries()).map(([code, matiere]) => (
                   <div key={code} className="rounded-lg border border-zinc-200 bg-white p-3">
-                    <button
-                      type="button"
-                      onClick={() => setSelectedMatiereId(code)}
-                      className={[
-                        'rounded-md px-2 py-1 text-left text-sm font-medium transition',
-                        selectedMatiereId === code
-                          ? 'bg-[#6d2745] text-white'
-                          : 'text-zinc-800 hover:bg-zinc-100',
-                      ].join(' ')}
-                    >
-                      {matiere.nom}{' '}
-                      <span className="text-xs opacity-80">
-                        (moyenne: {computeMatiereAverage(matiere.resultats)?.toFixed(2) ?? '-'})
-                      </span>
-                    </button>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedMatiereId(code)}
+                        className={[
+                          'rounded-md px-2 py-1 text-left text-sm font-medium transition',
+                          selectedMatiereId === code
+                            ? 'bg-[#6d2745] text-white'
+                            : 'text-zinc-800 hover:bg-zinc-100',
+                        ].join(' ')}
+                      >
+                        {matiere.nom}{' '}
+                        <span className="text-xs opacity-80">
+                          (moyenne: {computeMatiereAverage(matiere.resultats)?.toFixed(2) ?? '-'})
+                        </span>
+                      </button>
+                      {canCreateOwnResult && (
+                        <Button
+                          type="button"
+                          onClick={() => openCreateModal(code, matiere.nom)}
+                          className="h-8 rounded-lg bg-[#6d2745] px-3 text-xs text-white hover:bg-[#4f1730]"
+                        >
+                          Ajouter une note
+                        </Button>
+                      )}
+                    </div>
                     <div className="mt-2 overflow-x-auto">
                       <table className="min-w-full text-sm">
                         <tbody>
@@ -233,7 +279,8 @@ export function ResultsModule({ dashboard, promoId, onSaved }: ResultsModuleProp
                               </td>
                               <td className="px-2 py-2">Coef {resultat.coef.toFixed(2)}</td>
                               <td className="px-2 py-2">
-                                {editingId === resultat.id ? (
+                                {!canManageResultat(resultat.id_etu) ? null : editingId ===
+                                  resultat.id ? (
                                   <div className="flex flex-wrap items-center gap-1">
                                     <input
                                       value={editingLibelle}
@@ -322,9 +369,16 @@ export function ResultsModule({ dashboard, promoId, onSaved }: ResultsModuleProp
           {resultGroups.length === 0 && (
             <p className="text-sm text-zinc-500">Aucun resultat pour ce semestre.</p>
           )}
+          {message && <p className="text-sm text-zinc-600">{message}</p>}
+        </div>
+      )}
 
-          <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3">
-            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+      {canCreateOwnResult && isCreateModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
+          <div className="w-full max-w-xl rounded-2xl border border-zinc-200 bg-white p-5 shadow-2xl">
+            <h3 className="text-base font-semibold text-zinc-900">Ajouter une note</h3>
+            <p className="mt-1 text-sm text-zinc-600">Matiere: {createMatiereName}</p>
+            <div className="mt-4 grid gap-2 sm:grid-cols-2">
               <input
                 value={libelle}
                 onChange={(event) => setLibelle(event.target.value)}
@@ -349,16 +403,25 @@ export function ResultsModule({ dashboard, promoId, onSaved }: ResultsModuleProp
                 placeholder="Coef"
                 className="h-10 rounded-lg border border-zinc-300 px-3 text-sm"
               />
+            </div>
+            <div className="mt-4 flex items-center justify-end gap-2">
               <Button
                 type="button"
-                disabled={!selectedMatiereId || !note}
+                variant="outline"
+                onClick={() => setIsCreateModalOpen(false)}
+                className="h-10 rounded-lg"
+              >
+                Annuler
+              </Button>
+              <Button
+                type="button"
+                disabled={!note}
                 onClick={() => void saveResult()}
                 className="h-10 rounded-lg bg-[#6d2745] text-white hover:bg-[#4f1730]"
               >
                 Enregistrer
               </Button>
             </div>
-            {message && <p className="mt-2 text-sm text-zinc-600">{message}</p>}
           </div>
         </div>
       )}

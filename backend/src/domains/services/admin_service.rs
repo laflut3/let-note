@@ -10,6 +10,7 @@ use crate::infrastructure::s3;
 
 include!("admin_service/types.rs");
 include!("admin_service/students.rs");
+include!("admin_service/professeurs.rs");
 include!("admin_service/matieres.rs");
 include!("admin_service/promotions.rs");
 include!("admin_service/updates.rs");

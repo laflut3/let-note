@@ -79,6 +79,7 @@ export function useDashboardController(navigate: NavigateFunction) {
 
   const selectedPromotion =
     promotions.find((promotion) => promotion.id === selectedPromoId) ?? null;
+  const canManageSelectedPromotion = selectedPromotion?.can_manage ?? false;
 
   const loadBaseData = async () => {
     setIsLoading(true);
@@ -346,6 +347,7 @@ export function useDashboardController(navigate: NavigateFunction) {
     hasDelegueScope,
     handleLogout,
     promoLabel,
+    canManageSelectedPromotion,
   };
 }
 
