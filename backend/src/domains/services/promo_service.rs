@@ -1678,6 +1678,49 @@ pub async fn update_resultat(
   })
 }
 
+pub async fn delete_resultat(
+  db: &PgPool,
+  auth: &AuthContext,
+  promo_id: Uuid,
+  resultat_id: Uuid,
+) -> Result<MutationAck, ApiError> {
+  let row = sqlx::query_as::<_, (Uuid, Uuid)>(
+    r#"
+    SELECT id_etu, id_promo
+    FROM note_resultat
+    WHERE id = $1
+    "#,
+  )
+  .bind(resultat_id)
+  .fetch_optional(db)
+  .await
+  .map_err(map_schema_error("unable to delete result"))?
+  .ok_or_else(|| ApiError::bad_request("result not found"))?;
+
+  if row.1 != promo_id {
+    return Err(ApiError::bad_request(
+      "result does not belong to this promotion",
+    ));
+  }
+
+  let can_manage = can_manage_promo(db, auth, promo_id).await?;
+  if !can_manage && row.0 != auth.user_id {
+    return Err(ApiError::forbidden(
+      "you can only delete results for your own account",
+    ));
+  }
+
+  sqlx::query("DELETE FROM note_resultat WHERE id = $1")
+    .bind(resultat_id)
+    .execute(db)
+    .await
+    .map_err(map_schema_error("unable to delete result"))?;
+
+  Ok(MutationAck {
+    message: "result deleted",
+  })
+}
+
 async fn get_accessible_promotion(
   db: &PgPool,
   auth: &AuthContext,

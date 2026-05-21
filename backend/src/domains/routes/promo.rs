@@ -81,7 +81,7 @@ pub fn promo_routes(db: PgPool) -> Router<PgPool> {
     )
     .route(
       "/promotions/{promo_id}/resultats/{resultat_id}",
-      put(update_resultat),
+      put(update_resultat).delete(delete_resultat),
     )
 }
 
@@ -429,6 +429,22 @@ async fn update_resultat(
   };
 
   match promo_service::update_resultat(&db, &auth, promo_id, resultat_id, payload).await {
+    Ok(data) => axum::Json(data).into_response(),
+    Err(error) => error.into_response(),
+  }
+}
+
+async fn delete_resultat(
+  State(db): State<PgPool>,
+  headers: HeaderMap,
+  Path((promo_id, resultat_id)): Path<(Uuid, Uuid)>,
+) -> impl IntoResponse {
+  let auth = match middleware::extract_auth_context(&headers, &db).await {
+    Ok(value) => value,
+    Err(error) => return error.into_response(),
+  };
+
+  match promo_service::delete_resultat(&db, &auth, promo_id, resultat_id).await {
     Ok(data) => axum::Json(data).into_response(),
     Err(error) => error.into_response(),
   }

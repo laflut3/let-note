@@ -215,6 +215,10 @@ async function jsonRequest(path: string, options: RequestInit): Promise<Response
   });
 }
 
+export function toApiUrl(path: string): string {
+  return `${API_BASE_URL}${path}`;
+}
+
 export async function loginRequest(email: string, password: string): Promise<Response> {
   return jsonRequest('/auth/login', {
     method: 'POST',
@@ -260,9 +264,13 @@ export async function uploadMyProfilePhotoRequest(file: File): Promise<Response>
   });
 }
 
+export async function getMyProfilePhotoRequest(): Promise<Response> {
+  return jsonRequest('/etudiant/me/photo', { method: 'GET' });
+}
+
 export function getResourceFileUrl(resourceId: string, download = false): string {
   const suffix = download ? '?download=true' : '';
-  return `${API_BASE_URL}/resources/${resourceId}/file${suffix}`;
+  return toApiUrl(`/resources/${resourceId}/file${suffix}`);
 }
 
 export async function registerRequest(fields: AuthFields): Promise<Response> {
@@ -749,5 +757,14 @@ export async function updateResultatRequest(
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteResultatRequest(
+  promoId: string,
+  resultatId: string
+): Promise<Response> {
+  return jsonRequest(`/promotions/${promoId}/resultats/${resultatId}`, {
+    method: 'DELETE',
   });
 }

@@ -1,5 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { createResultatRequest, type PromotionDashboardPayload } from '@/services/api';
+import {
+  createResultatRequest,
+  deleteResultatRequest,
+  updateResultatRequest,
+  type PromotionDashboardPayload,
+} from '@/services/api';
 import { Button } from '@/components/ui/button';
 
 type ResultsModuleProps = {
@@ -16,6 +21,11 @@ export function ResultsModule({ dashboard, promoId, onSaved }: ResultsModuleProp
   const [note, setNote] = useState('');
   const [coef, setCoef] = useState('1');
   const [message, setMessage] = useState('');
+  const [editingId, setEditingId] = useState('');
+  const [editingLibelle, setEditingLibelle] = useState('');
+  const [editingSession, setEditingSession] = useState('');
+  const [editingNote, setEditingNote] = useState('');
+  const [editingCoef, setEditingCoef] = useState('');
 
   const semesters = useMemo(
     () =>
@@ -44,6 +54,7 @@ export function ResultsModule({ dashboard, promoId, onSaved }: ResultsModuleProp
         nom: string;
         semestre: number;
         matieres: Map<string, { nom: string; resultats: PromotionDashboardPayload['resultats'] }>;
+        matiereCoef: Map<string, number>;
       }
     >();
 
@@ -56,11 +67,13 @@ export function ResultsModule({ dashboard, promoId, onSaved }: ResultsModuleProp
         nom: matiere.ue_nom ?? 'UE sans nom',
         semestre: matiere.ue_semestre,
         matieres: new Map(),
+        matiereCoef: new Map(),
       };
       group.matieres.set(matiere.code_matiere, {
         nom: matiere.nom_matiere,
         resultats: resultatsByMatiere.get(matiere.code_matiere) ?? [],
       });
+      group.matiereCoef.set(matiere.code_matiere, matiere.coef_ue ?? 1);
       groups.set(matiere.ue_id, group);
     }
 
@@ -102,6 +115,44 @@ export function ResultsModule({ dashboard, promoId, onSaved }: ResultsModuleProp
     await onSaved();
   };
 
+  const computeMatiereAverage = (
+    resultats: PromotionDashboardPayload['resultats']
+  ): number | null => {
+    if (resultats.length === 0) return null;
+    const totalCoef = resultats.reduce((acc, item) => acc + (item.coef || 0), 0);
+    if (totalCoef <= 0) return null;
+    const total = resultats.reduce((acc, item) => acc + item.note * item.coef, 0);
+    return total / totalCoef;
+  };
+
+  const saveEdit = async (resultatId: string) => {
+    if (!promoId) return;
+    const response = await updateResultatRequest(promoId, resultatId, {
+      libelle: editingLibelle.trim() || undefined,
+      session: editingSession.trim() ? Number(editingSession) : undefined,
+      note: editingNote.trim() ? Number(editingNote) : undefined,
+      coef: editingCoef.trim() ? Number(editingCoef) : undefined,
+    });
+    if (!response.ok) {
+      setMessage('Impossible de modifier la note.');
+      return;
+    }
+    setEditingId('');
+    setMessage('Note modifiee.');
+    await onSaved();
+  };
+
+  const removeResult = async (resultatId: string) => {
+    if (!promoId) return;
+    const response = await deleteResultatRequest(promoId, resultatId);
+    if (!response.ok) {
+      setMessage('Impossible de supprimer la note.');
+      return;
+    }
+    setMessage('Note supprimee.');
+    await onSaved();
+  };
+
   return (
     <div className="rounded-2xl border border-black/10 bg-white/90 p-5 shadow-[0_14px_34px_rgba(26,18,8,0.12)]">
       <h2 className="text-lg font-semibold text-zinc-900">Notes et resultats</h2>
@@ -124,9 +175,28 @@ export function ResultsModule({ dashboard, promoId, onSaved }: ResultsModuleProp
 
           {resultGroups.map((ue) => (
             <section key={ue.id} className="rounded-xl border border-zinc-200 bg-zinc-50 p-3">
-              <h3 className="text-sm font-semibold text-zinc-900">
-                {ue.nom} - semestre {ue.semestre}
-              </h3>
+              {(() => {
+                const ueParts = Array.from(ue.matieres.entries())
+                  .map(([code, matiere]) => {
+                    const matAvg = computeMatiereAverage(matiere.resultats);
+                    if (matAvg === null) return null;
+                    return { avg: matAvg, coef: ue.matiereCoef.get(code) ?? 1 };
+                  })
+                  .filter((item): item is { avg: number; coef: number } => item !== null);
+                const ueCoef = ueParts.reduce((acc, item) => acc + item.coef, 0);
+                const ueAvg =
+                  ueCoef > 0
+                    ? ueParts.reduce((acc, item) => acc + item.avg * item.coef, 0) / ueCoef
+                    : null;
+                return (
+                  <h3 className="text-sm font-semibold text-zinc-900">
+                    {ue.nom} - semestre {ue.semestre}{' '}
+                    <span className="text-zinc-500">
+                      | moyenne UE: {ueAvg === null ? '-' : ueAvg.toFixed(2)}
+                    </span>
+                  </h3>
+                );
+              })()}
               <div className="mt-3 space-y-3 pl-4">
                 {Array.from(ue.matieres.entries()).map(([code, matiere]) => (
                   <div key={code} className="rounded-lg border border-zinc-200 bg-white p-3">
@@ -140,7 +210,10 @@ export function ResultsModule({ dashboard, promoId, onSaved }: ResultsModuleProp
                           : 'text-zinc-800 hover:bg-zinc-100',
                       ].join(' ')}
                     >
-                      {matiere.nom}
+                      {matiere.nom}{' '}
+                      <span className="text-xs opacity-80">
+                        (moyenne: {computeMatiereAverage(matiere.resultats)?.toFixed(2) ?? '-'})
+                      </span>
                     </button>
                     <div className="mt-2 overflow-x-auto">
                       <table className="min-w-full text-sm">
@@ -159,6 +232,78 @@ export function ResultsModule({ dashboard, promoId, onSaved }: ResultsModuleProp
                                 {resultat.note.toFixed(2)}
                               </td>
                               <td className="px-2 py-2">Coef {resultat.coef.toFixed(2)}</td>
+                              <td className="px-2 py-2">
+                                {editingId === resultat.id ? (
+                                  <div className="flex flex-wrap items-center gap-1">
+                                    <input
+                                      value={editingLibelle}
+                                      onChange={(event) => setEditingLibelle(event.target.value)}
+                                      className="h-8 rounded border border-zinc-300 px-2 text-xs"
+                                      placeholder="Libelle"
+                                    />
+                                    <input
+                                      value={editingSession}
+                                      onChange={(event) => setEditingSession(event.target.value)}
+                                      className="h-8 w-16 rounded border border-zinc-300 px-2 text-xs"
+                                      placeholder="S"
+                                    />
+                                    <input
+                                      value={editingNote}
+                                      onChange={(event) => setEditingNote(event.target.value)}
+                                      className="h-8 w-16 rounded border border-zinc-300 px-2 text-xs"
+                                      placeholder="Note"
+                                    />
+                                    <input
+                                      value={editingCoef}
+                                      onChange={(event) => setEditingCoef(event.target.value)}
+                                      className="h-8 w-16 rounded border border-zinc-300 px-2 text-xs"
+                                      placeholder="Coef"
+                                    />
+                                    <Button
+                                      type="button"
+                                      className="h-8 rounded bg-zinc-900 px-2 text-xs text-white"
+                                      onClick={() => void saveEdit(resultat.id)}
+                                    >
+                                      OK
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      className="h-8 rounded px-2 text-xs"
+                                      onClick={() => setEditingId('')}
+                                    >
+                                      Annuler
+                                    </Button>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center gap-1">
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      className="h-8 rounded px-2 text-xs"
+                                      onClick={() => {
+                                        setEditingId(resultat.id);
+                                        setEditingLibelle(resultat.libelle);
+                                        setEditingSession(
+                                          resultat.session ? String(resultat.session) : ''
+                                        );
+                                        setEditingNote(String(resultat.note));
+                                        setEditingCoef(String(resultat.coef));
+                                      }}
+                                    >
+                                      Modifier
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      className="h-8 rounded border-rose-300 px-2 text-xs text-rose-700"
+                                      onClick={() => void removeResult(resultat.id)}
+                                    >
+                                      Supprimer
+                                    </Button>
+                                  </div>
+                                )}
+                              </td>
                             </tr>
                           ))}
                           {matiere.resultats.length === 0 && (

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { NavigateFunction } from 'react-router-dom';
 import {
   authMeRequest,
+  getMyProfilePhotoRequest,
   getMyProfileRequest,
   getPromotionIcalRequest,
   getPromotionDashboardRequest,
@@ -13,6 +14,7 @@ import {
   type MyProfilePayload,
   type PromotionDashboardPayload,
   type PromotionScope,
+  toApiUrl,
 } from '@/services/api';
 import {
   getTodayBounds,
@@ -53,6 +55,24 @@ export function useDashboardController(navigate: NavigateFunction) {
   });
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [profileMessage, setProfileMessage] = useState('');
+  const [photoObjectUrl, setPhotoObjectUrl] = useState('');
+
+  const resolvePhotoUrl = (photoUrl: string | null | undefined): string => {
+    if (!photoUrl) return '';
+    if (photoUrl.startsWith('http://') || photoUrl.startsWith('https://')) return photoUrl;
+    return toApiUrl(photoUrl.startsWith('/') ? photoUrl : `/${photoUrl}`);
+  };
+
+  const loadProfilePhotoBlob = async () => {
+    try {
+      const response = await getMyProfilePhotoRequest();
+      if (!response.ok) return '';
+      const blob = await response.blob();
+      return URL.createObjectURL(blob);
+    } catch {
+      return '';
+    }
+  };
 
   const isAdmin = roles.includes('admin');
   const hasDelegueScope = promotions.some((promotion) => promotion.can_manage);
@@ -163,13 +183,17 @@ export function useDashboardController(navigate: NavigateFunction) {
 
       const data = (await response.json()) as MyProfilePayload;
       setProfile(data);
+      const directUrl = resolvePhotoUrl(data.photo_url);
+      const objectUrl = directUrl ? await loadProfilePhotoBlob() : '';
+      if (photoObjectUrl) URL.revokeObjectURL(photoObjectUrl);
+      setPhotoObjectUrl(objectUrl);
       setProfileForm({
         numero_etudiant: data.numero_etudiant ?? '',
         nom: data.nom,
         prenom: data.prenom,
         email: data.email,
         date_naissance: data.date_naissance,
-        photo_url: data.photo_url ?? '',
+        photo_url: objectUrl || directUrl,
       });
     } catch {
       // keep dashboard usable
@@ -180,6 +204,14 @@ export function useDashboardController(navigate: NavigateFunction) {
     void loadBaseData();
     void loadProfile();
   }, []);
+
+  useEffect(() => {
+    return () => {
+      if (photoObjectUrl) {
+        URL.revokeObjectURL(photoObjectUrl);
+      }
+    };
+  }, [photoObjectUrl]);
 
   useEffect(() => {
     if (selectedPromoId) {
@@ -221,13 +253,17 @@ export function useDashboardController(navigate: NavigateFunction) {
 
       const updated = (await response.json()) as MyProfilePayload;
       setProfile(updated);
+      const directUrl = resolvePhotoUrl(updated.photo_url);
+      const objectUrl = directUrl ? await loadProfilePhotoBlob() : '';
+      if (photoObjectUrl) URL.revokeObjectURL(photoObjectUrl);
+      setPhotoObjectUrl(objectUrl);
       setProfileForm({
         numero_etudiant: updated.numero_etudiant ?? '',
         nom: updated.nom,
         prenom: updated.prenom,
         email: updated.email,
         date_naissance: updated.date_naissance,
-        photo_url: updated.photo_url ?? '',
+        photo_url: objectUrl || directUrl,
       });
       setProfileMessage('Profil mis a jour.');
     } catch {
@@ -248,13 +284,17 @@ export function useDashboardController(navigate: NavigateFunction) {
       }
       const updated = (await response.json()) as MyProfilePayload;
       setProfile(updated);
+      const directUrl = resolvePhotoUrl(updated.photo_url);
+      const objectUrl = directUrl ? await loadProfilePhotoBlob() : '';
+      if (photoObjectUrl) URL.revokeObjectURL(photoObjectUrl);
+      setPhotoObjectUrl(objectUrl);
       setProfileForm({
         numero_etudiant: updated.numero_etudiant ?? '',
         nom: updated.nom,
         prenom: updated.prenom,
         email: updated.email,
         date_naissance: updated.date_naissance,
-        photo_url: updated.photo_url ?? '',
+        photo_url: objectUrl || directUrl,
       });
       setProfileMessage('Photo de profil mise a jour.');
     } catch {
