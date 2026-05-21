@@ -241,6 +241,12 @@ export function useDashboardController(navigate: NavigateFunction) {
     return `${selectedPromotion.nom} (${selectedPromotion.annee_arrivee}-${selectedPromotion.annee_depart})`;
   }, [selectedPromotion]);
 
+  const refreshDashboard = async () => {
+    if (selectedPromoId) {
+      await loadDashboard(selectedPromoId);
+    }
+  };
+
   return {
     roles,
     activeTab,
@@ -263,6 +269,7 @@ export function useDashboardController(navigate: NavigateFunction) {
     isSavingProfile,
     profileMessage,
     saveProfile,
+    refreshDashboard,
     isAdmin,
     hasDelegueScope,
     handleLogout,

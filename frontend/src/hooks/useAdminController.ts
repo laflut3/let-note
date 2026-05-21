@@ -17,11 +17,14 @@ import {
   adminListUsersRequest,
   adminRemoveDelegueRequest,
   attachUeToPromotionRequest,
+  createCatalogUeRequest,
   createUeRequest,
+  deleteCatalogUeRequest,
   deleteUeRequest,
-  listUeCatalogRequest,
+  listAllUesRequest,
   listUesRequest,
   logoutRequest,
+  updateCatalogUeRequest,
   updateUeRequest,
   type AdminMatiere,
   type AdminMatiereResource,
@@ -31,11 +34,10 @@ import {
   type AdminUser,
   type PromotionStudent,
   type UeItem,
-  type UeCatalogItem,
 } from '@/services/api';
 import type { SortDirection } from '@/types/common';
 
-export type AdminTab = 'promotions' | 'etudiants' | 'professeurs' | 'matieres' | 'ues';
+export type AdminTab = 'promotions' | 'etudiants' | 'professeurs' | 'matieres' | 'ues' | 'devoirs';
 
 export type Feedback = {
   type: '' | 'success' | 'error';
@@ -110,8 +112,10 @@ export function useAdminController(navigate: NavigateFunction) {
   const [linkPromoId, setLinkPromoId] = useState('');
   const [linkUes, setLinkUes] = useState<UeItem[]>([]);
   const [linkUeId, setLinkUeId] = useState('');
+  const [newLinkUeNom, setNewLinkUeNom] = useState('');
   const [newLinkUeSemestre, setNewLinkUeSemestre] = useState('1');
   const [editLinkUeId, setEditLinkUeId] = useState('');
+  const [editLinkUeNom, setEditLinkUeNom] = useState('');
   const [editLinkUeSemestre, setEditLinkUeSemestre] = useState('1');
   const [linkReferentProfId, setLinkReferentProfId] = useState('');
   const [linkCoef, setLinkCoef] = useState('1');
@@ -143,13 +147,12 @@ export function useAdminController(navigate: NavigateFunction) {
   const [studentSort, setStudentSort] = useState<SortDirection>('asc');
   const [matiereSearch, setMatiereSearch] = useState('');
   const [matiereSort, setMatiereSort] = useState<SortDirection>('asc');
-  const [uePromoId, setUePromoId] = useState('');
   const [ueItems, setUeItems] = useState<UeItem[]>([]);
+  const [newUeNom, setNewUeNom] = useState('');
   const [newUeSemestre, setNewUeSemestre] = useState('1');
   const [editUeId, setEditUeId] = useState('');
+  const [editUeNom, setEditUeNom] = useState('');
   const [editUeSemestre, setEditUeSemestre] = useState('1');
-  const [ueCatalogItems, setUeCatalogItems] = useState<UeCatalogItem[]>([]);
-  const [attachUeId, setAttachUeId] = useState('');
 
   const selectedCount = selectedUserIds.length;
   const canCreatePromotion = useMemo(() => {
@@ -263,7 +266,6 @@ export function useAdminController(navigate: NavigateFunction) {
         const promoData = (await promosRes.json()) as AdminPromotionSummary[];
         setPromotions(promoData);
         setSelectedPromoId((prev) => prev || promoData[0]?.id || '');
-        setUePromoId((prev) => prev || promoData[0]?.id || '');
       }
 
       if (!profRes.ok) {
@@ -360,11 +362,7 @@ export function useAdminController(navigate: NavigateFunction) {
 
   useEffect(() => {
     const loadUes = async () => {
-      if (!uePromoId) {
-        setUeItems([]);
-        return;
-      }
-      const response = await listUesRequest(uePromoId);
+      const response = await listAllUesRequest();
       if (!response.ok) {
         setUeItems([]);
         return;
@@ -372,28 +370,7 @@ export function useAdminController(navigate: NavigateFunction) {
       setUeItems((await response.json()) as UeItem[]);
     };
     void loadUes();
-  }, [uePromoId]);
-
-  useEffect(() => {
-    const loadUeCatalog = async () => {
-      if (!uePromoId) {
-        setUeCatalogItems([]);
-        setAttachUeId('');
-        return;
-      }
-      const response = await listUeCatalogRequest(uePromoId);
-      if (!response.ok) {
-        setUeCatalogItems([]);
-        setAttachUeId('');
-        return;
-      }
-      const data = (await response.json()) as UeCatalogItem[];
-      setUeCatalogItems(data);
-      const firstAttachable = data.find((item) => !item.linked_to_promo)?.id ?? '';
-      setAttachUeId((prev) => prev || firstAttachable);
-    };
-    void loadUeCatalog();
-  }, [uePromoId, ueItems.length]);
+  }, []);
 
   useEffect(() => {
     const loadUesForPromo = async () => {
@@ -410,7 +387,7 @@ export function useAdminController(navigate: NavigateFunction) {
       }
       const data = (await response.json()) as UeItem[];
       setLinkUes(data);
-      setLinkUeId((prev) => prev || data[0]?.id || '');
+      setLinkUeId((prev) => (data.some((ue) => ue.id === prev) ? prev : data[0]?.id || ''));
     };
     void loadUesForPromo();
   }, [linkPromoId]);
@@ -637,7 +614,7 @@ export function useAdminController(navigate: NavigateFunction) {
     if (!response.ok) return;
     const data = (await response.json()) as UeItem[];
     setLinkUes(data);
-    setLinkUeId((prev) => prev || data[0]?.id || '');
+    setLinkUeId((prev) => (data.some((ue) => ue.id === prev) ? prev : data[0]?.id || ''));
   };
 
   const handleCreateUeForLinkPromo = async () => {
@@ -645,9 +622,14 @@ export function useAdminController(navigate: NavigateFunction) {
       setFeedback({ type: 'error', message: 'Selectionnez une promotion.' });
       return;
     }
+    if (!newLinkUeNom.trim()) {
+      setFeedback({ type: 'error', message: 'Nom UE requis.' });
+      return;
+    }
     await runAction(
       () =>
         createUeRequest(linkPromoId, {
+          nom_ue: newLinkUeNom.trim(),
           semestre: Number(newLinkUeSemestre) || 1,
         }),
       'UE creee.',
@@ -664,6 +646,7 @@ export function useAdminController(navigate: NavigateFunction) {
     await runAction(
       () =>
         updateUeRequest(linkPromoId, editLinkUeId, {
+          nom_ue: editLinkUeNom.trim() || undefined,
           semestre: Number(editLinkUeSemestre) || 1,
         }),
       'UE modifiee.',
@@ -679,19 +662,22 @@ export function useAdminController(navigate: NavigateFunction) {
   };
 
   const refreshAdminUes = async () => {
-    if (!uePromoId) return;
-    const response = await listUesRequest(uePromoId);
+    const response = await listAllUesRequest();
     if (!response.ok) return;
     setUeItems((await response.json()) as UeItem[]);
   };
 
   const handleCreateAdminUe = async () => {
-    if (!uePromoId) {
-      setFeedback({ type: 'error', message: 'Selectionnez une promotion.' });
+    if (!newUeNom.trim()) {
+      setFeedback({ type: 'error', message: 'Nom UE requis.' });
       return;
     }
     await runAction(
-      () => createUeRequest(uePromoId, { semestre: Number(newUeSemestre) || 1 }),
+      () =>
+        createCatalogUeRequest({
+          nom_ue: newUeNom.trim(),
+          semestre: Number(newUeSemestre) || 1,
+        }),
       'UE creee.',
       false
     );
@@ -699,12 +685,16 @@ export function useAdminController(navigate: NavigateFunction) {
   };
 
   const handleUpdateAdminUe = async () => {
-    if (!uePromoId || !editUeId) {
+    if (!editUeId) {
       setFeedback({ type: 'error', message: 'Selectionnez une UE.' });
       return;
     }
     await runAction(
-      () => updateUeRequest(uePromoId, editUeId, { semestre: Number(editUeSemestre) || 1 }),
+      () =>
+        updateCatalogUeRequest(editUeId, {
+          nom_ue: editUeNom.trim() || undefined,
+          semestre: Number(editUeSemestre) || 1,
+        }),
       'UE modifiee.',
       false
     );
@@ -712,21 +702,27 @@ export function useAdminController(navigate: NavigateFunction) {
   };
 
   const handleDeleteAdminUe = async (ueId: string) => {
-    if (!uePromoId) return;
-    await runAction(() => deleteUeRequest(uePromoId, ueId), 'UE supprimee.', false);
+    await runAction(() => deleteCatalogUeRequest(ueId), 'UE supprimee.', false);
     await refreshAdminUes();
   };
 
-  const handleAttachAdminUe = async () => {
-    if (!uePromoId || !attachUeId) {
-      setFeedback({ type: 'error', message: 'Selectionnez une UE a lier.' });
+  const handleAttachAdminUe = async (ueId: string, promoIds: string[]) => {
+    if (!ueId || promoIds.length === 0) {
+      setFeedback({ type: 'error', message: 'Selectionnez au moins une promotion.' });
       return;
     }
-    await runAction(
-      () => attachUeToPromotionRequest(uePromoId, attachUeId),
-      'UE liee a la promotion.',
-      false
-    );
+    setFeedback({ type: '', message: '' });
+    for (const promoId of promoIds) {
+      const response = await attachUeToPromotionRequest(promoId, ueId);
+      if (!response.ok) {
+        setFeedback({
+          type: 'error',
+          message: await extractErrorMessage(response, 'Impossible de lier UE a une promotion.'),
+        });
+        return;
+      }
+    }
+    setFeedback({ type: 'success', message: 'UE liee aux promotions selectionnees.' });
     await refreshAdminUes();
   };
 
@@ -848,10 +844,14 @@ export function useAdminController(navigate: NavigateFunction) {
     linkUes,
     linkUeId,
     setLinkUeId,
+    newLinkUeNom,
+    setNewLinkUeNom,
     newLinkUeSemestre,
     setNewLinkUeSemestre,
     editLinkUeId,
     setEditLinkUeId,
+    editLinkUeNom,
+    setEditLinkUeNom,
     editLinkUeSemestre,
     setEditLinkUeSemestre,
     linkReferentProfId,
@@ -871,6 +871,7 @@ export function useAdminController(navigate: NavigateFunction) {
     editStudentBirthDate,
     setEditStudentBirthDate,
     feedback,
+    setFeedback,
     confirmDialog,
     promotionSearch,
     setPromotionSearch,
@@ -888,18 +889,17 @@ export function useAdminController(navigate: NavigateFunction) {
     setMatiereSearch,
     matiereSort,
     setMatiereSort,
-    uePromoId,
-    setUePromoId,
     ueItems,
+    newUeNom,
+    setNewUeNom,
     newUeSemestre,
     setNewUeSemestre,
     editUeId,
     setEditUeId,
+    editUeNom,
+    setEditUeNom,
     editUeSemestre,
     setEditUeSemestre,
-    ueCatalogItems,
-    attachUeId,
-    setAttachUeId,
     selectedCount,
     canCreatePromotion,
     runAction,
@@ -917,6 +917,7 @@ export function useAdminController(navigate: NavigateFunction) {
     handleCreateUeForLinkPromo,
     handleUpdateUeForLinkPromo,
     handleDeleteUeForLinkPromo,
+    refreshAdminUes,
     handleCreateAdminUe,
     handleUpdateAdminUe,
     handleDeleteAdminUe,

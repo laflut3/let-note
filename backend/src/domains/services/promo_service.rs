@@ -1,4 +1,4 @@
-use chrono::{NaiveDate, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use sqlx::PgPool;
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -7,25 +7,38 @@ use crate::domains::{error::ApiError, middleware::AuthContext};
 
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct CreateUeInput {
+  pub nom_ue: String,
   pub semestre: i32,
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct UpdateUeInput {
+  pub nom_ue: Option<String>,
   pub semestre: i32,
 }
 
 #[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
 pub struct UePayload {
   pub id: Uuid,
+  pub nom_ue: String,
   pub semestre: i32,
 }
 
 #[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
 pub struct UeCatalogItem {
   pub id: Uuid,
+  pub nom_ue: String,
   pub semestre: i32,
   pub linked_to_promo: bool,
+}
+
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+pub struct UePromotionLinkPayload {
+  pub id: Uuid,
+  pub nom: String,
+  pub annee_arrivee: i32,
+  pub annee_depart: i32,
+  pub linked: bool,
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
@@ -67,6 +80,22 @@ pub struct UpdateResultatInput {
   pub coef: Option<f32>,
 }
 
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct CreateDevoirInput {
+  pub id_mat: String,
+  pub titre: String,
+  pub description: Option<String>,
+  pub date_rendu: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct UpdateDevoirInput {
+  pub id_mat: Option<String>,
+  pub titre: Option<String>,
+  pub description: Option<String>,
+  pub date_rendu: Option<DateTime<Utc>>,
+}
+
 #[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
 pub struct PromotionScope {
   pub id: Uuid,
@@ -88,6 +117,7 @@ pub struct DashboardPayload {
   pub etudiants: Vec<PromoStudent>,
   pub matieres: Vec<MatiereDashboardItem>,
   pub professeurs: Vec<ProfesseurDashboardItem>,
+  pub devoirs: Vec<DevoirPayload>,
   pub resultats: Vec<ResultatDashboardItem>,
 }
 
@@ -105,6 +135,7 @@ pub struct MatiereDashboardItem {
   pub code_matiere: String,
   pub nom_matiere: String,
   pub ue_id: Option<Uuid>,
+  pub ue_nom: Option<String>,
   pub ue_semestre: Option<i32>,
   pub coef_ue: Option<f32>,
   pub referent_prof_id: Option<Uuid>,
@@ -119,6 +150,7 @@ struct MatiereDashboardRow {
   pub code_matiere: String,
   pub nom_matiere: String,
   pub ue_id: Option<Uuid>,
+  pub ue_nom: Option<String>,
   pub ue_semestre: Option<i32>,
   pub coef_ue: Option<f32>,
   pub referent_prof_id: Option<Uuid>,
@@ -140,7 +172,20 @@ pub struct MatiereResourceDashboardItem {
   pub url: Option<String>,
   pub content_type: Option<String>,
   pub size_bytes: Option<i64>,
-  pub created_at: chrono::DateTime<chrono::Utc>,
+  pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+pub struct DevoirPayload {
+  pub id: Uuid,
+  pub id_promo: Uuid,
+  pub id_mat: String,
+  pub nom_matiere: String,
+  pub titre: String,
+  pub description: Option<String>,
+  pub date_rendu: Option<DateTime<Utc>>,
+  pub created_at: DateTime<Utc>,
+  pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
@@ -164,7 +209,7 @@ pub struct ResultatDashboardItem {
   pub session: Option<i32>,
   pub note: f32,
   pub coef: f32,
-  pub updated_at: chrono::DateTime<chrono::Utc>,
+  pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -264,6 +309,7 @@ pub async fn get_promotion_dashboard(
       m.code_matiere,
       m.nom_matiere,
       mu.id_ue AS ue_id,
+      u.nom_ue AS ue_nom,
       u.semestre AS ue_semestre,
       mu.coef_ue,
       rmp.id_prof AS referent_prof_id,
@@ -272,7 +318,7 @@ pub async fn get_promotion_dashboard(
       p.email AS referent_prof_email
     FROM mat_promo mp
     JOIN matiere m ON m.code_matiere = mp.id_mat
-    LEFT JOIN matiere_ue mu ON mu.id_matiere = m.code_matiere
+    LEFT JOIN matiere_ue mu ON mu.id_matiere = m.code_matiere AND mu.id_promo = mp.id_promo
     LEFT JOIN ue u ON u.id = mu.id_ue
     LEFT JOIN referent_matiere_promo rmp ON rmp.id_mat = mp.id_mat AND rmp.id_promo = mp.id_promo
     LEFT JOIN professeur p ON p.id = rmp.id_prof
@@ -291,6 +337,7 @@ pub async fn get_promotion_dashboard(
       code_matiere: row.code_matiere,
       nom_matiere: row.nom_matiere,
       ue_id: row.ue_id,
+      ue_nom: row.ue_nom,
       ue_semestre: row.ue_semestre,
       coef_ue: row.coef_ue,
       referent_prof_id: row.referent_prof_id,
@@ -343,6 +390,8 @@ pub async fn get_promotion_dashboard(
   .await
   .map_err(map_schema_error("unable to load professors"))?;
 
+  let devoirs = list_devoirs_for_promo(db, auth, promo_id).await?;
+
   let resultats = if promotion.can_manage {
     sqlx::query_as::<_, ResultatDashboardItem>(
       r#"
@@ -360,9 +409,9 @@ pub async fn get_promotion_dashboard(
         nr.coef,
         nr.updated_at
       FROM note_resultat nr
-      JOIN mat_promo mp ON mp.id_mat = nr.id_mat AND mp.id_promo = $1
       JOIN matiere m ON m.code_matiere = nr.id_mat
       JOIN etudiant e ON e.id = nr.id_etu
+      WHERE nr.id_promo = $1
       ORDER BY m.nom_matiere, e.nom, e.prenom, nr.updated_at DESC
       "#,
     )
@@ -387,10 +436,9 @@ pub async fn get_promotion_dashboard(
         nr.coef,
         nr.updated_at
       FROM note_resultat nr
-      JOIN mat_promo mp ON mp.id_mat = nr.id_mat AND mp.id_promo = $1
       JOIN matiere m ON m.code_matiere = nr.id_mat
       JOIN etudiant e ON e.id = nr.id_etu
-      WHERE nr.id_etu = $2
+      WHERE nr.id_promo = $1 AND nr.id_etu = $2
       ORDER BY m.nom_matiere, nr.updated_at DESC
       "#,
     )
@@ -406,6 +454,7 @@ pub async fn get_promotion_dashboard(
     etudiants,
     matieres,
     professeurs,
+    devoirs,
     resultats,
   })
 }
@@ -419,7 +468,7 @@ pub async fn list_ues_for_promo(
 
   sqlx::query_as::<_, UePayload>(
     r#"
-    SELECT u.id, u.semestre
+    SELECT u.id, u.nom_ue, u.semestre
     FROM promo_ue pu
     JOIN ue u ON u.id = pu.id_ue
     WHERE pu.id_promo = $1
@@ -432,24 +481,100 @@ pub async fn list_ues_for_promo(
   .map_err(map_schema_error("unable to list UE"))
 }
 
+async fn ensure_can_manage_ue_catalog(db: &PgPool, auth: &AuthContext) -> Result<(), ApiError> {
+  if auth.roles.iter().any(|role| role == "admin") {
+    return Ok(());
+  }
+
+  let is_delegue = sqlx::query_scalar::<_, i64>(
+    r#"
+    SELECT COUNT(*)
+    FROM delegue_promo
+    WHERE id_etu = $1
+    "#,
+  )
+  .bind(auth.user_id)
+  .fetch_one(db)
+  .await
+  .map_err(map_schema_error("unable to validate UE permissions"))?
+    > 0;
+
+  if is_delegue {
+    return Ok(());
+  }
+
+  Err(ApiError::forbidden(
+    "insufficient permissions for UE catalog",
+  ))
+}
+
+pub async fn list_ues(db: &PgPool, auth: &AuthContext) -> Result<Vec<UePayload>, ApiError> {
+  ensure_can_manage_ue_catalog(db, auth).await?;
+
+  sqlx::query_as::<_, UePayload>(
+    r#"
+    SELECT id, nom_ue, semestre
+    FROM ue
+    ORDER BY semestre, nom_ue
+    "#,
+  )
+  .fetch_all(db)
+  .await
+  .map_err(map_schema_error("unable to list UE catalog"))
+}
+
+pub async fn create_ue(
+  db: &PgPool,
+  auth: &AuthContext,
+  payload: CreateUeInput,
+) -> Result<UePayload, ApiError> {
+  ensure_can_manage_ue_catalog(db, auth).await?;
+
+  let nom_ue = payload.nom_ue.trim().to_string();
+  if nom_ue.is_empty() {
+    return Err(ApiError::bad_request("nom_ue is required"));
+  }
+  if !(1..=12).contains(&payload.semestre) {
+    return Err(ApiError::bad_request("invalid semestre"));
+  }
+
+  sqlx::query_as::<_, UePayload>(
+    r#"
+    INSERT INTO ue (nom_ue, semestre)
+    VALUES ($1, $2)
+    RETURNING id, nom_ue, semestre
+    "#,
+  )
+  .bind(nom_ue)
+  .bind(payload.semestre)
+  .fetch_one(db)
+  .await
+  .map_err(map_schema_error("unable to create UE"))
+}
+
 pub async fn create_ue_for_promo(
   db: &PgPool,
   promo_id: Uuid,
   payload: CreateUeInput,
 ) -> Result<UePayload, ApiError> {
+  let nom_ue = payload.nom_ue.trim().to_string();
+  if nom_ue.is_empty() {
+    return Err(ApiError::bad_request("nom_ue is required"));
+  }
   if !(1..=12).contains(&payload.semestre) {
     return Err(ApiError::bad_request("invalid semestre"));
   }
 
   ensure_promotion_exists(db, promo_id).await?;
 
-  let created = sqlx::query_as::<_, (Uuid, i32)>(
+  let created = sqlx::query_as::<_, (Uuid, String, i32)>(
     r#"
-    INSERT INTO ue (semestre)
-    VALUES ($1)
-    RETURNING id, semestre
+    INSERT INTO ue (nom_ue, semestre)
+    VALUES ($1, $2)
+    RETURNING id, nom_ue, semestre
     "#,
   )
+  .bind(&nom_ue)
   .bind(payload.semestre)
   .fetch_one(db)
   .await
@@ -470,8 +595,161 @@ pub async fn create_ue_for_promo(
 
   Ok(UePayload {
     id: created.0,
-    semestre: created.1,
+    nom_ue: created.1,
+    semestre: created.2,
   })
+}
+
+pub async fn update_ue(
+  db: &PgPool,
+  auth: &AuthContext,
+  ue_id: Uuid,
+  payload: UpdateUeInput,
+) -> Result<UePayload, ApiError> {
+  ensure_can_manage_ue_catalog(db, auth).await?;
+
+  let nom_ue = payload
+    .nom_ue
+    .as_deref()
+    .map(str::trim)
+    .filter(|value| !value.is_empty());
+  if !(1..=12).contains(&payload.semestre) {
+    return Err(ApiError::bad_request("invalid semestre"));
+  }
+
+  sqlx::query_as::<_, UePayload>(
+    r#"
+    UPDATE ue
+    SET nom_ue = COALESCE($2, nom_ue),
+        semestre = $3
+    WHERE id = $1
+    RETURNING id, nom_ue, semestre
+    "#,
+  )
+  .bind(ue_id)
+  .bind(nom_ue)
+  .bind(payload.semestre)
+  .fetch_optional(db)
+  .await
+  .map_err(map_schema_error("unable to update UE"))?
+  .ok_or_else(|| ApiError::bad_request("UE not found"))
+}
+
+pub async fn delete_ue(
+  db: &PgPool,
+  auth: &AuthContext,
+  ue_id: Uuid,
+) -> Result<MutationAck, ApiError> {
+  ensure_can_manage_ue_catalog(db, auth).await?;
+
+  let used = sqlx::query_scalar::<_, i64>(
+    r#"
+    SELECT COUNT(*)
+    FROM matiere_ue
+    WHERE id_ue = $1
+    "#,
+  )
+  .bind(ue_id)
+  .fetch_one(db)
+  .await
+  .map_err(map_schema_error("unable to delete UE"))?;
+
+  if used > 0 {
+    return Err(ApiError::bad_request(
+      "remove subject links from this UE before deleting it",
+    ));
+  }
+
+  let deleted = sqlx::query(
+    r#"
+    DELETE FROM ue
+    WHERE id = $1
+    "#,
+  )
+  .bind(ue_id)
+  .execute(db)
+  .await
+  .map_err(map_schema_error("unable to delete UE"))?
+  .rows_affected();
+
+  if deleted == 0 {
+    return Err(ApiError::bad_request("UE not found"));
+  }
+
+  Ok(MutationAck {
+    message: "UE deleted",
+  })
+}
+
+pub async fn list_ue_promotions(
+  db: &PgPool,
+  auth: &AuthContext,
+  ue_id: Uuid,
+) -> Result<Vec<UePromotionLinkPayload>, ApiError> {
+  ensure_can_manage_ue_catalog(db, auth).await?;
+
+  let ue_exists = sqlx::query_scalar::<_, i64>(
+    r#"
+    SELECT COUNT(*)
+    FROM ue
+    WHERE id = $1
+    "#,
+  )
+  .bind(ue_id)
+  .fetch_one(db)
+  .await
+  .map_err(map_schema_error("unable to list UE promotions"))?
+    > 0;
+
+  if !ue_exists {
+    return Err(ApiError::bad_request("UE not found"));
+  }
+
+  if auth.roles.iter().any(|role| role == "admin") {
+    return sqlx::query_as::<_, UePromotionLinkPayload>(
+      r#"
+      SELECT
+        p.id,
+        p.nom,
+        p.annee_arrivee,
+        p.annee_depart,
+        EXISTS(
+          SELECT 1
+          FROM promo_ue pu
+          WHERE pu.id_promo = p.id AND pu.id_ue = $1
+        ) AS linked
+      FROM promotion p
+      ORDER BY p.annee_arrivee DESC, p.nom
+      "#,
+    )
+    .bind(ue_id)
+    .fetch_all(db)
+    .await
+    .map_err(map_schema_error("unable to list UE promotions"));
+  }
+
+  sqlx::query_as::<_, UePromotionLinkPayload>(
+    r#"
+    SELECT
+      p.id,
+      p.nom,
+      p.annee_arrivee,
+      p.annee_depart,
+      EXISTS(
+        SELECT 1
+        FROM promo_ue pu
+        WHERE pu.id_promo = p.id AND pu.id_ue = $2
+      ) AS linked
+    FROM promotion p
+    JOIN delegue_promo dp ON dp.id_promo = p.id AND dp.id_etu = $1
+    ORDER BY p.annee_arrivee DESC, p.nom
+    "#,
+  )
+  .bind(auth.user_id)
+  .bind(ue_id)
+  .fetch_all(db)
+  .await
+  .map_err(map_schema_error("unable to list UE promotions"))
 }
 
 pub async fn list_ue_catalog_for_promo(
@@ -484,6 +762,7 @@ pub async fn list_ue_catalog_for_promo(
     r#"
     SELECT
       u.id,
+      u.nom_ue,
       u.semestre,
       EXISTS(
         SELECT 1
@@ -548,6 +827,11 @@ pub async fn update_ue_for_promo(
   ue_id: Uuid,
   payload: UpdateUeInput,
 ) -> Result<UePayload, ApiError> {
+  let nom_ue = payload
+    .nom_ue
+    .as_deref()
+    .map(str::trim)
+    .filter(|value| !value.is_empty());
   if !(1..=12).contains(&payload.semestre) {
     return Err(ApiError::bad_request("invalid semestre"));
   }
@@ -558,12 +842,14 @@ pub async fn update_ue_for_promo(
   sqlx::query_as::<_, UePayload>(
     r#"
     UPDATE ue
-    SET semestre = $2
+    SET nom_ue = COALESCE($2, nom_ue),
+        semestre = $3
     WHERE id = $1
-    RETURNING id, semestre
+    RETURNING id, nom_ue, semestre
     "#,
   )
   .bind(ue_id)
+  .bind(nom_ue)
   .bind(payload.semestre)
   .fetch_optional(db)
   .await
@@ -582,9 +868,8 @@ pub async fn delete_ue_for_promo(
   let used_in_target = sqlx::query_scalar::<_, i64>(
     r#"
     SELECT COUNT(*)
-    FROM matiere_ue mu
-    JOIN mat_promo mp ON mp.id_mat = mu.id_matiere
-    WHERE mu.id_ue = $1 AND mp.id_promo = $2
+    FROM matiere_ue
+    WHERE id_ue = $1 AND id_promo = $2
     "#,
   )
   .bind(ue_id)
@@ -611,43 +896,52 @@ pub async fn delete_ue_for_promo(
   .await
   .map_err(map_schema_error("unable to detach UE"))?;
 
-  let still_attached_elsewhere = sqlx::query_scalar::<_, i64>(
+  Ok(MutationAck {
+    message: "UE detached from promotion",
+  })
+}
+
+pub async fn detach_ue_from_promo(
+  db: &PgPool,
+  promo_id: Uuid,
+  ue_id: Uuid,
+) -> Result<MutationAck, ApiError> {
+  ensure_promotion_exists(db, promo_id).await?;
+  ensure_ue_attached_to_promo(db, promo_id, ue_id).await?;
+
+  let used_in_target = sqlx::query_scalar::<_, i64>(
     r#"
     SELECT COUNT(*)
-    FROM promo_ue
-    WHERE id_ue = $1
+    FROM matiere_ue
+    WHERE id_ue = $1 AND id_promo = $2
     "#,
   )
   .bind(ue_id)
+  .bind(promo_id)
   .fetch_one(db)
   .await
-  .map_err(map_schema_error("unable to delete UE"))?
-    > 0;
+  .map_err(map_schema_error("unable to detach UE"))?;
 
-  if still_attached_elsewhere {
-    return Ok(MutationAck {
-      message: "UE detached from promotion",
-    });
+  if used_in_target > 0 {
+    return Err(ApiError::bad_request(
+      "remove subject links from this UE before detaching it",
+    ));
   }
 
-  let deleted = sqlx::query(
+  sqlx::query(
     r#"
-    DELETE FROM ue
-    WHERE id = $1
+    DELETE FROM promo_ue
+    WHERE id_promo = $1 AND id_ue = $2
     "#,
   )
+  .bind(promo_id)
   .bind(ue_id)
   .execute(db)
   .await
-  .map_err(map_schema_error("unable to delete UE"))?
-  .rows_affected();
-
-  if deleted == 0 {
-    return Err(ApiError::bad_request("UE not found"));
-  }
+  .map_err(map_schema_error("unable to detach UE"))?;
 
   Ok(MutationAck {
-    message: "UE deleted",
+    message: "UE detached from promotion",
   })
 }
 
@@ -785,14 +1079,15 @@ pub async fn add_matiere_to_promo(
 
   sqlx::query(
     r#"
-    INSERT INTO matiere_ue (id_matiere, id_ue, coef_ue)
-    VALUES ($1, $2, $3)
-    ON CONFLICT (id_matiere, id_ue)
-    DO UPDATE SET coef_ue = EXCLUDED.coef_ue
+    INSERT INTO matiere_ue (id_promo, id_ue, id_matiere, coef_ue)
+    VALUES ($1, $2, $3, $4)
+    ON CONFLICT (id_promo, id_matiere)
+    DO UPDATE SET id_ue = EXCLUDED.id_ue, coef_ue = EXCLUDED.coef_ue
     "#,
   )
-  .bind(&code)
+  .bind(promo_id)
   .bind(payload.ue_id)
+  .bind(&code)
   .bind(coef)
   .execute(&mut *tx)
   .await
@@ -987,6 +1282,167 @@ pub async fn update_promotion_ical_url(
   })
 }
 
+pub async fn list_devoirs_for_promo(
+  db: &PgPool,
+  auth: &AuthContext,
+  promo_id: Uuid,
+) -> Result<Vec<DevoirPayload>, ApiError> {
+  let _promotion = get_accessible_promotion(db, auth, promo_id).await?;
+
+  sqlx::query_as::<_, DevoirPayload>(
+    r#"
+    SELECT
+      d.id,
+      d.id_promo,
+      d.id_mat,
+      m.nom_matiere,
+      d.titre,
+      d.description,
+      d.date_rendu,
+      d.created_at,
+      d.updated_at
+    FROM devoir d
+    JOIN matiere m ON m.code_matiere = d.id_mat
+    WHERE d.id_promo = $1
+    ORDER BY d.date_rendu NULLS LAST, d.created_at DESC
+    "#,
+  )
+  .bind(promo_id)
+  .fetch_all(db)
+  .await
+  .map_err(map_schema_error("unable to list homework"))
+}
+
+pub async fn create_devoir_for_promo(
+  db: &PgPool,
+  auth: &AuthContext,
+  promo_id: Uuid,
+  payload: CreateDevoirInput,
+) -> Result<MutationAck, ApiError> {
+  let code = payload.id_mat.trim().to_uppercase();
+  let titre = payload.titre.trim().to_string();
+  if code.is_empty() || titre.is_empty() {
+    return Err(ApiError::bad_request("id_mat and titre are required"));
+  }
+
+  ensure_subject_in_promo(db, &code, promo_id).await?;
+
+  sqlx::query(
+    r#"
+    INSERT INTO devoir (id_promo, id_mat, titre, description, date_rendu, created_by, updated_by)
+    VALUES ($1, $2, $3, $4, $5, $6, $6)
+    "#,
+  )
+  .bind(promo_id)
+  .bind(code)
+  .bind(titre)
+  .bind(payload.description)
+  .bind(payload.date_rendu)
+  .bind(auth.user_id)
+  .execute(db)
+  .await
+  .map_err(map_schema_error("unable to create homework"))?;
+
+  Ok(MutationAck {
+    message: "homework created",
+  })
+}
+
+pub async fn update_devoir_for_promo(
+  db: &PgPool,
+  auth: &AuthContext,
+  promo_id: Uuid,
+  devoir_id: Uuid,
+  payload: UpdateDevoirInput,
+) -> Result<MutationAck, ApiError> {
+  let current = sqlx::query_as::<_, (String, String, Option<String>, Option<DateTime<Utc>>)>(
+    r#"
+    SELECT id_mat, titre, description, date_rendu
+    FROM devoir
+    WHERE id = $1 AND id_promo = $2
+    "#,
+  )
+  .bind(devoir_id)
+  .bind(promo_id)
+  .fetch_optional(db)
+  .await
+  .map_err(map_schema_error("unable to update homework"))?
+  .ok_or_else(|| ApiError::bad_request("homework not found"))?;
+
+  let code = payload
+    .id_mat
+    .as_deref()
+    .map(str::trim)
+    .filter(|value| !value.is_empty())
+    .map(str::to_uppercase)
+    .unwrap_or(current.0);
+  let titre = payload
+    .titre
+    .as_deref()
+    .map(str::trim)
+    .filter(|value| !value.is_empty())
+    .unwrap_or(&current.1)
+    .to_string();
+  let description = payload.description.or(current.2);
+  let date_rendu = payload.date_rendu.or(current.3);
+
+  ensure_subject_in_promo(db, &code, promo_id).await?;
+
+  sqlx::query(
+    r#"
+    UPDATE devoir
+    SET id_mat = $2,
+        titre = $3,
+        description = $4,
+        date_rendu = $5,
+        updated_by = $6,
+        updated_at = NOW()
+    WHERE id = $1 AND id_promo = $7
+    "#,
+  )
+  .bind(devoir_id)
+  .bind(code)
+  .bind(titre)
+  .bind(description)
+  .bind(date_rendu)
+  .bind(auth.user_id)
+  .bind(promo_id)
+  .execute(db)
+  .await
+  .map_err(map_schema_error("unable to update homework"))?;
+
+  Ok(MutationAck {
+    message: "homework updated",
+  })
+}
+
+pub async fn delete_devoir_for_promo(
+  db: &PgPool,
+  promo_id: Uuid,
+  devoir_id: Uuid,
+) -> Result<MutationAck, ApiError> {
+  let deleted = sqlx::query(
+    r#"
+    DELETE FROM devoir
+    WHERE id = $1 AND id_promo = $2
+    "#,
+  )
+  .bind(devoir_id)
+  .bind(promo_id)
+  .execute(db)
+  .await
+  .map_err(map_schema_error("unable to delete homework"))?
+  .rows_affected();
+
+  if deleted == 0 {
+    return Err(ApiError::bad_request("homework not found"));
+  }
+
+  Ok(MutationAck {
+    message: "homework deleted",
+  })
+}
+
 pub async fn fetch_promotion_ical(
   db: &PgPool,
   auth: &AuthContext,
@@ -1053,10 +1509,12 @@ pub async fn create_resultat_for_matiere(
 
   sqlx::query(
     r#"
-    INSERT INTO note_resultat (id_mat, id_etu, libelle, session, note, coef, created_by, updated_by)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $7)
+    INSERT INTO note_resultat
+      (id_promo, id_mat, id_etu, libelle, session, note, coef, created_by, updated_by)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8)
     "#,
   )
+  .bind(promo_id)
   .bind(code)
   .bind(target_student)
   .bind(payload.libelle.trim())
@@ -1080,9 +1538,9 @@ pub async fn update_resultat(
   resultat_id: Uuid,
   payload: UpdateResultatInput,
 ) -> Result<MutationAck, ApiError> {
-  let row = sqlx::query_as::<_, (Uuid, String)>(
+  let row = sqlx::query_as::<_, (Uuid, String, Uuid)>(
     r#"
-    SELECT nr.id_etu, nr.id_mat
+    SELECT nr.id_etu, nr.id_mat, nr.id_promo
     FROM note_resultat nr
     WHERE nr.id = $1
     "#,
@@ -1092,6 +1550,12 @@ pub async fn update_resultat(
   .await
   .map_err(map_schema_error("unable to update result"))?
   .ok_or_else(|| ApiError::bad_request("result not found"))?;
+
+  if row.2 != promo_id {
+    return Err(ApiError::bad_request(
+      "result does not belong to this promotion",
+    ));
+  }
 
   ensure_student_in_promo(db, row.0, promo_id).await?;
   ensure_subject_in_promo(db, &row.1, promo_id).await?;

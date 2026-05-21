@@ -1,5 +1,8 @@
 DROP INDEX IF EXISTS ix_note_resultat_etu;
+DROP INDEX IF EXISTS ix_note_resultat_promo;
 DROP INDEX IF EXISTS ix_note_resultat_mat;
+DROP INDEX IF EXISTS ix_devoir_mat;
+DROP INDEX IF EXISTS ix_devoir_promo;
 DROP INDEX IF EXISTS ix_matiere_resource_type;
 DROP INDEX IF EXISTS ix_matiere_resource_promo;
 DROP INDEX IF EXISTS ix_matiere_resource_mat;
@@ -11,6 +14,7 @@ DROP TABLE IF EXISTS delegue_promo;
 DROP TABLE IF EXISTS note;
 DROP TABLE IF EXISTS matiere_ue;
 DROP TABLE IF EXISTS role_etu;
+DROP TABLE IF EXISTS devoir;
 DROP TABLE IF EXISTS mat_promo;
 DROP TABLE IF EXISTS etu_promo;
 DROP TABLE IF EXISTS matiere;

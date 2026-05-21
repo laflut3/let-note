@@ -59,6 +59,7 @@ export type MatiereDashboardItem = {
   code_matiere: string;
   nom_matiere: string;
   ue_id: string | null;
+  ue_nom: string | null;
   ue_semestre: number | null;
   coef_ue: number | null;
   referent_prof_id: string | null;
@@ -99,6 +100,7 @@ export type PromotionDashboardPayload = {
   }[];
   matieres: MatiereDashboardItem[];
   professeurs: ProfesseurDashboardItem[];
+  devoirs: DevoirItem[];
   resultats: {
     id: string;
     id_mat: string;
@@ -113,6 +115,18 @@ export type PromotionDashboardPayload = {
     coef: number;
     updated_at: string;
   }[];
+};
+
+export type DevoirItem = {
+  id: string;
+  id_promo: string;
+  id_mat: string;
+  nom_matiere: string;
+  titre: string;
+  description: string | null;
+  date_rendu: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
 export type AdminPromotionSummary = {
@@ -160,13 +174,23 @@ export type AdminMatiereResource = {
 
 export type UeItem = {
   id: string;
+  nom_ue: string;
   semestre: number;
 };
 
 export type UeCatalogItem = {
   id: string;
+  nom_ue: string;
   semestre: number;
   linked_to_promo: boolean;
+};
+
+export type UePromotionLink = {
+  id: string;
+  nom: string;
+  annee_arrivee: number;
+  annee_depart: number;
+  linked: boolean;
 };
 
 export type AuthMePayload = {
@@ -482,6 +506,14 @@ export async function listUesRequest(promoId: string): Promise<Response> {
   return jsonRequest(`/promotions/${promoId}/ues`, { method: 'GET' });
 }
 
+export async function listAllUesRequest(): Promise<Response> {
+  return jsonRequest('/ues', { method: 'GET' });
+}
+
+export async function listUePromotionsRequest(ueId: string): Promise<Response> {
+  return jsonRequest(`/ues/${ueId}/promotions`, { method: 'GET' });
+}
+
 export async function listUeCatalogRequest(promoId: string): Promise<Response> {
   return jsonRequest(`/promotions/${promoId}/ues/catalog`, { method: 'GET' });
 }
@@ -543,9 +575,22 @@ export async function setReferentRequest(
 
 export async function createUeRequest(
   promoId: string,
-  payload: { semestre: number }
+  payload: { nom_ue: string; semestre: number }
 ): Promise<Response> {
   return jsonRequest(`/promotions/${promoId}/ues`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function createCatalogUeRequest(payload: {
+  nom_ue: string;
+  semestre: number;
+}): Promise<Response> {
+  return jsonRequest('/ues', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -557,9 +602,22 @@ export async function createUeRequest(
 export async function updateUeRequest(
   promoId: string,
   ueId: string,
-  payload: { semestre: number }
+  payload: { nom_ue?: string; semestre: number }
 ): Promise<Response> {
   return jsonRequest(`/promotions/${promoId}/ues/${ueId}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateCatalogUeRequest(
+  ueId: string,
+  payload: { nom_ue?: string; semestre: number }
+): Promise<Response> {
+  return jsonRequest(`/ues/${ueId}`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
@@ -574,9 +632,24 @@ export async function deleteUeRequest(promoId: string, ueId: string): Promise<Re
   });
 }
 
+export async function deleteCatalogUeRequest(ueId: string): Promise<Response> {
+  return jsonRequest(`/ues/${ueId}`, {
+    method: 'DELETE',
+  });
+}
+
 export async function attachUeToPromotionRequest(promoId: string, ueId: string): Promise<Response> {
   return jsonRequest(`/promotions/${promoId}/ues/${ueId}/attach`, {
     method: 'POST',
+  });
+}
+
+export async function detachUeFromPromotionRequest(
+  promoId: string,
+  ueId: string
+): Promise<Response> {
+  return jsonRequest(`/promotions/${promoId}/ues/${ueId}/attach`, {
+    method: 'DELETE',
   });
 }
 
@@ -598,6 +671,51 @@ export async function createResultatRequest(
     },
     body: JSON.stringify(payload),
   });
+}
+
+export async function listDevoirsRequest(promoId: string): Promise<Response> {
+  return jsonRequest(`/promotions/${promoId}/devoirs`, { method: 'GET' });
+}
+
+export async function createDevoirRequest(
+  promoId: string,
+  payload: {
+    id_mat: string;
+    titre: string;
+    description?: string | null;
+    date_rendu?: string | null;
+  }
+): Promise<Response> {
+  return jsonRequest(`/promotions/${promoId}/devoirs`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateDevoirRequest(
+  promoId: string,
+  devoirId: string,
+  payload: {
+    id_mat?: string;
+    titre?: string;
+    description?: string | null;
+    date_rendu?: string | null;
+  }
+): Promise<Response> {
+  return jsonRequest(`/promotions/${promoId}/devoirs/${devoirId}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteDevoirRequest(promoId: string, devoirId: string): Promise<Response> {
+  return jsonRequest(`/promotions/${promoId}/devoirs/${devoirId}`, { method: 'DELETE' });
 }
 
 export async function updateResultatRequest(

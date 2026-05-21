@@ -37,10 +37,14 @@ export function SubjectsTab({ controller }: Props) {
     linkUes,
     linkUeId,
     setLinkUeId,
+    newLinkUeNom,
+    setNewLinkUeNom,
     newLinkUeSemestre,
     setNewLinkUeSemestre,
     editLinkUeId,
     setEditLinkUeId,
+    editLinkUeNom,
+    setEditLinkUeNom,
     editLinkUeSemestre,
     setEditLinkUeSemestre,
     linkReferentProfId,
@@ -267,10 +271,10 @@ export function SubjectsTab({ controller }: Props) {
             onChange={(e) => setLinkUeId(e.target.value)}
             className={adminUi.select}
           >
-            <option value="">Selectionner UE</option>
+            {linkUes.length === 0 && <option value="">Aucune UE disponible</option>}
             {linkUes.map((ue) => (
               <option key={ue.id} value={ue.id}>
-                UE semestre {ue.semestre}
+                {ue.nom_ue} - semestre {ue.semestre}
               </option>
             ))}
           </select>
@@ -297,6 +301,12 @@ export function SubjectsTab({ controller }: Props) {
           <p className="text-sm font-semibold text-violet-950">Gestion des UE de la promo</p>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <input
+              value={newLinkUeNom}
+              onChange={(e) => setNewLinkUeNom(e.target.value)}
+              placeholder="Nom UE"
+              className="h-9 w-56 rounded-lg border border-violet-200 px-2 text-sm"
+            />
+            <input
               value={newLinkUeSemestre}
               onChange={(e) => setNewLinkUeSemestre(e.target.value)}
               placeholder="Semestre (1-12)"
@@ -319,13 +329,22 @@ export function SubjectsTab({ controller }: Props) {
                 className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-zinc-200 bg-white p-2"
               >
                 <p className="text-sm text-zinc-700">
-                  UE {ue.id.slice(0, 8)} - semestre {ue.semestre}
+                  <span className="font-semibold">{ue.nom_ue}</span> - semestre {ue.semestre}
                 </p>
                 <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    value={editLinkUeId === ue.id ? editLinkUeNom : ue.nom_ue}
+                    onChange={(e) => {
+                      setEditLinkUeId(ue.id);
+                      setEditLinkUeNom(e.target.value);
+                    }}
+                    className="h-9 w-44 rounded-lg border border-zinc-300 px-2 text-sm"
+                  />
                   <input
                     value={editLinkUeId === ue.id ? editLinkUeSemestre : String(ue.semestre)}
                     onChange={(e) => {
                       setEditLinkUeId(ue.id);
+                      setEditLinkUeNom(editLinkUeId === ue.id ? editLinkUeNom : ue.nom_ue);
                       setEditLinkUeSemestre(e.target.value);
                     }}
                     className="h-9 w-28 rounded-lg border border-zinc-300 px-2 text-sm"
@@ -336,6 +355,7 @@ export function SubjectsTab({ controller }: Props) {
                     className="h-9 rounded-lg"
                     onClick={() => {
                       setEditLinkUeId(ue.id);
+                      setEditLinkUeNom(editLinkUeId === ue.id ? editLinkUeNom : ue.nom_ue);
                       void handleUpdateUeForLinkPromo();
                     }}
                   >

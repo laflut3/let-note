@@ -51,6 +51,7 @@ CREATE TABLE IF NOT EXISTS role (
 
 CREATE TABLE IF NOT EXISTS ue (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  nom_ue TEXT NOT NULL,
   semestre INTEGER NOT NULL
 );
 
@@ -78,6 +79,26 @@ CREATE TABLE IF NOT EXISTS mat_promo (
   PRIMARY KEY (id_mat, id_promo)
 );
 
+CREATE TABLE IF NOT EXISTS devoir (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id_promo UUID NOT NULL REFERENCES promotion(id) ON DELETE CASCADE,
+  id_mat TEXT NOT NULL,
+  titre TEXT NOT NULL,
+  description TEXT,
+  date_rendu TIMESTAMPTZ,
+  created_by UUID REFERENCES etudiant(id) ON DELETE SET NULL,
+  updated_by UUID REFERENCES etudiant(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT fk_devoir_mat_promo
+    FOREIGN KEY (id_mat, id_promo)
+    REFERENCES mat_promo(id_mat, id_promo)
+    ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS ix_devoir_promo ON devoir(id_promo);
+CREATE INDEX IF NOT EXISTS ix_devoir_mat ON devoir(id_mat);
+
 CREATE TABLE IF NOT EXISTS role_etu (
   id_role UUID NOT NULL REFERENCES role(id) ON DELETE CASCADE,
   id_etu UUID NOT NULL REFERENCES etudiant(id) ON DELETE CASCADE,
@@ -85,10 +106,19 @@ CREATE TABLE IF NOT EXISTS role_etu (
 );
 
 CREATE TABLE IF NOT EXISTS matiere_ue (
+  id_promo UUID NOT NULL,
+  id_ue UUID NOT NULL,
   id_matiere TEXT NOT NULL REFERENCES matiere(code_matiere) ON DELETE CASCADE,
-  id_ue UUID NOT NULL REFERENCES ue(id) ON DELETE CASCADE,
   coef_ue REAL NOT NULL,
-  PRIMARY KEY (id_matiere, id_ue)
+  PRIMARY KEY (id_promo, id_matiere),
+  CONSTRAINT fk_matiere_ue_promo_ue
+    FOREIGN KEY (id_promo, id_ue)
+    REFERENCES promo_ue(id_promo, id_ue)
+    ON DELETE CASCADE,
+  CONSTRAINT fk_matiere_ue_mat_promo
+    FOREIGN KEY (id_matiere, id_promo)
+    REFERENCES mat_promo(id_mat, id_promo)
+    ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS note (
@@ -130,6 +160,7 @@ CREATE TABLE IF NOT EXISTS referent_matiere_promo (
 
 CREATE TABLE IF NOT EXISTS note_resultat (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id_promo UUID NOT NULL,
   id_mat TEXT NOT NULL REFERENCES matiere(code_matiere) ON DELETE CASCADE,
   id_etu UUID NOT NULL REFERENCES etudiant(id) ON DELETE CASCADE,
   libelle TEXT NOT NULL,
@@ -139,10 +170,15 @@ CREATE TABLE IF NOT EXISTS note_resultat (
   created_by UUID REFERENCES etudiant(id) ON DELETE SET NULL,
   updated_by UUID REFERENCES etudiant(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT fk_note_resultat_mat_promo
+    FOREIGN KEY (id_mat, id_promo)
+    REFERENCES mat_promo(id_mat, id_promo)
+    ON DELETE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS ix_note_resultat_mat ON note_resultat(id_mat);
+CREATE INDEX IF NOT EXISTS ix_note_resultat_promo ON note_resultat(id_promo);
 CREATE INDEX IF NOT EXISTS ix_note_resultat_etu ON note_resultat(id_etu);
 
 CREATE TABLE IF NOT EXISTS matiere_resource (

@@ -2,29 +2,36 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BookOpen, Home, Layers, LogOut, Shield, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { ListControls } from '@/components/common/ListControls';
+import { UeManagementSection } from '@/components/ue/UeManagementSection';
+import { DevoirsSection } from '@/components/devoirs/DevoirsSection';
 import {
-  attachUeToPromotionRequest,
   addMatiereRequest,
   addProfesseurRequest,
   authMeRequest,
+  createCatalogUeRequest,
   createResultatRequest,
-  createUeRequest,
-  deleteUeRequest,
+  deleteCatalogUeRequest,
   getPromotionDashboardRequest,
+  listAllUesRequest,
   listAccessiblePromotionsRequest,
-  listUeCatalogRequest,
   listUesRequest,
   logoutRequest,
   setReferentRequest,
-  updateUeRequest,
+  updateCatalogUeRequest,
   type AuthMePayload,
   type PromotionDashboardPayload,
   type PromotionScope,
   type UeItem,
 } from '@/services/api';
 
-type DelegateTab = 'general' | 'ues' | 'matieres' | 'professeurs' | 'resultats';
+type DelegateTab =
+  | 'general'
+  | 'ues'
+  | 'matieres'
+  | 'professeurs'
+  | 'etudiants'
+  | 'devoirs'
+  | 'resultats';
 
 type Feedback = {
   type: '' | 'success' | 'error';
@@ -44,12 +51,15 @@ export function DelegatePage() {
   const [selectedPromoId, setSelectedPromoId] = useState('');
   const [dashboard, setDashboard] = useState<PromotionDashboardPayload | null>(null);
   const [ues, setUes] = useState<UeItem[]>([]);
+  const [allUes, setAllUes] = useState<UeItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
   const [feedback, setFeedback] = useState<Feedback>({ type: '', message: '' });
 
+  const [newUeNom, setNewUeNom] = useState('');
   const [newUeSemestre, setNewUeSemestre] = useState('1');
   const [editingUeId, setEditingUeId] = useState('');
+  const [editingUeNom, setEditingUeNom] = useState('');
   const [editingUeSemestre, setEditingUeSemestre] = useState('1');
   const [matiereCode, setMatiereCode] = useState('');
   const [matiereName, setMatiereName] = useState('');
@@ -67,11 +77,7 @@ export function DelegatePage() {
   const [resultSession, setResultSession] = useState('1');
   const [resultValue, setResultValue] = useState('0');
   const [resultCoef, setResultCoef] = useState('1');
-  const [ueSearch, setUeSearch] = useState('');
-  const [ueSort, setUeSort] = useState<'asc' | 'desc'>('asc');
-  const [ueSemesterFilter, setUeSemesterFilter] = useState<string>('all');
-  const [ueCatalogItems, setUeCatalogItems] = useState<UeItem[]>([]);
-  const [attachUeId, setAttachUeId] = useState('');
+  const [resultSemester, setResultSemester] = useState('all');
 
   const isAdmin = roles.includes('admin');
 
@@ -104,6 +110,7 @@ export function DelegatePage() {
 
       setPromotions(manageablePromotions);
       setSelectedPromoId((prev) => prev || manageablePromotions[0]?.id || '');
+      await loadAllUes();
     } catch {
       setErrorMessage('Erreur reseau. Reessayez.');
       setPromotions([]);
@@ -143,27 +150,26 @@ export function DelegatePage() {
       if (uesRes.ok) {
         const ueData = (await uesRes.json()) as UeItem[];
         setUes(ueData);
-        setSelectedUeId((prev) => prev || ueData[0]?.id || '');
-        const catalogRes = await listUeCatalogRequest(promoId);
-        if (catalogRes.ok) {
-          const catalog = (await catalogRes.json()) as Array<UeItem & { linked_to_promo: boolean }>;
-          const attachables = catalog.filter((item) => !item.linked_to_promo);
-          setUeCatalogItems(attachables);
-          setAttachUeId((prev) => prev || attachables[0]?.id || '');
-        } else {
-          setUeCatalogItems([]);
-          setAttachUeId('');
-        }
+        setSelectedUeId((prev) =>
+          ueData.some((ue) => ue.id === prev) ? prev : ueData[0]?.id || ''
+        );
       } else {
         setUes([]);
-        setUeCatalogItems([]);
-        setAttachUeId('');
       }
     } catch {
       setErrorMessage('Erreur reseau. Reessayez.');
       setDashboard(null);
       setUes([]);
     }
+  };
+
+  const loadAllUes = async () => {
+    const response = await listAllUesRequest();
+    if (!response.ok) {
+      setAllUes([]);
+      return;
+    }
+    setAllUes((await response.json()) as UeItem[]);
   };
 
   useEffect(() => {
@@ -212,33 +218,115 @@ export function DelegatePage() {
     return `${promotion.nom} (${promotion.annee_arrivee}-${promotion.annee_depart})`;
   }, [promotions, selectedPromoId]);
 
-  const filteredUes = useMemo(() => {
-    const query = ueSearch.trim().toLowerCase();
-    const semesterValue = ueSemesterFilter === 'all' ? null : Number(ueSemesterFilter);
-    const filtered = ues.filter((ue) => {
-      const bySearch =
-        !query || ue.id.toLowerCase().includes(query) || String(ue.semestre).includes(query);
-      const bySemester = semesterValue === null || ue.semestre === semesterValue;
-      return bySearch && bySemester;
-    });
-    return filtered.sort((a, b) => {
-      if (a.semestre !== b.semestre) {
-        return ueSort === 'asc' ? a.semestre - b.semestre : b.semestre - a.semestre;
-      }
-      const cmp = a.id.localeCompare(b.id);
-      return ueSort === 'asc' ? cmp : -cmp;
-    });
-  }, [ues, ueSearch, ueSort, ueSemesterFilter]);
-
-  const ueSemesters = useMemo(
-    () => Array.from(new Set(ues.map((ue) => ue.semestre))).sort((a, b) => a - b),
-    [ues]
+  const resultSemesters = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          (dashboard?.matieres ?? [])
+            .map((matiere) => matiere.ue_semestre)
+            .filter((semestre): semestre is number => semestre !== null)
+        )
+      ).sort((a, b) => a - b),
+    [dashboard?.matieres]
   );
 
+  const resultUeGroups = useMemo(() => {
+    const selectedSemester = resultSemester === 'all' ? null : Number(resultSemester);
+    const groups = new Map<
+      string,
+      {
+        id: string;
+        nom: string;
+        semestre: number;
+        matieres: NonNullable<PromotionDashboardPayload['matieres']>;
+      }
+    >();
+
+    for (const matiere of dashboard?.matieres ?? []) {
+      if (!matiere.ue_id || !matiere.ue_semestre) continue;
+      if (selectedSemester !== null && matiere.ue_semestre !== selectedSemester) continue;
+      const current = groups.get(matiere.ue_id) ?? {
+        id: matiere.ue_id,
+        nom: matiere.ue_nom ?? 'UE sans nom',
+        semestre: matiere.ue_semestre,
+        matieres: [],
+      };
+      current.matieres.push(matiere);
+      groups.set(matiere.ue_id, current);
+    }
+
+    return Array.from(groups.values()).sort((a, b) => {
+      if (a.semestre !== b.semestre) return a.semestre - b.semestre;
+      return a.nom.localeCompare(b.nom, 'fr');
+    });
+  }, [dashboard?.matieres, resultSemester]);
+
+  const refreshDelegateUes = async () => {
+    await loadAllUes();
+    if (selectedPromoId) {
+      await loadPromotionData(selectedPromoId);
+    }
+  };
+
+  const handleCreateDelegateUe = async () => {
+    await runAction(
+      () =>
+        createCatalogUeRequest({
+          nom_ue: newUeNom.trim(),
+          semestre: Number(newUeSemestre),
+        }),
+      'UE creee dans le catalogue.'
+    );
+    await loadAllUes();
+  };
+
+  const handleUpdateDelegateUe = async () => {
+    if (!editingUeId) {
+      setFeedback({ type: 'error', message: 'Selectionnez une UE.' });
+      return;
+    }
+    await runAction(
+      () =>
+        updateCatalogUeRequest(editingUeId, {
+          nom_ue: editingUeNom.trim() || undefined,
+          semestre: Number(editingUeSemestre) || 1,
+        }),
+      'UE modifiee.'
+    );
+    await loadAllUes();
+  };
+
+  const handleDeleteDelegateUe = async (ueId: string) => {
+    await runAction(() => deleteCatalogUeRequest(ueId), 'UE supprimee.');
+    await loadAllUes();
+  };
+
+  const delegateUeTheme = {
+    panel:
+      'mt-4 rounded-2xl border border-[#eadfce] bg-white p-4 shadow-[0_12px_30px_rgba(79,23,48,0.08)] sm:p-6',
+    title: 'text-xl font-semibold text-[#4f1730]',
+    input: 'h-11 rounded-xl border border-[#e7d8c4] bg-white px-3',
+    select: 'h-10 rounded-xl border border-[#e7d8c4] bg-white px-3 text-sm',
+    primaryButton: 'h-10 rounded-xl bg-[#6d2745] text-white hover:bg-[#4f1730]',
+    row: 'flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#eadfce] bg-[#fbf7f0] p-4',
+    modalOverlay:
+      'fixed inset-0 z-50 flex items-center justify-center bg-[#4f1730]/35 p-4 backdrop-blur-sm',
+    modal: 'w-full max-w-xl rounded-3xl border border-[#eadfce] bg-white p-6 shadow-2xl',
+  };
+
+  useEffect(() => {
+    const visibleMatiereIds = resultUeGroups.flatMap((ue) =>
+      ue.matieres.map((matiere) => matiere.code_matiere)
+    );
+    if (!visibleMatiereIds.includes(resultMatiereId)) {
+      setResultMatiereId(visibleMatiereIds[0] ?? '');
+    }
+  }, [resultMatiereId, resultUeGroups]);
+
   return (
-    <main className="min-h-screen bg-[linear-gradient(180deg,#f7f0e5,#f1e7d8)] p-3 sm:p-4 md:p-8">
-      <section className="mx-auto max-w-[1280px] w-full space-y-4">
-        <nav className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--auth-card-border)] bg-[linear-gradient(135deg,#4f1730,#6d2745)] px-4 py-3 text-white shadow-[0_16px_38px_rgba(36,14,30,0.28)]">
+    <main className="min-h-screen bg-[linear-gradient(180deg,#f7f0e5,#f1e7d8)] p-3 sm:p-5 md:p-8">
+      <section className="mx-auto w-full max-w-[1380px] space-y-6 rounded-[28px] border border-[#eadfce] bg-white/82 p-4 shadow-[0_24px_80px_rgba(79,23,48,0.14)] backdrop-blur sm:p-6">
+        <nav className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#e7d8c4] bg-[linear-gradient(135deg,#4f1730,#6d2745)] px-4 py-3 text-white shadow-[0_16px_38px_rgba(36,14,30,0.22)]">
           <div className="flex flex-wrap items-center gap-2">
             {(
               [
@@ -246,6 +334,8 @@ export function DelegatePage() {
                 ['ues', 'UE'],
                 ['matieres', 'Matieres'],
                 ['professeurs', 'Professeurs'],
+                ['etudiants', 'Etudiants'],
+                ['devoirs', 'Devoirs'],
                 ['resultats', 'Resultats'],
               ] as const
             ).map(([value, label]) => (
@@ -262,6 +352,8 @@ export function DelegatePage() {
                 {value === 'ues' && <Layers className="h-4 w-4" />}
                 {value === 'matieres' && <BookOpen className="h-4 w-4" />}
                 {value === 'professeurs' && <Users className="h-4 w-4" />}
+                {value === 'etudiants' && <Users className="h-4 w-4" />}
+                {value === 'devoirs' && <BookOpen className="h-4 w-4" />}
                 {value === 'resultats' && <Shield className="h-4 w-4" />}
                 <span className="hidden sm:inline">{label}</span>
               </button>
@@ -300,7 +392,7 @@ export function DelegatePage() {
           </div>
         </nav>
 
-        <section className="rounded-2xl border border-black/10 bg-white/85 p-4 shadow-[0_14px_34px_rgba(26,18,8,0.12)]">
+        <section className="rounded-2xl border border-[#eadfce] bg-white p-4 shadow-[0_12px_30px_rgba(79,23,48,0.08)] sm:p-6">
           <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">Promotions deleguees</p>
           <div className="mt-3 flex flex-wrap gap-2">
             {isLoading ? (
@@ -318,8 +410,8 @@ export function DelegatePage() {
                     className={[
                       'rounded-xl border px-3 py-2 text-sm transition',
                       active
-                        ? 'border-zinc-900 bg-zinc-900 text-white'
-                        : 'border-zinc-300 bg-white text-zinc-700 hover:border-zinc-500',
+                        ? 'border-[#6d2745] bg-[#6d2745] text-white'
+                        : 'border-[#e7d8c4] bg-white text-zinc-700 hover:border-[#6d2745]',
                     ].join(' ')}
                   >
                     {promotion.nom} ({promotion.annee_arrivee}-{promotion.annee_depart})
@@ -330,7 +422,7 @@ export function DelegatePage() {
           </div>
         </section>
 
-        <section className="rounded-2xl border border-black/10 bg-white/90 p-5 shadow-[0_14px_34px_rgba(26,18,8,0.12)]">
+        <section className="rounded-2xl border border-[#eadfce] bg-white p-4 shadow-[0_12px_30px_rgba(79,23,48,0.08)] sm:p-6">
           <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">Espace delegue</p>
           <h1 className="mt-2 text-2xl font-semibold text-zinc-900 md:text-3xl">{promoLabel}</h1>
           {errorMessage && (
@@ -361,137 +453,25 @@ export function DelegatePage() {
           )}
 
           {activeTab === 'ues' && selectedPromoId && (
-            <div className="mt-4 space-y-4">
-              <div className="grid gap-3 md:grid-cols-3">
-                <input
-                  value={newUeSemestre}
-                  onChange={(e) => setNewUeSemestre(e.target.value)}
-                  placeholder="Semestre UE"
-                  className="h-11 rounded-xl border border-zinc-300 px-3"
-                />
-                <Button
-                  type="button"
-                  className="h-11 rounded-xl bg-zinc-900 text-white hover:bg-zinc-800"
-                  onClick={() =>
-                    void runAction(
-                      () => createUeRequest(selectedPromoId, { semestre: Number(newUeSemestre) }),
-                      'UE creee.'
-                    )
-                  }
-                >
-                  Creer UE
-                </Button>
-              </div>
-              <div className="grid gap-3 md:grid-cols-3">
-                <select
-                  value={attachUeId}
-                  onChange={(e) => setAttachUeId(e.target.value)}
-                  className="h-11 rounded-xl border border-zinc-300 px-3 md:col-span-2"
-                >
-                  <option value="">Lier une UE existante</option>
-                  {ueCatalogItems.map((ue) => (
-                    <option key={ue.id} value={ue.id}>
-                      UE {ue.id.slice(0, 8)} - semestre {ue.semestre}
-                    </option>
-                  ))}
-                </select>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="h-11 rounded-xl"
-                  disabled={!attachUeId}
-                  onClick={() =>
-                    void runAction(
-                      () => attachUeToPromotionRequest(selectedPromoId, attachUeId),
-                      'UE liee a la promotion.'
-                    )
-                  }
-                >
-                  Lier UE existante
-                </Button>
-              </div>
-
-              <div className="space-y-2 rounded-xl border border-zinc-200 bg-zinc-50 p-3">
-                <p className="text-sm font-semibold text-zinc-800">UE de la promotion</p>
-                <ListControls
-                  className="mt-2"
-                  searchValue={ueSearch}
-                  onSearchChange={setUeSearch}
-                  searchPlaceholder="Rechercher (id UE, semestre)"
-                  sortValue={ueSort}
-                  onSortChange={setUeSort}
-                  resultCount={filteredUes.length}
-                />
-                <div className="mt-2">
-                  <select
-                    value={ueSemesterFilter}
-                    onChange={(e) => setUeSemesterFilter(e.target.value)}
-                    className="h-10 rounded-xl border border-zinc-300 bg-white px-3 text-sm"
-                  >
-                    <option value="all">Tous les semestres</option>
-                    {ueSemesters.map((semester) => (
-                      <option key={semester} value={String(semester)}>
-                        Semestre {semester}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                {filteredUes.length === 0 && (
-                  <p className="text-xs text-zinc-600">Aucune UE liee a cette promotion.</p>
-                )}
-                {filteredUes.map((ue) => (
-                  <div
-                    key={ue.id}
-                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-zinc-200 bg-white p-2"
-                  >
-                    <div className="text-sm text-zinc-700">
-                      UE {ue.id.slice(0, 8)} - semestre {ue.semestre}
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <input
-                        value={editingUeId === ue.id ? editingUeSemestre : String(ue.semestre)}
-                        onChange={(e) => {
-                          setEditingUeId(ue.id);
-                          setEditingUeSemestre(e.target.value);
-                        }}
-                        className="h-9 w-28 rounded-lg border border-zinc-300 px-2 text-sm"
-                      />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="h-9 rounded-lg"
-                        onClick={() =>
-                          void runAction(
-                            () =>
-                              updateUeRequest(selectedPromoId, ue.id, {
-                                semestre:
-                                  Number(editingUeId === ue.id ? editingUeSemestre : ue.semestre) ||
-                                  ue.semestre,
-                              }),
-                            'UE modifiee.'
-                          )
-                        }
-                      >
-                        Modifier
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="h-9 rounded-lg border-rose-300 text-rose-700 hover:bg-rose-50"
-                        onClick={() =>
-                          void runAction(
-                            () => deleteUeRequest(selectedPromoId, ue.id),
-                            'UE supprimee.'
-                          )
-                        }
-                      >
-                        Supprimer
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <UeManagementSection
+              ueItems={allUes}
+              newUeNom={newUeNom}
+              setNewUeNom={setNewUeNom}
+              newUeSemestre={newUeSemestre}
+              setNewUeSemestre={setNewUeSemestre}
+              editUeId={editingUeId}
+              setEditUeId={setEditingUeId}
+              editUeNom={editingUeNom}
+              setEditUeNom={setEditingUeNom}
+              editUeSemestre={editingUeSemestre}
+              setEditUeSemestre={setEditingUeSemestre}
+              onCreate={handleCreateDelegateUe}
+              onUpdate={handleUpdateDelegateUe}
+              onDelete={handleDeleteDelegateUe}
+              onRefresh={refreshDelegateUes}
+              onFeedback={setFeedback}
+              theme={delegateUeTheme}
+            />
           )}
 
           {activeTab === 'matieres' && selectedPromoId && (
@@ -514,10 +494,10 @@ export function DelegatePage() {
                   onChange={(e) => setSelectedUeId(e.target.value)}
                   className="h-11 rounded-xl border border-zinc-300 px-3"
                 >
-                  <option value="">Selectionner UE</option>
+                  {ues.length === 0 && <option value="">Aucune UE disponible</option>}
                   {ues.map((ue) => (
                     <option key={ue.id} value={ue.id}>
-                      UE semestre {ue.semestre}
+                      {ue.nom_ue} - semestre {ue.semestre}
                     </option>
                   ))}
                 </select>
@@ -652,21 +632,106 @@ export function DelegatePage() {
             </div>
           )}
 
+          {activeTab === 'etudiants' && selectedPromoId && (
+            <div className="mt-4 overflow-x-auto rounded-xl border border-zinc-200">
+              <table className="min-w-full text-sm">
+                <thead className="bg-zinc-100 text-zinc-800">
+                  <tr>
+                    <th className="px-3 py-2 text-left">Etudiant</th>
+                    <th className="px-3 py-2 text-left">Numero</th>
+                    <th className="px-3 py-2 text-left">Email</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(dashboard?.etudiants ?? []).map((etudiant) => (
+                    <tr key={etudiant.id} className="border-t border-zinc-200 bg-white">
+                      <td className="px-3 py-2">
+                        {etudiant.prenom} {etudiant.nom}
+                      </td>
+                      <td className="px-3 py-2">{etudiant.numero_etudiant ?? '-'}</td>
+                      <td className="px-3 py-2">{etudiant.email}</td>
+                    </tr>
+                  ))}
+                  {(dashboard?.etudiants ?? []).length === 0 && (
+                    <tr className="border-t border-zinc-200 bg-white">
+                      <td className="px-3 py-2 text-zinc-500" colSpan={3}>
+                        Aucun etudiant dans cette promotion.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {activeTab === 'devoirs' && selectedPromoId && (
+            <DevoirsSection
+              promotions={promotions}
+              matieres={dashboard?.matieres ?? []}
+              selectedPromoId={selectedPromoId}
+              onPromoChange={setSelectedPromoId}
+              onFeedback={setFeedback}
+              theme={{
+                panel:
+                  'mt-4 rounded-2xl border border-[#eadfce] bg-white p-4 shadow-[0_12px_30px_rgba(79,23,48,0.08)] sm:p-6',
+                title: 'text-xl font-semibold text-[#4f1730]',
+                input: 'h-11 rounded-xl border border-[#e7d8c4] bg-white px-3',
+                select: 'h-11 rounded-xl border border-[#e7d8c4] bg-white px-3',
+                primaryButton: 'h-10 rounded-xl bg-[#6d2745] text-white hover:bg-[#4f1730]',
+                row: 'flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#eadfce] bg-[#fbf7f0] p-4',
+              }}
+            />
+          )}
+
           {activeTab === 'resultats' && selectedPromoId && (
             <div className="mt-4 space-y-4">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <select
-                  value={resultMatiereId}
-                  onChange={(e) => setResultMatiereId(e.target.value)}
-                  className="h-11 rounded-xl border border-zinc-300 px-3"
-                >
-                  <option value="">Selectionner matiere</option>
-                  {(dashboard?.matieres ?? []).map((matiere) => (
-                    <option key={matiere.code_matiere} value={matiere.code_matiere}>
-                      {matiere.nom_matiere}
-                    </option>
+              <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <select
+                    value={resultSemester}
+                    onChange={(e) => setResultSemester(e.target.value)}
+                    className="h-11 rounded-xl border border-zinc-300 bg-white px-3"
+                  >
+                    <option value="all">Tous les semestres</option>
+                    {resultSemesters.map((semester) => (
+                      <option key={semester} value={String(semester)}>
+                        Semestre {semester}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="mt-3 space-y-3">
+                  {resultUeGroups.map((ue) => (
+                    <div key={ue.id} className="rounded-lg border border-zinc-200 bg-white p-3">
+                      <p className="text-sm font-semibold text-zinc-900">
+                        {ue.nom} - semestre {ue.semestre}
+                      </p>
+                      <div className="mt-2 space-y-2 pl-4">
+                        {ue.matieres.map((matiere) => (
+                          <button
+                            key={matiere.code_matiere}
+                            type="button"
+                            onClick={() => setResultMatiereId(matiere.code_matiere)}
+                            className={[
+                              'block w-full rounded-lg border px-3 py-2 text-left text-sm transition',
+                              resultMatiereId === matiere.code_matiere
+                                ? 'border-[#6d2745] bg-[#6d2745] text-white'
+                                : 'border-zinc-200 bg-zinc-50 text-zinc-800 hover:border-[#6d2745]',
+                            ].join(' ')}
+                          >
+                            {matiere.nom_matiere}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   ))}
-                </select>
+                  {resultUeGroups.length === 0 && (
+                    <p className="text-sm text-zinc-500">Aucune matiere pour ce semestre.</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
                 <select
                   value={resultEtudiantId}
                   onChange={(e) => setResultEtudiantId(e.target.value)}
@@ -705,7 +770,8 @@ export function DelegatePage() {
                 />
                 <Button
                   type="button"
-                  className="h-10 rounded-xl bg-zinc-900 text-white hover:bg-zinc-800 sm:col-span-2"
+                  className="h-10 rounded-xl bg-[#6d2745] text-white hover:bg-[#4f1730] sm:col-span-2"
+                  disabled={!resultMatiereId}
                   onClick={() =>
                     void runAction(
                       () =>

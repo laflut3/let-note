@@ -456,6 +456,8 @@ pub async fn create_matiere(
     r#"
     INSERT INTO matiere (code_matiere, nom_matiere, annee)
     VALUES ($1, $2, $3)
+    ON CONFLICT (code_matiere)
+    DO UPDATE SET nom_matiere = EXCLUDED.nom_matiere
     "#,
   )
   .bind(code)
@@ -623,22 +625,20 @@ pub async fn link_matiere_to_all_promotions(
   .await
   .map_err(map_schema_error("unable to upsert subject"))?;
 
-  sqlx::query(
-    r#"
-    INSERT INTO matiere_ue (id_matiere, id_ue, coef_ue)
-    VALUES ($1, $2, $3)
-    ON CONFLICT (id_matiere, id_ue)
-    DO UPDATE SET coef_ue = EXCLUDED.coef_ue
-    "#,
-  )
-  .bind(&code)
-  .bind(payload.ue_id)
-  .bind(payload.coef_ue.unwrap_or(1.0))
-  .execute(&mut *tx)
-  .await
-  .map_err(map_schema_error("unable to link subject to UE"))?;
-
   for promo_id in promo_ids {
+    sqlx::query(
+      r#"
+      INSERT INTO promo_ue (id_promo, id_ue)
+      VALUES ($1, $2)
+      ON CONFLICT DO NOTHING
+      "#,
+    )
+    .bind(promo_id)
+    .bind(payload.ue_id)
+    .execute(&mut *tx)
+    .await
+    .map_err(map_schema_error("unable to link UE to promotion"))?;
+
     sqlx::query(
       r#"
       INSERT INTO mat_promo (id_mat, id_promo)
@@ -651,6 +651,22 @@ pub async fn link_matiere_to_all_promotions(
     .execute(&mut *tx)
     .await
     .map_err(map_schema_error("unable to link subject to promotion"))?;
+
+    sqlx::query(
+      r#"
+      INSERT INTO matiere_ue (id_promo, id_ue, id_matiere, coef_ue)
+      VALUES ($1, $2, $3, $4)
+      ON CONFLICT (id_promo, id_matiere)
+      DO UPDATE SET id_ue = EXCLUDED.id_ue, coef_ue = EXCLUDED.coef_ue
+      "#,
+    )
+    .bind(promo_id)
+    .bind(payload.ue_id)
+    .bind(&code)
+    .bind(payload.coef_ue.unwrap_or(1.0))
+    .execute(&mut *tx)
+    .await
+    .map_err(map_schema_error("unable to link subject to UE"))?;
 
     sqlx::query(
       r#"
@@ -765,18 +781,16 @@ pub async fn link_matiere_to_promotion(
 
   sqlx::query(
     r#"
-    INSERT INTO matiere_ue (id_matiere, id_ue, coef_ue)
-    VALUES ($1, $2, $3)
-    ON CONFLICT (id_matiere, id_ue)
-    DO UPDATE SET coef_ue = EXCLUDED.coef_ue
+    INSERT INTO promo_ue (id_promo, id_ue)
+    VALUES ($1, $2)
+    ON CONFLICT DO NOTHING
     "#,
   )
-  .bind(&code)
+  .bind(payload.promo_id)
   .bind(payload.ue_id)
-  .bind(payload.coef_ue.unwrap_or(1.0))
   .execute(&mut *tx)
   .await
-  .map_err(map_schema_error("unable to link subject to UE"))?;
+  .map_err(map_schema_error("unable to link UE to promotion"))?;
 
   sqlx::query(
     r#"
@@ -790,6 +804,22 @@ pub async fn link_matiere_to_promotion(
   .execute(&mut *tx)
   .await
   .map_err(map_schema_error("unable to link subject to promotion"))?;
+
+  sqlx::query(
+    r#"
+    INSERT INTO matiere_ue (id_promo, id_ue, id_matiere, coef_ue)
+    VALUES ($1, $2, $3, $4)
+    ON CONFLICT (id_promo, id_matiere)
+    DO UPDATE SET id_ue = EXCLUDED.id_ue, coef_ue = EXCLUDED.coef_ue
+    "#,
+  )
+  .bind(payload.promo_id)
+  .bind(payload.ue_id)
+  .bind(&code)
+  .bind(payload.coef_ue.unwrap_or(1.0))
+  .execute(&mut *tx)
+  .await
+  .map_err(map_schema_error("unable to link subject to UE"))?;
 
   sqlx::query(
     r#"

@@ -92,7 +92,11 @@ export function DashboardPage() {
               )}
 
               {controller.activeTab === 'notes' && (
-                <ResultsModule dashboard={controller.dashboard} />
+                <ResultsModule
+                  dashboard={controller.dashboard}
+                  promoId={controller.selectedPromoId}
+                  onSaved={controller.refreshDashboard}
+                />
               )}
             </section>
           </div>

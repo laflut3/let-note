@@ -13,6 +13,9 @@ use crate::domains::{middleware, services::promo_service};
 
 pub fn promo_routes(db: PgPool) -> Router<PgPool> {
   Router::new()
+    .route("/ues", get(list_ues).post(create_ue))
+    .route("/ues/{ue_id}", put(update_ue).delete(delete_ue))
+    .route("/ues/{ue_id}/promotions", get(list_ue_promotions))
     .route("/promotions", get(list_accessible_promotions))
     .route("/promotions/{promo_id}/dashboard", get(get_promo_dashboard))
     .route("/promotions/{promo_id}/ical", get(get_promo_ical))
@@ -38,7 +41,10 @@ pub fn promo_routes(db: PgPool) -> Router<PgPool> {
     )
     .route(
       "/promotions/{promo_id}/ues/{ue_id}/attach",
-      middleware::right_admin_or_delegue_for_promo(post(attach_ue_to_promo), db.clone()),
+      middleware::right_admin_or_delegue_for_promo(
+        post(attach_ue_to_promo).delete(detach_ue_from_promo),
+        db.clone(),
+      ),
     )
     .route(
       "/promotions/{promo_id}/matieres",
@@ -47,6 +53,21 @@ pub fn promo_routes(db: PgPool) -> Router<PgPool> {
     .route(
       "/promotions/{promo_id}/professeurs",
       middleware::right_admin_or_delegue_for_promo(post(add_professeur_to_promo), db.clone()),
+    )
+    .route(
+      "/promotions/{promo_id}/devoirs",
+      get(list_devoirs_for_promo),
+    )
+    .route(
+      "/promotions/{promo_id}/devoirs",
+      middleware::right_admin_or_delegue_for_promo(post(create_devoir_for_promo), db.clone()),
+    )
+    .route(
+      "/promotions/{promo_id}/devoirs/{devoir_id}",
+      middleware::right_admin_or_delegue_for_promo(
+        put(update_devoir_for_promo).delete(delete_devoir_for_promo),
+        db.clone(),
+      ),
     )
     .route(
       "/promotions/{promo_id}/matieres/{matiere_id}/referent/{prof_id}",
@@ -151,6 +172,83 @@ async fn create_ue_for_promo(
   }
 }
 
+async fn list_ues(State(db): State<PgPool>, headers: HeaderMap) -> impl IntoResponse {
+  let auth = match middleware::extract_auth_context(&headers, &db).await {
+    Ok(value) => value,
+    Err(error) => return error.into_response(),
+  };
+
+  match promo_service::list_ues(&db, &auth).await {
+    Ok(data) => axum::Json(data).into_response(),
+    Err(error) => error.into_response(),
+  }
+}
+
+async fn create_ue(
+  State(db): State<PgPool>,
+  headers: HeaderMap,
+  Json(payload): Json<promo_service::CreateUeInput>,
+) -> impl IntoResponse {
+  let auth = match middleware::extract_auth_context(&headers, &db).await {
+    Ok(value) => value,
+    Err(error) => return error.into_response(),
+  };
+
+  match promo_service::create_ue(&db, &auth, payload).await {
+    Ok(data) => axum::Json(data).into_response(),
+    Err(error) => error.into_response(),
+  }
+}
+
+async fn update_ue(
+  State(db): State<PgPool>,
+  headers: HeaderMap,
+  Path(ue_id): Path<Uuid>,
+  Json(payload): Json<promo_service::UpdateUeInput>,
+) -> impl IntoResponse {
+  let auth = match middleware::extract_auth_context(&headers, &db).await {
+    Ok(value) => value,
+    Err(error) => return error.into_response(),
+  };
+
+  match promo_service::update_ue(&db, &auth, ue_id, payload).await {
+    Ok(data) => axum::Json(data).into_response(),
+    Err(error) => error.into_response(),
+  }
+}
+
+async fn delete_ue(
+  State(db): State<PgPool>,
+  headers: HeaderMap,
+  Path(ue_id): Path<Uuid>,
+) -> impl IntoResponse {
+  let auth = match middleware::extract_auth_context(&headers, &db).await {
+    Ok(value) => value,
+    Err(error) => return error.into_response(),
+  };
+
+  match promo_service::delete_ue(&db, &auth, ue_id).await {
+    Ok(data) => axum::Json(data).into_response(),
+    Err(error) => error.into_response(),
+  }
+}
+
+async fn list_ue_promotions(
+  State(db): State<PgPool>,
+  headers: HeaderMap,
+  Path(ue_id): Path<Uuid>,
+) -> impl IntoResponse {
+  let auth = match middleware::extract_auth_context(&headers, &db).await {
+    Ok(value) => value,
+    Err(error) => return error.into_response(),
+  };
+
+  match promo_service::list_ue_promotions(&db, &auth, ue_id).await {
+    Ok(data) => axum::Json(data).into_response(),
+    Err(error) => error.into_response(),
+  }
+}
+
 async fn list_ue_catalog_for_promo(
   State(db): State<PgPool>,
   Path(promo_id): Path<Uuid>,
@@ -192,6 +290,16 @@ async fn attach_ue_to_promo(
   }
 }
 
+async fn detach_ue_from_promo(
+  State(db): State<PgPool>,
+  Path((promo_id, ue_id)): Path<(Uuid, Uuid)>,
+) -> impl IntoResponse {
+  match promo_service::detach_ue_from_promo(&db, promo_id, ue_id).await {
+    Ok(data) => axum::Json(data).into_response(),
+    Err(error) => error.into_response(),
+  }
+}
+
 async fn add_matiere_to_promo(
   State(db): State<PgPool>,
   Path(promo_id): Path<Uuid>,
@@ -219,6 +327,66 @@ async fn set_referent_for_matiere(
   Path((promo_id, matiere_id, prof_id)): Path<(Uuid, String, Uuid)>,
 ) -> impl IntoResponse {
   match promo_service::set_referent_for_matiere(&db, promo_id, matiere_id, prof_id).await {
+    Ok(data) => axum::Json(data).into_response(),
+    Err(error) => error.into_response(),
+  }
+}
+
+async fn list_devoirs_for_promo(
+  State(db): State<PgPool>,
+  headers: HeaderMap,
+  Path(promo_id): Path<Uuid>,
+) -> impl IntoResponse {
+  let auth = match middleware::extract_auth_context(&headers, &db).await {
+    Ok(value) => value,
+    Err(error) => return error.into_response(),
+  };
+
+  match promo_service::list_devoirs_for_promo(&db, &auth, promo_id).await {
+    Ok(data) => axum::Json(data).into_response(),
+    Err(error) => error.into_response(),
+  }
+}
+
+async fn create_devoir_for_promo(
+  State(db): State<PgPool>,
+  headers: HeaderMap,
+  Path(promo_id): Path<Uuid>,
+  Json(payload): Json<promo_service::CreateDevoirInput>,
+) -> impl IntoResponse {
+  let auth = match middleware::extract_auth_context(&headers, &db).await {
+    Ok(value) => value,
+    Err(error) => return error.into_response(),
+  };
+
+  match promo_service::create_devoir_for_promo(&db, &auth, promo_id, payload).await {
+    Ok(data) => axum::Json(data).into_response(),
+    Err(error) => error.into_response(),
+  }
+}
+
+async fn update_devoir_for_promo(
+  State(db): State<PgPool>,
+  headers: HeaderMap,
+  Path((promo_id, devoir_id)): Path<(Uuid, Uuid)>,
+  Json(payload): Json<promo_service::UpdateDevoirInput>,
+) -> impl IntoResponse {
+  let auth = match middleware::extract_auth_context(&headers, &db).await {
+    Ok(value) => value,
+    Err(error) => return error.into_response(),
+  };
+
+  match promo_service::update_devoir_for_promo(&db, &auth, promo_id, devoir_id, payload).await {
+    Ok(data) => axum::Json(data).into_response(),
+    Err(error) => error.into_response(),
+  }
+}
+
+async fn delete_devoir_for_promo(
+  State(db): State<PgPool>,
+  Path((promo_id, devoir_id)): Path<(Uuid, Uuid)>,
+) -> impl IntoResponse {
+  match promo_service::delete_devoir_for_promo(&db, promo_id, devoir_id).await {
     Ok(data) => axum::Json(data).into_response(),
     Err(error) => error.into_response(),
   }
