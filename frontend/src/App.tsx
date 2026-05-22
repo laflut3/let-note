@@ -104,11 +104,11 @@ function AppContent() {
 
   return (
     <ThemeContextProvider value={{ theme, resolvedTheme, toggleTheme }}>
-      <div className="min-h-screen bg-[var(--surface-1)] text-foreground">
+      <div className="flex min-h-screen flex-col bg-[var(--surface-1)] text-foreground">
         {isLoginRoute ? (
           <ThemeToggle theme={theme} resolvedTheme={resolvedTheme} onToggle={toggleTheme} />
         ) : null}
-        <div className="pb-36">
+        <div className="flex-1">
           <Routes>
             <Route
               path={APP_ROUTES.root}

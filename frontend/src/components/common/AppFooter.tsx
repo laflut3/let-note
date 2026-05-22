@@ -4,7 +4,7 @@ import { APP_ROUTES } from '@/lib/constants/routes';
 
 export function AppFooter() {
   return (
-    <footer className="fixed inset-x-0 bottom-0 z-40 border-t border-[var(--surface-border)] bg-[var(--surface-2)] shadow-[0_-8px_24px_rgba(15,10,6,0.12)] backdrop-blur">
+    <footer className="mt-auto border-t border-[var(--surface-border)] bg-[var(--surface-2)]">
       <div className="mx-auto flex w-full max-w-[1300px] flex-col gap-4 px-4 py-5 sm:px-6 lg:px-8">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm font-medium text-foreground">Let-Note</p>

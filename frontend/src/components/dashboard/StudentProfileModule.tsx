@@ -1,4 +1,5 @@
 import { Button } from '@/components/ui/button';
+import { useMemo, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 
 type ProfileForm = {
@@ -27,15 +28,32 @@ export function StudentProfileModule({
   isSavingProfile,
   profileMessage,
 }: StudentProfileModuleProps) {
+  const [imageError, setImageError] = useState(false);
+  const initials = useMemo(() => {
+    const first = profileForm.prenom?.trim()?.[0] ?? '';
+    const last = profileForm.nom?.trim()?.[0] ?? '';
+    const value = `${first}${last}`.toUpperCase();
+    return value || 'ET';
+  }, [profileForm.prenom, profileForm.nom]);
+
+  const hasPhoto = Boolean(profileForm.photo_url) && !imageError;
+
   return (
     <section className="rounded-2xl border border-[var(--surface-border)] bg-[var(--surface-2)] p-4 shadow-sm">
       <h3 className="text-base font-semibold text-foreground">Profil etudiant</h3>
       <div className="mt-3 flex items-center gap-3 rounded-xl border border-[var(--surface-border)] bg-[var(--surface-muted)] p-3">
-        <img
-          src={profileForm.photo_url || '/favicon.ico'}
-          alt="Photo de profil"
-          className="h-16 w-16 rounded-xl border border-[var(--surface-border)] object-cover"
-        />
+        {hasPhoto ? (
+          <img
+            src={profileForm.photo_url}
+            alt="Photo de profil"
+            className="h-16 w-16 rounded-xl border border-[var(--surface-border)] object-cover"
+            onError={() => setImageError(true)}
+          />
+        ) : (
+          <div className="flex h-16 w-16 items-center justify-center rounded-xl border border-[var(--surface-border)] bg-[var(--surface-1)] text-lg font-semibold text-foreground">
+            {initials}
+          </div>
+        )}
         <div className="min-w-0 flex-1 space-y-2">
           <p className="text-xs text-muted-foreground">Photo (optionnelle)</p>
           <input
@@ -45,6 +63,7 @@ export function StudentProfileModule({
             onChange={(event) => {
               const file = event.target.files?.[0];
               if (file) {
+                setImageError(false);
                 void uploadProfilePhoto(file);
               }
             }}

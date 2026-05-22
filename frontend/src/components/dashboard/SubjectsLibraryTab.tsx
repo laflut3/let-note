@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Download, Eye, Search } from 'lucide-react';
+import { ChevronDown, ChevronRight, Download, Eye, Search } from 'lucide-react';
 import { getResourceFileUrl, type PromotionDashboardPayload } from '@/services/api';
 
 type SubjectsLibraryTabProps = {
@@ -26,6 +26,7 @@ export function SubjectsLibraryTab({ dashboard }: SubjectsLibraryTabProps) {
   const [semesterFilter, setSemesterFilter] = useState('all');
   const [resourceFilter, setResourceFilter] = useState<'all' | 'with' | 'without'>('all');
   const [sortBy, setSortBy] = useState<'recent' | 'alpha'>('recent');
+  const [expandedCodes, setExpandedCodes] = useState<string[]>([]);
 
   const subjects = useMemo<SubjectActivity[]>(() => {
     return (dashboard?.matieres ?? []).map((matiere) => {
@@ -98,6 +99,12 @@ export function SubjectsLibraryTab({ dashboard }: SubjectsLibraryTabProps) {
       return aSem - bSem;
     });
   }, [filtered]);
+
+  const toggleExpanded = (code: string) => {
+    setExpandedCodes((prev) =>
+      prev.includes(code) ? prev.filter((item) => item !== code) : [...prev, code]
+    );
+  };
 
   return (
     <section className="rounded-3xl border border-[var(--surface-border)] bg-[var(--surface-1)] p-4">
@@ -173,10 +180,21 @@ export function SubjectsLibraryTab({ dashboard }: SubjectsLibraryTabProps) {
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
-                      <p className="text-sm font-semibold text-foreground">
-                        {matiere.nom}{' '}
-                        <span className="text-muted-foreground">({matiere.code})</span>
-                      </p>
+                      <button
+                        type="button"
+                        onClick={() => toggleExpanded(matiere.code)}
+                        className="inline-flex items-center gap-1 text-left"
+                      >
+                        {expandedCodes.includes(matiere.code) ? (
+                          <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                        )}
+                        <p className="text-sm font-semibold text-foreground">
+                          {matiere.nom}{' '}
+                          <span className="text-muted-foreground">({matiere.code})</span>
+                        </p>
+                      </button>
                       <p className="text-xs text-muted-foreground">
                         Derniere activite fichier: {formatDate(matiere.latestResourceAt)}
                       </p>
@@ -193,44 +211,46 @@ export function SubjectsLibraryTab({ dashboard }: SubjectsLibraryTabProps) {
                     </p>
                   )}
 
-                  <div className="mt-2 space-y-1">
-                    {matiere.resources.length === 0 ? (
-                      <p className="text-xs text-muted-foreground">Aucun fichier.</p>
-                    ) : (
-                      matiere.resources.map((resource) => (
-                        <div
-                          key={resource.id}
-                          className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-[var(--surface-border)] bg-[var(--surface-1)] px-2 py-1.5 text-xs"
-                        >
-                          <div className="min-w-0">
-                            <p className="truncate text-foreground">{resource.title}</p>
-                            <p className="text-muted-foreground">
-                              {resource.type_metier.toUpperCase()} -{' '}
-                              {new Date(resource.created_at).toLocaleString('fr-FR')}
-                            </p>
+                  {expandedCodes.includes(matiere.code) && (
+                    <div className="mt-2 space-y-1">
+                      {matiere.resources.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">Aucun fichier.</p>
+                      ) : (
+                        matiere.resources.map((resource) => (
+                          <div
+                            key={resource.id}
+                            className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-[var(--surface-border)] bg-[var(--surface-1)] px-2 py-1.5 text-xs"
+                          >
+                            <div className="min-w-0">
+                              <p className="truncate text-foreground">{resource.title}</p>
+                              <p className="text-muted-foreground">
+                                {resource.type_metier.toUpperCase()} -{' '}
+                                {new Date(resource.created_at).toLocaleString('fr-FR')}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <a
+                                href={getResourceFileUrl(resource.id, false)}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1 rounded-md border border-[var(--surface-border)] bg-[var(--surface-2)] px-2 py-1 text-foreground"
+                              >
+                                <Eye className="h-3.5 w-3.5" />
+                                Voir
+                              </a>
+                              <a
+                                href={getResourceFileUrl(resource.id, true)}
+                                className="inline-flex items-center gap-1 rounded-md border border-[var(--surface-border)] bg-[var(--surface-2)] px-2 py-1 text-foreground"
+                              >
+                                <Download className="h-3.5 w-3.5" />
+                                Telecharger
+                              </a>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-1">
-                            <a
-                              href={getResourceFileUrl(resource.id, false)}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex items-center gap-1 rounded-md border border-[var(--surface-border)] bg-[var(--surface-2)] px-2 py-1 text-foreground"
-                            >
-                              <Eye className="h-3.5 w-3.5" />
-                              Voir
-                            </a>
-                            <a
-                              href={getResourceFileUrl(resource.id, true)}
-                              className="inline-flex items-center gap-1 rounded-md border border-[var(--surface-border)] bg-[var(--surface-2)] px-2 py-1 text-foreground"
-                            >
-                              <Download className="h-3.5 w-3.5" />
-                              Telecharger
-                            </a>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
+                        ))
+                      )}
+                    </div>
+                  )}
                 </article>
               ))}
             </div>
