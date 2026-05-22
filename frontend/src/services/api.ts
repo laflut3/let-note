@@ -326,6 +326,10 @@ export async function adminUpdateUserRequest(
   });
 }
 
+export async function adminDeleteUserRequest(etuId: string): Promise<Response> {
+  return jsonRequest(`/admin/users/${etuId}`, { method: 'DELETE' });
+}
+
 export async function adminListProfesseursRequest(): Promise<Response> {
   return jsonRequest('/admin/professeurs', { method: 'GET' });
 }

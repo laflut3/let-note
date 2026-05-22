@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Github, Linkedin } from 'lucide-react';
+import { Globe, UserRound } from 'lucide-react';
 import { APP_ROUTES } from '@/lib/constants/routes';
 
 export function AppFooter() {
@@ -18,16 +18,16 @@ export function AppFooter() {
             rel="noreferrer"
             className="inline-flex items-center gap-1 rounded-lg border border-[var(--surface-border)] bg-[var(--surface-1)] px-3 py-1.5 text-foreground transition hover:bg-[var(--surface-muted)]"
           >
-            <Github className="h-4 w-4" />
+            <Globe className="h-4 w-4" />
             GitHub
           </a>
           <a
-            href="https://www.linkedin.com/in/leo-torres/"
+            href="https://www.linkedin.com/in/leo-torres-804687264/"
             target="_blank"
             rel="noreferrer"
             className="inline-flex items-center gap-1 rounded-lg border border-[var(--surface-border)] bg-[var(--surface-1)] px-3 py-1.5 text-foreground transition hover:bg-[var(--surface-muted)]"
           >
-            <Linkedin className="h-4 w-4" />
+            <UserRound className="h-4 w-4" />
             LinkedIn
           </a>
           <Link

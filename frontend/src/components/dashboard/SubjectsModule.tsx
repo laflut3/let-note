@@ -35,7 +35,7 @@ export function SubjectsModule({ dashboard, onOpenAllMatieres }: SubjectsModuleP
       .sort((a, b) => {
         const aNoFiles = a.resourcesCount === 0;
         const bNoFiles = b.resourcesCount === 0;
-        if (aNoFiles !== bNoFiles) return aNoFiles ? -1 : 1;
+        if (aNoFiles !== bNoFiles) return aNoFiles ? 1 : -1;
         if (b.latestResourceAt !== a.latestResourceAt)
           return b.latestResourceAt - a.latestResourceAt;
         return a.nom.localeCompare(b.nom, 'fr');

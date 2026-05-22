@@ -184,3 +184,54 @@ pub async fn update_student(
     message: "student updated",
   })
 }
+
+pub async fn delete_student(db: &PgPool, etu_id: Uuid) -> Result<MutationAck, ApiError> {
+  let student_exists = sqlx::query_scalar::<_, bool>(
+    r#"
+    SELECT EXISTS(SELECT 1 FROM etudiant WHERE id = $1)
+    "#,
+  )
+  .bind(etu_id)
+  .fetch_one(db)
+  .await
+  .map_err(map_schema_error("unable to delete student"))?;
+
+  if !student_exists {
+    return Err(ApiError::bad_request("student not found"));
+  }
+
+  let is_admin = sqlx::query_scalar::<_, bool>(
+    r#"
+    SELECT EXISTS(
+      SELECT 1
+      FROM role_etu re
+      JOIN role r ON r.id = re.id_role
+      WHERE re.id_etu = $1 AND r.role = 'admin'
+    )
+    "#,
+  )
+  .bind(etu_id)
+  .fetch_one(db)
+  .await
+  .map_err(map_schema_error("unable to delete student"))?;
+
+  if is_admin {
+    return Err(ApiError::bad_request(
+      "cannot delete an admin account from student deletion",
+    ));
+  }
+
+  let result = sqlx::query("DELETE FROM etudiant WHERE id = $1")
+    .bind(etu_id)
+    .execute(db)
+    .await
+    .map_err(map_schema_error("unable to delete student"))?;
+
+  if result.rows_affected() == 0 {
+    return Err(ApiError::bad_request("student not found"));
+  }
+
+  Ok(MutationAck {
+    message: "student deleted",
+  })
+}

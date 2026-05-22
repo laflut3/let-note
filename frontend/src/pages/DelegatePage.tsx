@@ -3,30 +3,24 @@ import { useNavigate } from 'react-router-dom';
 import { BookOpen, Home, Layers, LogOut, Shield, User, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { NumberInput } from '@/components/ui/number-input';
 import { ThemeToggle } from '@/components/auth/ThemeToggle';
 import { useThemeContext } from '@/context/theme-context';
 import { adminUi } from '@/lib/admin-ui';
-import { UeManagementSection } from '@/components/ue/UeManagementSection';
 import { DevoirsSection } from '@/components/devoirs/DevoirsSection';
 import { ResultsModule } from '@/components/dashboard/ResultsModule';
+import { SubjectsTab } from '@/components/admin/SubjectsSection';
+import { UesSection } from '@/components/admin/UesSection';
+import { AdminOverlays } from '@/components/admin/AdminOverlays';
+import { useAdminController } from '@/hooks/useAdminController';
 import {
-  addMatiereRequest,
   addProfesseurRequest,
   authMeRequest,
-  createCatalogUeRequest,
-  deleteCatalogUeRequest,
   getPromotionDashboardRequest,
-  listAllUesRequest,
   listAccessiblePromotionsRequest,
-  listUesRequest,
   logoutRequest,
-  setReferentRequest,
-  updateCatalogUeRequest,
   type AuthMePayload,
   type PromotionDashboardPayload,
   type PromotionScope,
-  type UeItem,
 } from '@/services/api';
 
 type DelegateTab =
@@ -50,32 +44,20 @@ async function extractError(response: Response, fallback: string): Promise<strin
 
 export function DelegatePage() {
   const navigate = useNavigate();
+  const adminController = useAdminController(navigate);
   const { theme, resolvedTheme, toggleTheme } = useThemeContext();
   const [roles, setRoles] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState<DelegateTab>('general');
   const [promotions, setPromotions] = useState<PromotionScope[]>([]);
   const [selectedPromoId, setSelectedPromoId] = useState('');
   const [dashboard, setDashboard] = useState<PromotionDashboardPayload | null>(null);
-  const [ues, setUes] = useState<UeItem[]>([]);
-  const [allUes, setAllUes] = useState<UeItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
   const [feedback, setFeedback] = useState<Feedback>({ type: '', message: '' });
 
-  const [newUeNom, setNewUeNom] = useState('');
-  const [newUeSemestre, setNewUeSemestre] = useState('');
-  const [editingUeId, setEditingUeId] = useState('');
-  const [editingUeNom, setEditingUeNom] = useState('');
-  const [editingUeSemestre, setEditingUeSemestre] = useState('');
-  const [matiereCode, setMatiereCode] = useState('');
-  const [matiereName, setMatiereName] = useState('');
-  const [selectedUeId, setSelectedUeId] = useState('');
-  const [matiereCoef, setMatiereCoef] = useState('');
   const [profNom, setProfNom] = useState('');
   const [profPrenom, setProfPrenom] = useState('');
   const [profEmail, setProfEmail] = useState('');
-  const [referentMatiere, setReferentMatiere] = useState('');
-  const [referentProf, setReferentProf] = useState('');
 
   const isAdmin = roles.includes('admin');
 
@@ -108,7 +90,6 @@ export function DelegatePage() {
 
       setPromotions(manageablePromotions);
       setSelectedPromoId((prev) => prev || manageablePromotions[0]?.id || '');
-      await loadAllUes();
     } catch {
       setErrorMessage('Erreur reseau. Reessayez.');
       setPromotions([]);
@@ -120,52 +101,25 @@ export function DelegatePage() {
   const loadPromotionData = async (promoId: string) => {
     if (!promoId) {
       setDashboard(null);
-      setUes([]);
       return;
     }
 
     setErrorMessage('');
     try {
-      const [dashboardRes, uesRes] = await Promise.all([
-        getPromotionDashboardRequest(promoId),
-        listUesRequest(promoId),
-      ]);
+      const dashboardRes = await getPromotionDashboardRequest(promoId);
 
       if (!dashboardRes.ok) {
         setErrorMessage(await extractError(dashboardRes, 'Impossible de charger cette promotion.'));
         setDashboard(null);
-        setUes([]);
         return;
       }
 
       const dashboardData = (await dashboardRes.json()) as PromotionDashboardPayload;
       setDashboard(dashboardData);
-      setReferentMatiere(dashboardData.matieres[0]?.code_matiere ?? '');
-      setReferentProf(dashboardData.professeurs[0]?.id ?? '');
-
-      if (uesRes.ok) {
-        const ueData = (await uesRes.json()) as UeItem[];
-        setUes(ueData);
-        setSelectedUeId((prev) =>
-          ueData.some((ue) => ue.id === prev) ? prev : ueData[0]?.id || ''
-        );
-      } else {
-        setUes([]);
-      }
     } catch {
       setErrorMessage('Erreur reseau. Reessayez.');
       setDashboard(null);
-      setUes([]);
     }
-  };
-
-  const loadAllUes = async () => {
-    const response = await listAllUesRequest();
-    if (!response.ok) {
-      setAllUes([]);
-      return;
-    }
-    setAllUes((await response.json()) as UeItem[]);
   };
 
   useEffect(() => {
@@ -213,62 +167,6 @@ export function DelegatePage() {
 
     return `${promotion.nom} (${promotion.annee_arrivee}-${promotion.annee_depart})`;
   }, [promotions, selectedPromoId]);
-
-  const refreshDelegateUes = async () => {
-    await loadAllUes();
-    if (selectedPromoId) {
-      await loadPromotionData(selectedPromoId);
-    }
-  };
-
-  const handleCreateDelegateUe = async () => {
-    await runAction(
-      () =>
-        createCatalogUeRequest({
-          nom_ue: newUeNom.trim(),
-          semestre: Number(newUeSemestre),
-        }),
-      'UE creee dans le catalogue.'
-    );
-    await loadAllUes();
-  };
-
-  const handleUpdateDelegateUe = async () => {
-    if (!editingUeId) {
-      setFeedback({ type: 'error', message: 'Selectionnez une UE.' });
-      return;
-    }
-    await runAction(
-      () =>
-        updateCatalogUeRequest(editingUeId, {
-          nom_ue: editingUeNom.trim() || undefined,
-          semestre: Number(editingUeSemestre) || 1,
-        }),
-      'UE modifiee.'
-    );
-    await loadAllUes();
-  };
-
-  const handleDeleteDelegateUe = async (ueId: string) => {
-    await runAction(() => deleteCatalogUeRequest(ueId), 'UE supprimee.');
-    await loadAllUes();
-  };
-
-  const delegateUeTheme = {
-    panel:
-      'mt-4 rounded-2xl border border-[var(--surface-border)] bg-[var(--surface-2)] p-4 shadow-[0_12px_30px_rgba(79,23,48,0.08)] sm:p-6',
-    title: 'text-xl font-semibold text-foreground',
-    input: 'h-11 rounded-xl border border-[var(--surface-border)] bg-[var(--surface-2)] px-3',
-    select:
-      'h-10 rounded-xl border border-[var(--surface-border)] bg-[var(--surface-2)] px-3 text-sm',
-    primaryButton:
-      'h-10 rounded-xl bg-[var(--surface-strong)] text-white hover:bg-[var(--surface-strong-hover)] dark:text-zinc-900',
-    row: 'flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--surface-border)] bg-[var(--surface-muted)] p-4',
-    modalOverlay:
-      'fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm',
-    modal:
-      'w-full max-w-xl rounded-3xl border border-[var(--surface-border)] bg-[var(--surface-2)] p-6 shadow-2xl',
-  };
 
   return (
     <main className={adminUi.pageBg}>
@@ -406,189 +304,77 @@ export function DelegatePage() {
             </div>
           )}
 
-          {activeTab === 'ues' && selectedPromoId && (
-            <UeManagementSection
-              ueItems={allUes}
-              newUeNom={newUeNom}
-              setNewUeNom={setNewUeNom}
-              newUeSemestre={newUeSemestre}
-              setNewUeSemestre={setNewUeSemestre}
-              editUeId={editingUeId}
-              setEditUeId={setEditingUeId}
-              editUeNom={editingUeNom}
-              setEditUeNom={setEditingUeNom}
-              editUeSemestre={editingUeSemestre}
-              setEditUeSemestre={setEditingUeSemestre}
-              onCreate={handleCreateDelegateUe}
-              onUpdate={handleUpdateDelegateUe}
-              onDelete={handleDeleteDelegateUe}
-              onRefresh={refreshDelegateUes}
-              onFeedback={setFeedback}
-              theme={delegateUeTheme}
-            />
-          )}
+          {activeTab === 'ues' && <UesSection controller={adminController} />}
 
-          {activeTab === 'matieres' && selectedPromoId && (
-            <div className="mt-4 space-y-4">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <Input
-                  value={matiereCode}
-                  onChange={(e) => setMatiereCode(e.target.value)}
-                  placeholder="Code matiere"
-                  className="h-11"
-                />
-                <Input
-                  value={matiereName}
-                  onChange={(e) => setMatiereName(e.target.value)}
-                  placeholder="Nom matiere"
-                  className="h-11"
-                />
-                <select
-                  value={selectedUeId}
-                  onChange={(e) => setSelectedUeId(e.target.value)}
-                  className="h-11 rounded-xl border border-[var(--surface-border)] bg-[var(--surface-2)] px-3 text-foreground"
-                >
-                  {ues.length === 0 && <option value="">Aucune UE disponible</option>}
-                  {ues.map((ue) => (
-                    <option key={ue.id} value={ue.id}>
-                      {ue.nom_ue} - semestre {ue.semestre}
-                    </option>
-                  ))}
-                </select>
-                <NumberInput
-                  value={matiereCoef}
-                  onChange={(e) => setMatiereCoef(e.target.value)}
-                  placeholder="Coefficient UE"
-                  min="0"
-                  step="0.1"
-                  className="h-11"
-                />
-                <Button
-                  type="button"
-                  className="h-10 rounded-xl bg-zinc-900 text-white hover:bg-zinc-800 sm:col-span-2"
-                  onClick={() =>
-                    void runAction(
-                      () =>
-                        addMatiereRequest(selectedPromoId, {
-                          code_matiere: matiereCode,
-                          nom_matiere: matiereName,
-                          ue_id: selectedUeId,
-                          coef_ue: Number(matiereCoef),
-                          referent_prof_id: referentProf,
-                        }),
-                      'Matiere ajoutee.'
-                    )
-                  }
-                >
-                  Ajouter matiere
-                </Button>
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <select
-                  value={referentMatiere}
-                  onChange={(e) => setReferentMatiere(e.target.value)}
-                  className="h-11 rounded-xl border border-[var(--surface-border)] bg-[var(--surface-2)] px-3 text-foreground"
-                >
-                  <option value="">Selectionner matiere</option>
-                  {(dashboard?.matieres ?? []).map((matiere) => (
-                    <option key={matiere.code_matiere} value={matiere.code_matiere}>
-                      {matiere.nom_matiere}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  value={referentProf}
-                  onChange={(e) => setReferentProf(e.target.value)}
-                  className="h-11 rounded-xl border border-[var(--surface-border)] bg-[var(--surface-2)] px-3 text-foreground"
-                >
-                  <option value="">Selectionner professeur</option>
-                  {(dashboard?.professeurs ?? []).map((professeur) => (
-                    <option key={professeur.id} value={professeur.id}>
-                      {professeur.prenom} {professeur.nom}
-                    </option>
-                  ))}
-                </select>
-                <Button
-                  type="button"
-                  className="h-10 rounded-xl bg-zinc-900 text-white hover:bg-zinc-800 sm:col-span-2"
-                  onClick={() =>
-                    void runAction(
-                      () => setReferentRequest(selectedPromoId, referentMatiere, referentProf),
-                      'Referent mis a jour.'
-                    )
-                  }
-                >
-                  Definir referent matiere
-                </Button>
-              </div>
-            </div>
-          )}
+          {activeTab === 'matieres' && <SubjectsTab controller={adminController} />}
 
           {activeTab === 'professeurs' && selectedPromoId && (
-            <div className="mt-4 space-y-4">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <Input
-                  value={profPrenom}
-                  onChange={(e) => setProfPrenom(e.target.value)}
-                  placeholder="Prenom professeur"
-                  className="h-11"
-                />
-                <Input
-                  value={profNom}
-                  onChange={(e) => setProfNom(e.target.value)}
-                  placeholder="Nom professeur"
-                  className="h-11"
-                />
-                <Input
-                  value={profEmail}
-                  onChange={(e) => setProfEmail(e.target.value)}
-                  placeholder="Email professeur"
-                  className="h-11 sm:col-span-2"
-                />
-                <Button
-                  type="button"
-                  className="h-10 rounded-xl bg-zinc-900 text-white hover:bg-zinc-800 sm:col-span-2"
-                  onClick={() =>
-                    void runAction(
-                      () =>
-                        addProfesseurRequest(selectedPromoId, {
-                          prenom: profPrenom,
-                          nom: profNom,
-                          email: profEmail,
-                        }),
-                      'Professeur ajoute.'
-                    )
-                  }
-                >
-                  Ajouter professeur
-                </Button>
-              </div>
+            <section className={adminUi.panel}>
+              <h2 className="text-xl font-semibold text-foreground">Gestion des professeurs</h2>
+              <div className="mt-4 space-y-4">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Input
+                    value={profPrenom}
+                    onChange={(e) => setProfPrenom(e.target.value)}
+                    placeholder="Prenom professeur"
+                    className="h-11"
+                  />
+                  <Input
+                    value={profNom}
+                    onChange={(e) => setProfNom(e.target.value)}
+                    placeholder="Nom professeur"
+                    className="h-11"
+                  />
+                  <Input
+                    value={profEmail}
+                    onChange={(e) => setProfEmail(e.target.value)}
+                    placeholder="Email professeur"
+                    className="h-11 sm:col-span-2"
+                  />
+                  <Button
+                    type="button"
+                    className={`${adminUi.primaryBtn} sm:col-span-2`}
+                    onClick={() =>
+                      void runAction(
+                        () =>
+                          addProfesseurRequest(selectedPromoId, {
+                            prenom: profPrenom,
+                            nom: profNom,
+                            email: profEmail,
+                          }),
+                        'Professeur ajoute.'
+                      )
+                    }
+                  >
+                    Ajouter professeur
+                  </Button>
+                </div>
 
-              <div className="overflow-x-auto rounded-xl border border-[var(--surface-border)]">
-                <table className="min-w-full text-sm">
-                  <thead className="bg-[var(--surface-muted)] text-foreground">
-                    <tr>
-                      <th className="px-3 py-2 text-left">Professeur</th>
-                      <th className="px-3 py-2 text-left">Email</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(dashboard?.professeurs ?? []).map((professeur) => (
-                      <tr
-                        key={professeur.id}
-                        className="border-t border-[var(--surface-border)] bg-[var(--surface-2)]"
-                      >
-                        <td className="px-3 py-2">
-                          {professeur.prenom} {professeur.nom}
-                        </td>
-                        <td className="px-3 py-2">{professeur.email}</td>
+                <div className="overflow-x-auto rounded-xl border border-[var(--surface-border)]">
+                  <table className="min-w-full text-sm">
+                    <thead className="bg-[var(--surface-muted)] text-foreground">
+                      <tr>
+                        <th className="px-3 py-2 text-left">Professeur</th>
+                        <th className="px-3 py-2 text-left">Email</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {(dashboard?.professeurs ?? []).map((professeur) => (
+                        <tr
+                          key={professeur.id}
+                          className="border-t border-[var(--surface-border)] bg-[var(--surface-2)]"
+                        >
+                          <td className="px-3 py-2">
+                            {professeur.prenom} {professeur.nom}
+                          </td>
+                          <td className="px-3 py-2">{professeur.email}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </div>
+            </section>
           )}
 
           {activeTab === 'etudiants' && selectedPromoId && (
@@ -676,7 +462,24 @@ export function DelegatePage() {
               {feedback.message}
             </p>
           )}
+
+          {(activeTab === 'ues' || activeTab === 'matieres') &&
+            adminController.feedback.message && (
+              <p
+                className={[
+                  'mt-4 rounded-lg px-3 py-2 text-sm',
+                  adminController.feedback.type === 'success'
+                    ? 'bg-emerald-100 text-emerald-800'
+                    : 'border border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-400/40 dark:bg-rose-950/30 dark:text-rose-200',
+                ].join(' ')}
+              >
+                {adminController.feedback.message}
+              </p>
+            )}
         </section>
+        {(activeTab === 'ues' || activeTab === 'matieres') && (
+          <AdminOverlays controller={adminController} />
+        )}
       </section>
     </main>
   );

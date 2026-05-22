@@ -5,6 +5,7 @@ import {
   adminCreateMatiereRequest,
   adminCreateMatiereResourceRequest,
   adminCreateProfesseurRequest,
+  adminDeleteUserRequest,
   adminDeleteMatiereResourceRequest,
   adminLinkMatierePromotionRequest,
   adminUnlinkMatierePromotionRequest,
@@ -145,6 +146,7 @@ export function useAdminController(navigate: NavigateFunction) {
   const [profSort, setProfSort] = useState<SortDirection>('asc');
   const [studentSearch, setStudentSearch] = useState('');
   const [studentSort, setStudentSort] = useState<SortDirection>('asc');
+  const [selectedStudentIdsForDelete, setSelectedStudentIdsForDelete] = useState<string[]>([]);
   const [matiereSearch, setMatiereSearch] = useState('');
   const [matiereSort, setMatiereSort] = useState<SortDirection>('asc');
   const [ueItems, setUeItems] = useState<UeItem[]>([]);
@@ -740,6 +742,58 @@ export function useAdminController(navigate: NavigateFunction) {
     await refreshAdminUes();
   };
 
+  const toggleStudentForDelete = (studentId: string) => {
+    setSelectedStudentIdsForDelete((prev) =>
+      prev.includes(studentId) ? prev.filter((id) => id !== studentId) : [...prev, studentId]
+    );
+  };
+
+  const setStudentsForDeleteBulk = (studentIds: string[], selected: boolean) => {
+    setSelectedStudentIdsForDelete((prev) => {
+      if (!selected) {
+        return prev.filter((id) => !studentIds.includes(id));
+      }
+      const next = new Set(prev);
+      studentIds.forEach((id) => next.add(id));
+      return Array.from(next);
+    });
+  };
+
+  const clearStudentDeleteSelection = () => {
+    setSelectedStudentIdsForDelete([]);
+  };
+
+  const handleDeleteSelectedStudents = async () => {
+    const deletableStudentIds = selectedStudentIdsForDelete.filter((id) => {
+      const student = studentsDetails.find((item) => item.id === id);
+      return student && !student.roles.includes('admin');
+    });
+
+    if (deletableStudentIds.length === 0) {
+      setFeedback({ type: 'error', message: 'Selectionnez au moins un etudiant.' });
+      return;
+    }
+
+    setFeedback({ type: '', message: '' });
+    for (const studentId of deletableStudentIds) {
+      const response = await adminDeleteUserRequest(studentId);
+      if (!response.ok) {
+        setFeedback({
+          type: 'error',
+          message: await extractErrorMessage(response, 'Impossible de supprimer un etudiant.'),
+        });
+        return;
+      }
+    }
+
+    setFeedback({
+      type: 'success',
+      message: `${deletableStudentIds.length} etudiant(s) supprime(s).`,
+    });
+    setSelectedStudentIdsForDelete([]);
+    await loadAdminData();
+  };
+
   const handleLogout = async () => {
     setIsLoggingOut(true);
     try {
@@ -897,6 +951,11 @@ export function useAdminController(navigate: NavigateFunction) {
     setStudentSearch,
     studentSort,
     setStudentSort,
+    selectedStudentIdsForDelete,
+    toggleStudentForDelete,
+    setStudentsForDeleteBulk,
+    clearStudentDeleteSelection,
+    handleDeleteSelectedStudents,
     matiereSearch,
     setMatiereSearch,
     matiereSort,

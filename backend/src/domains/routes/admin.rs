@@ -29,7 +29,7 @@ pub fn admin_routes(db: PgPool) -> Router<PgPool> {
     )
     .route(
       "/users/{etu_id}",
-      middleware::right_admin(put(update_user), db.clone()),
+      middleware::right_admin(put(update_user).delete(delete_user), db.clone()),
     )
     .route(
       "/professeurs",

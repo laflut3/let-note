@@ -32,3 +32,10 @@ async fn update_user(
     Err(error) => error.into_response(),
   }
 }
+
+async fn delete_user(State(db): State<PgPool>, Path(etu_id): Path<Uuid>) -> impl IntoResponse {
+  match admin_service::delete_student(&db, etu_id).await {
+    Ok(ack) => (StatusCode::OK, Json(ack)).into_response(),
+    Err(error) => error.into_response(),
+  }
+}
