@@ -24,6 +24,7 @@ export function ResultsModule({
   canManagePromotion,
   currentUserId,
 }: ResultsModuleProps) {
+  const showStudentName = canManagePromotion;
   const [semester, setSemester] = useState('all');
   const [selectedMatiereId, setSelectedMatiereId] = useState('');
   const [createMatiereId, setCreateMatiereId] = useState('');
@@ -286,9 +287,11 @@ export function ResultsModule({
                               key={resultat.id}
                               className="border-t border-[var(--surface-soft-border)] first:border-t-0"
                             >
-                              <td className="px-2 py-2">
-                                {resultat.etu_prenom} {resultat.etu_nom}
-                              </td>
+                              {showStudentName && (
+                                <td className="px-2 py-2">
+                                  {resultat.etu_prenom} {resultat.etu_nom}
+                                </td>
+                              )}
                               <td className="px-2 py-2">{resultat.libelle}</td>
                               <td className="px-2 py-2">Session {resultat.session ?? '-'}</td>
                               <td className="px-2 py-2 font-semibold">
@@ -379,7 +382,12 @@ export function ResultsModule({
                           ))}
                           {matiere.resultats.length === 0 && (
                             <tr>
-                              <td className="px-2 py-2 text-muted-foreground">Aucune note.</td>
+                              <td
+                                className="px-2 py-2 text-muted-foreground"
+                                colSpan={showStudentName ? 6 : 5}
+                              >
+                                Aucune note.
+                              </td>
                             </tr>
                           )}
                         </tbody>
@@ -394,9 +402,11 @@ export function ResultsModule({
                             key={`mobile-${resultat.id}`}
                             className="rounded-lg border border-[var(--surface-border)] bg-[var(--surface-muted)] p-2"
                           >
-                            <p className="text-sm font-semibold text-foreground">
-                              {resultat.etu_prenom} {resultat.etu_nom}
-                            </p>
+                            {showStudentName && (
+                              <p className="text-sm font-semibold text-foreground">
+                                {resultat.etu_prenom} {resultat.etu_nom}
+                              </p>
+                            )}
                             <p className="text-xs text-muted-foreground">
                               {resultat.libelle} | Session {resultat.session ?? '-'} | Note{' '}
                               {resultat.note.toFixed(2)} | Coef {resultat.coef.toFixed(2)}

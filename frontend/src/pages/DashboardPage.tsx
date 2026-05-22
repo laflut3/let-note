@@ -112,7 +112,7 @@ export function DashboardPage() {
                   dashboard={controller.dashboard}
                   promoId={controller.selectedPromoId}
                   onSaved={controller.refreshDashboard}
-                  canManagePromotion={controller.canManageSelectedPromotion}
+                  canManagePromotion={false}
                   currentUserId={controller.profile?.id ?? ''}
                 />
               )}
