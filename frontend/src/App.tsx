@@ -108,43 +108,45 @@ function AppContent() {
         {isLoginRoute ? (
           <ThemeToggle theme={theme} resolvedTheme={resolvedTheme} onToggle={toggleTheme} />
         ) : null}
-        <Routes>
-          <Route
-            path={APP_ROUTES.root}
-            element={
-              <PublicOnlyRoute>
-                <AuthPage />
-              </PublicOnlyRoute>
-            }
-          />
-          <Route
-            path={APP_ROUTES.dashboard}
-            element={
-              <ProtectedDashboardRoute>
-                <DashboardPage />
-              </ProtectedDashboardRoute>
-            }
-          />
-          <Route
-            path={APP_ROUTES.admin}
-            element={
-              <ProtectedAdminRoute>
-                <AdminPage />
-              </ProtectedAdminRoute>
-            }
-          />
-          <Route
-            path={APP_ROUTES.delegue}
-            element={
-              <ProtectedDelegueRoute>
-                <DelegatePage />
-              </ProtectedDelegueRoute>
-            }
-          />
-          <Route path={APP_ROUTES.terms} element={<TermsPage />} />
-          <Route path={APP_ROUTES.privacy} element={<PrivacyPage />} />
-          <Route path="*" element={<Navigate to={APP_ROUTES.root} replace />} />
-        </Routes>
+        <div className="pb-36">
+          <Routes>
+            <Route
+              path={APP_ROUTES.root}
+              element={
+                <PublicOnlyRoute>
+                  <AuthPage />
+                </PublicOnlyRoute>
+              }
+            />
+            <Route
+              path={APP_ROUTES.dashboard}
+              element={
+                <ProtectedDashboardRoute>
+                  <DashboardPage />
+                </ProtectedDashboardRoute>
+              }
+            />
+            <Route
+              path={APP_ROUTES.admin}
+              element={
+                <ProtectedAdminRoute>
+                  <AdminPage />
+                </ProtectedAdminRoute>
+              }
+            />
+            <Route
+              path={APP_ROUTES.delegue}
+              element={
+                <ProtectedDelegueRoute>
+                  <DelegatePage />
+                </ProtectedDelegueRoute>
+              }
+            />
+            <Route path={APP_ROUTES.terms} element={<TermsPage />} />
+            <Route path={APP_ROUTES.privacy} element={<PrivacyPage />} />
+            <Route path="*" element={<Navigate to={APP_ROUTES.root} replace />} />
+          </Routes>
+        </div>
         <AppFooter />
       </div>
     </ThemeContextProvider>
