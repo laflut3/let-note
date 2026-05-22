@@ -48,8 +48,8 @@ usage() {
 Usage: $0 [all|dev|staging|prod] [--version <semver>] [--arch <multi|amd64|arm64>]
 
 Exemples:
-  $0 prod --version 0.1.0 --arch multi
-  $0 staging --version 0.1.0 --arch amd64
+  $0 prod --version 1.0.0 --arch multi
+  $0 staging --version 1.0.0 --arch amd64
   $0 all
 EOF
 }

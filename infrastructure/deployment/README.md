@@ -92,18 +92,18 @@ Par defaut, le script lit `config-let-note.toml`:
 
 ```toml
 [images]
-version = "0.1.0"
+version = "1.0.0"
 arch = "amd64"
 ```
 
 Vous pouvez aussi surcharger a l'execution:
 
 ```bash
-# Deploy la release multi-arch 0.1.0 en prod
-./infrastructure/deployment/deploy-app.sh prod --version 0.1.0 --arch multi
+# Deploy la release multi-arch 1.0.0 en prod
+./infrastructure/deployment/deploy-app.sh prod --version 1.0.0 --arch multi
 
 # Deploy une image monoplatforme (si tag suffixe publie)
-./infrastructure/deployment/deploy-app.sh staging --version 0.1.0 --arch amd64
+./infrastructure/deployment/deploy-app.sh staging --version 1.0.0 --arch amd64
 ```
 
 Priorite des valeurs:
