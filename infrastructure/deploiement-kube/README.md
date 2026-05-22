@@ -2,10 +2,11 @@
 
 Un seul script orchestre tout:
 1. applique namespaces/quotas
-2. synchronise automatiquement les variables applicatives dans Vault (`kv put`)
+2. synchronise automatiquement les variables applicatives dans Vault (`kv put`) uniquement si le path n'existe pas deja
 3. deploie backend/frontend/postgres/seaweed
 4. applique les migrations SQL
-5. verifie les images deployees
+5. prepare HTTPS (secret TLS local auto-signe) si active
+6. verifie les images deployees
 
 Script principal: [`deploy-app.sh`](/home/ltorres/perso/let-note/infrastructure/deploiement-kube/deploy-app.sh)
 
@@ -22,6 +23,9 @@ Variables critiques dans `.env`:
 - `VAULT_APP_TOKEN`: token injecte dans `secret/vault-app-auth` pour le backend
 - `LET_NOTE_VERSION`, `LET_NOTE_ARCH`
 - toutes les variables `PS_BDD_*`, `JWT_SECRET_*`, `S3_*` par environnement
+- `ADMIN_EMAIL_*`, `ADMIN_PASSWORD_*`, `ADMIN_PRENOM_*`, `ADMIN_NOM_*` pour le bootstrap du premier compte admin
+- `ENABLE_HTTPS=true` pour generer le secret TLS automatiquement
+- `INGRESS_HOST_DEV|STAGING|PROD` pour les hosts exposes
 
 ## IMPORTANT: recuperer / regenerer VAULT_APP_TOKEN
 
@@ -92,12 +96,25 @@ kubectl -n dev create secret generic vault-app-auth \
 ./infrastructure/deploiement-kube/deploy-app.sh prod --version 1.0.0 --arch multi
 ```
 
+## Script update BDD uniquement
+
+Script dedie: [`update-db.sh`](/home/ltorres/perso/let-note/infrastructure/deploiement-kube/update-db.sh)
+
+```bash
+./infrastructure/deploiement-kube/update-db.sh dev
+./infrastructure/deploiement-kube/update-db.sh staging
+./infrastructure/deploiement-kube/update-db.sh prod
+./infrastructure/deploiement-kube/update-db.sh all
+```
+
 ## Options
 
 - `--skip-vault-sync`: saute la phase d'ecriture des variables dans Vault
+- `--force-vault-sync`: force la reecriture Vault meme si les donnees existent deja
 
 Exemple:
 
 ```bash
 ./infrastructure/deploiement-kube/deploy-app.sh dev --skip-vault-sync
+./infrastructure/deploiement-kube/deploy-app.sh dev --force-vault-sync
 ```

@@ -12,6 +12,7 @@ MIGRATIONS_DIR="${REPO_ROOT}/infrastructure/BDD/migration"
 CLI_VERSION=""
 CLI_ARCH=""
 SKIP_VAULT_SYNC="false"
+FORCE_VAULT_SYNC="false"
 
 if [ -t 1 ]; then
   C_RESET="$(printf '\033[0m')"
@@ -55,13 +56,14 @@ escape_sed_replacement() {
 
 usage() {
   cat <<USAGE
-Usage: $0 [all|dev|staging|prod] [--version <semver>] [--arch <multi|amd64|arm64>] [--skip-vault-sync]
+Usage: $0 [all|dev|staging|prod] [--version <semver>] [--arch <multi|amd64|arm64>] [--skip-vault-sync] [--force-vault-sync]
 
 Examples:
   $0 all
   $0 dev --version 1.0.0 --arch amd64
   $0 prod --version 1.0.0 --arch multi
   $0 staging --skip-vault-sync
+  $0 dev --force-vault-sync
 USAGE
 }
 
@@ -117,6 +119,7 @@ vault_put_env() {
 
   local kv_mount secret_path
   local ps_server ps_db ps_user ps_pass ps_port jwt cookie
+  local admin_email admin_password admin_prenom admin_nom
   local s3_endpoint s3_region s3_bucket s3_access_key s3_secret_key
 
   kv_mount="$(env_or_fail VAULT_KV_MOUNT)"
@@ -136,6 +139,10 @@ vault_put_env() {
   ps_port="$(env_or_fail PS_BDD_PORT_${suffix})"
   jwt="$(env_or_fail JWT_SECRET_${suffix})"
   cookie="$(env_or_fail COOKIE_SECURE_${suffix})"
+  admin_email="$(env_or_fail ADMIN_EMAIL_${suffix})"
+  admin_password="$(env_or_fail ADMIN_PASSWORD_${suffix})"
+  admin_prenom="$(env_or_fail ADMIN_PRENOM_${suffix})"
+  admin_nom="$(env_or_fail ADMIN_NOM_${suffix})"
   s3_endpoint="$(env_or_fail S3_ENDPOINT_${suffix})"
   s3_region="$(env_or_fail S3_REGION_${suffix})"
   s3_bucket="$(env_or_fail S3_BUCKET_${suffix})"
@@ -143,21 +150,90 @@ vault_put_env() {
   s3_secret_key="$(env_or_fail S3_SECRET_KEY_${suffix})"
 
   sub "Sync Vault path: ${kv_mount}/${secret_path}"
-  vault_exec "${VAULT_ADDR}" "${VAULT_ADMIN_TOKEN}" kv put "${kv_mount}/${secret_path}" \
-    PS_BDD_SERVER="${ps_server}" \
-    PS_BDD_DB="${ps_db}" \
-    PS_BDD_USER="${ps_user}" \
-    PS_BDD_PASS="$(vault_cli_safe_value "${ps_pass}")" \
-    PS_BDD_PORT="${ps_port}" \
-    JWT_SECRET="$(vault_cli_safe_value "${jwt}")" \
-    COOKIE_SECURE="${cookie}" \
-    S3_ENDPOINT="$(vault_cli_safe_value "${s3_endpoint}")" \
-    S3_REGION="${s3_region}" \
-    S3_BUCKET="${s3_bucket}" \
-    S3_ACCESS_KEY="$(vault_cli_safe_value "${s3_access_key}")" \
-    S3_SECRET_KEY="$(vault_cli_safe_value "${s3_secret_key}")" >/dev/null
 
-  ok "Vault variables synchronisees pour ${env_name}"
+  local -a all_pairs
+  all_pairs=(
+    "PS_BDD_SERVER=${ps_server}"
+    "PS_BDD_DB=${ps_db}"
+    "PS_BDD_USER=${ps_user}"
+    "PS_BDD_PASS=$(vault_cli_safe_value "${ps_pass}")"
+    "PS_BDD_PORT=${ps_port}"
+    "JWT_SECRET=$(vault_cli_safe_value "${jwt}")"
+    "COOKIE_SECURE=${cookie}"
+    "ADMIN_EMAIL=$(vault_cli_safe_value "${admin_email}")"
+    "ADMIN_PASSWORD=$(vault_cli_safe_value "${admin_password}")"
+    "ADMIN_PRENOM=$(vault_cli_safe_value "${admin_prenom}")"
+    "ADMIN_NOM=$(vault_cli_safe_value "${admin_nom}")"
+    "S3_ENDPOINT=$(vault_cli_safe_value "${s3_endpoint}")"
+    "S3_REGION=${s3_region}"
+    "S3_BUCKET=${s3_bucket}"
+    "S3_ACCESS_KEY=$(vault_cli_safe_value "${s3_access_key}")"
+    "S3_SECRET_KEY=$(vault_cli_safe_value "${s3_secret_key}")"
+  )
+
+  local vault_path_exists="false"
+  if vault_exec "${VAULT_ADDR}" "${VAULT_ADMIN_TOKEN}" kv get "${kv_mount}/${secret_path}" >/dev/null 2>&1; then
+    vault_path_exists="true"
+  fi
+
+  if [ "${FORCE_VAULT_SYNC}" = "true" ] || [ "${vault_path_exists}" = "false" ]; then
+    vault_exec "${VAULT_ADDR}" "${VAULT_ADMIN_TOKEN}" kv put "${kv_mount}/${secret_path}" "${all_pairs[@]}" >/dev/null
+    ok "Vault variables synchronisees (${FORCE_VAULT_SYNC:+force=on}) pour ${env_name}"
+    return
+  fi
+
+  local -a missing_pairs
+  missing_pairs=()
+  local pair key
+  for pair in "${all_pairs[@]}"; do
+    key="${pair%%=*}"
+    if ! vault_exec "${VAULT_ADDR}" "${VAULT_ADMIN_TOKEN}" kv get -field="${key}" "${kv_mount}/${secret_path}" >/dev/null 2>&1; then
+      missing_pairs+=("${pair}")
+    fi
+  done
+
+  if [ "${#missing_pairs[@]}" -eq 0 ]; then
+    ok "Vault path deja present, aucune cle manquante (${env_name})"
+    return
+  fi
+
+  vault_exec "${VAULT_ADDR}" "${VAULT_ADMIN_TOKEN}" kv patch "${kv_mount}/${secret_path}" "${missing_pairs[@]}" >/dev/null
+  ok "Vault path complete: ${#missing_pairs[@]} cles ajoutees (${env_name})"
+}
+
+ensure_https_tls_secret() {
+  local env_name="$1"
+  local host="$2"
+  local tls_secret="${TLS_SECRET_NAME:-app-tls}"
+
+  if [ "${ENABLE_HTTPS:-false}" != "true" ]; then
+    warn "HTTPS desactive (ENABLE_HTTPS!=true), ingress TLS peut rester non fonctionnel."
+    return
+  fi
+
+  require_cmd openssl
+  title "TLS setup ${env_name}"
+  sub "Host: ${host}"
+  sub "Secret: ${tls_secret}"
+
+  local cert_file key_file
+  cert_file="$(mktemp)"
+  key_file="$(mktemp)"
+
+  openssl req -x509 -nodes -newkey rsa:2048 \
+    -keyout "${key_file}" \
+    -out "${cert_file}" \
+    -days "${TLS_CERT_DAYS:-365}" \
+    -subj "/CN=${host}" \
+    -addext "subjectAltName=DNS:${host}" >/dev/null 2>&1
+
+  kubectl -n "${env_name}" create secret tls "${tls_secret}" \
+    --cert="${cert_file}" \
+    --key="${key_file}" \
+    --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+
+  rm -f "${cert_file}" "${key_file}"
+  ok "Secret TLS ${tls_secret} pret pour ${env_name}"
 }
 
 ensure_db_credentials() {
@@ -234,6 +310,10 @@ while [[ $# -gt 0 ]]; do
       SKIP_VAULT_SYNC="true"
       shift
       ;;
+    --force-vault-sync)
+      FORCE_VAULT_SYNC="true"
+      shift
+      ;;
     *)
       err "Argument inconnu: $1"
       usage
@@ -301,7 +381,7 @@ sync_vault() {
 deploy_env() {
   local env="$1"
   local overlay="${SCRIPT_DIR}/environments/${env}"
-  local escaped_token escaped_vault_secret_path escaped_vault_addr upper_env env_path_var vault_secret_path
+  local escaped_token escaped_vault_secret_path escaped_vault_addr escaped_ingress_host upper_env env_path_var vault_secret_path ingress_host
   local backend_expected front_expected backend_images front_images
 
   [ -d "${overlay}" ] || { err "Overlay introuvable: ${overlay}"; exit 1; }
@@ -311,6 +391,11 @@ deploy_env() {
   upper_env="$(printf '%s' "${env}" | tr '[:lower:]' '[:upper:]')"
   env_path_var="VAULT_SECRET_PATH_${upper_env}"
   vault_secret_path="${!env_path_var:-}"
+  env_path_var="INGRESS_HOST_${upper_env}"
+  ingress_host="${!env_path_var:-}"
+  if [ -z "${ingress_host}" ]; then
+    ingress_host="${env}.app.local"
+  fi
   if [ -z "${vault_secret_path}" ]; then
     if [ "${env}" = "staging" ] && [ -n "${VAULT_SECRET_PATH_STAGGING:-}" ]; then
       vault_secret_path="${VAULT_SECRET_PATH_STAGGING}"
@@ -319,6 +404,7 @@ deploy_env() {
     fi
   fi
   escaped_vault_secret_path="$(escape_sed_replacement "${vault_secret_path}")"
+  escaped_ingress_host="$(escape_sed_replacement "${ingress_host}")"
 
   backend_expected="${BACKEND_IMAGE_REPO}:${IMAGE_TAG}"
   front_expected="${FRONTEND_IMAGE_REPO}:${IMAGE_TAG}"
@@ -327,11 +413,15 @@ deploy_env() {
   sub "Image tag: ${IMAGE_TAG}"
   sub "Vault path: ${vault_secret_path}"
   sub "Vault addr: ${VAULT_ADDR}"
+  sub "Ingress host: ${ingress_host}"
+
+  ensure_https_tls_secret "${env}" "${ingress_host}"
 
   kubectl kustomize "${overlay}" \
     | sed "s|${BACKEND_IMAGE_REPO}:latest|${BACKEND_IMAGE_REPO}:${IMAGE_TAG}|g" \
     | sed "s|${FRONTEND_IMAGE_REPO}:latest|${FRONTEND_IMAGE_REPO}:${IMAGE_TAG}|g" \
     | sed "s|value: http://vault.default.svc.cluster.local:8200|value: ${escaped_vault_addr}|g" \
+    | sed "s|host: ${env}.app.local|host: ${escaped_ingress_host}|g" \
     | sed "s|value: let-note/${env}|value: ${escaped_vault_secret_path}|g" \
     | sed "s|\${VAULT_APP_TOKEN}|${escaped_token}|g" \
     | kubectl apply -f -

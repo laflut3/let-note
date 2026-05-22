@@ -4,6 +4,10 @@ metadata:
   name: app-ingress
 spec:
   ingressClassName: traefik
+  tls:
+  - hosts:
+    - dev.app.local
+    secretName: app-tls
   rules:
   - host: dev.app.local
     http:

@@ -3,6 +3,10 @@ kind: Ingress
 metadata:
   name: app-ingress
 spec:
+  tls:
+  - hosts:
+    - staging.app.local
+    secretName: app-tls
   rules:
   - host: staging.app.local
     http:
