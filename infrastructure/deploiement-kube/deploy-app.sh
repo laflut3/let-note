@@ -205,6 +205,8 @@ ensure_https_tls_secret() {
   local env_name="$1"
   local host="$2"
   local tls_secret="${TLS_SECRET_NAME:-app-tls}"
+  local tls_mode="${TLS_MODE:-auto}"
+  local mkcert_install_ca="${MKCERT_INSTALL_CA:-true}"
 
   if [ "${ENABLE_HTTPS:-false}" != "true" ]; then
     warn "HTTPS desactive (ENABLE_HTTPS!=true), ingress TLS peut rester non fonctionnel."
@@ -215,22 +217,66 @@ ensure_https_tls_secret() {
   title "TLS setup ${env_name}"
   sub "Host: ${host}"
   sub "Secret: ${tls_secret}"
+  sub "Mode: ${tls_mode}"
 
   local cert_file key_file
   cert_file="$(mktemp)"
   key_file="$(mktemp)"
+  local cert_mode_used="self-signed"
 
-  openssl req -x509 -nodes -newkey rsa:2048 \
-    -keyout "${key_file}" \
-    -out "${cert_file}" \
-    -days "${TLS_CERT_DAYS:-365}" \
-    -subj "/CN=${host}" \
-    -addext "subjectAltName=DNS:${host}" >/dev/null 2>&1
+  if [ "${tls_mode}" = "mkcert" ] || { [ "${tls_mode}" = "auto" ] && command -v mkcert >/dev/null 2>&1; }; then
+    cert_mode_used="mkcert"
+    if [ "${mkcert_install_ca}" = "true" ]; then
+      mkcert -install >/dev/null 2>&1 || warn "mkcert -install a echoue, verification navigateur potentiellement KO."
+    fi
+    if ! mkcert -cert-file "${cert_file}" -key-file "${key_file}" "${host}" >/dev/null 2>&1; then
+      warn "Generation mkcert impossible, fallback vers certificat auto-signe."
+      cert_mode_used="self-signed"
+    fi
+  fi
+
+  if [ "${cert_mode_used}" = "self-signed" ]; then
+    openssl req -x509 -nodes -newkey rsa:2048 \
+      -keyout "${key_file}" \
+      -out "${cert_file}" \
+      -days "${TLS_CERT_DAYS:-365}" \
+      -subj "/CN=${host}" \
+      -addext "subjectAltName=DNS:${host}" >/dev/null 2>&1
+  fi
 
   kubectl -n "${env_name}" create secret tls "${tls_secret}" \
     --cert="${cert_file}" \
     --key="${key_file}" \
     --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+
+  local cert_subject cert_issuer cert_dates cert_verify
+  cert_subject="$(openssl x509 -in "${cert_file}" -noout -subject | sed 's/^subject=//')"
+  cert_issuer="$(openssl x509 -in "${cert_file}" -noout -issuer | sed 's/^issuer=//')"
+  cert_dates="$(openssl x509 -in "${cert_file}" -noout -dates | tr '\n' ' ' | sed 's/ $//')"
+  cert_verify="NON_TRUSTED"
+  if [ "${cert_mode_used}" = "mkcert" ]; then
+    cert_verify="TRUSTED_LOCAL_CA"
+  fi
+
+  sub "Cert subject: ${cert_subject}"
+  sub "Cert issuer: ${cert_issuer}"
+  sub "Cert dates: ${cert_dates}"
+  sub "Cert trust mode: ${cert_verify}"
+
+  if [ "${cert_mode_used}" = "self-signed" ]; then
+    warn "Certificat auto-signe: Chrome affichera 'Non securise' tant que la CA n'est pas approuvee."
+    warn "Pour un cadenas vert local: installe mkcert puis relance avec TLS_MODE=mkcert."
+  else
+    ok "Certificat local de confiance genere avec mkcert."
+  fi
+
+  if command -v getent >/dev/null 2>&1; then
+    if getent hosts "${host}" >/dev/null 2>&1; then
+      sub "Resolution DNS locale OK pour ${host}"
+    else
+      warn "Host ${host} introuvable localement (ajoute-le dans /etc/hosts ou DNS local)."
+    fi
+  fi
 
   rm -f "${cert_file}" "${key_file}"
   ok "Secret TLS ${tls_secret} pret pour ${env_name}"
