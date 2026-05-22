@@ -4,11 +4,9 @@
 
 - `BDD/`: scripts SQL de migration
 - `deploiement-local/`: deploiement local Docker Compose (BDD + Back + Front, Vault externe)
-- `deploiement-vault/`: deploiement Kubernetes Vault mutualise (1 Vault commun)
-- `deployment/`: deploiement Kubernetes de l'application Let-Note (3 env)
+- `deploiement-kube/`: deploiement Kubernetes unifie de l'application Let-Note (Vault sync + deploy)
 
 ## Guides
 
 - Local: `infrastructure/deploiement-local/README.md`
-- Vault K8s: `infrastructure/deploiement-vault/README.md`
-- App K8s: `infrastructure/deployment/README.md`
+- App K8s: `infrastructure/deploiement-kube/README.md`

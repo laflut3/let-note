@@ -11,25 +11,32 @@ FRONTEND_IMAGE_REPO="ghcr.io/laflut3/let-note-frontend"
 MIGRATIONS_DIR="${REPO_ROOT}/infrastructure/BDD/migration"
 CLI_VERSION=""
 CLI_ARCH=""
+SKIP_VAULT_SYNC="false"
 
 if [ -t 1 ]; then
   C_RESET="$(printf '\033[0m')"
-  C_INFO="$(printf '\033[90m')"
+  C_DIM="$(printf '\033[2m')"
+  C_INFO="$(printf '\033[36m')"
   C_WARN="$(printf '\033[33m')"
   C_ERR="$(printf '\033[31m')"
   C_OK="$(printf '\033[32m')"
+  C_TITLE="$(printf '\033[1;35m')"
 else
   C_RESET=""
+  C_DIM=""
   C_INFO=""
   C_WARN=""
   C_ERR=""
   C_OK=""
+  C_TITLE=""
 fi
 
+title() { printf '\n%b%s%b\n' "${C_TITLE}" "$*" "${C_RESET}"; }
 info() { printf '%b\n' "${C_INFO}[INFO]${C_RESET} $*"; }
 warn() { printf '%b\n' "${C_WARN}[WARN]${C_RESET} $*"; }
-ok() { printf '%b\n' "${C_OK}[OK]${C_RESET} $*"; }
-err() { printf '%b\n' "${C_ERR}[ERR]${C_RESET} $*" >&2; }
+ok() { printf '%b\n' "${C_OK}[ OK ]${C_RESET} $*"; }
+err() { printf '%b\n' "${C_ERR}[ERR ]${C_RESET} $*" >&2; }
+sub() { printf '%b\n' "${C_DIM}  -> $*${C_RESET}"; }
 
 load_env_file() {
   local env_file="$1"
@@ -46,52 +53,123 @@ escape_sed_replacement() {
   printf '%s' "$1" | sed 's/[&|]/\\&/g'
 }
 
-if ! command -v kubectl >/dev/null 2>&1; then
-  err "kubectl est requis."
-  exit 1
-fi
-
 usage() {
-  cat <<EOF
-Usage: $0 [all|dev|staging|prod] [--version <semver>] [--arch <multi|amd64|arm64>]
+  cat <<USAGE
+Usage: $0 [all|dev|staging|prod] [--version <semver>] [--arch <multi|amd64|arm64>] [--skip-vault-sync]
 
-Exemples:
-  $0 prod --version 1.0.0 --arch multi
-  $0 staging --version 1.0.0 --arch amd64
+Examples:
   $0 all
-EOF
+  $0 dev --version 1.0.0 --arch amd64
+  $0 prod --version 1.0.0 --arch multi
+  $0 staging --skip-vault-sync
+USAGE
 }
 
-choose_target_interactive() {
-  local options=("dev" "staging" "prod" "all")
-  info "Aucun environnement fourni. Choisissez une cible:"
-  select choice in "${options[@]}"; do
-    case "${choice}" in
-      dev|staging|prod|all)
-        TARGET="${choice}"
-        ok "Cible selectionnee: ${TARGET}"
-        break
-        ;;
-      *)
-        warn "Choix invalide. Reessayez."
-        ;;
-    esac
-  done
+require_cmd() {
+  local cmd="$1"
+  command -v "${cmd}" >/dev/null 2>&1 || {
+    err "Commande requise manquante: ${cmd}"
+    exit 1
+  }
 }
+
+env_or_fail() {
+  local key="$1"
+  local val="${!key:-}"
+  if [ -z "${val}" ]; then
+    err "Variable requise manquante: ${key}"
+    exit 1
+  fi
+  printf '%s' "${val}"
+}
+
+vault_exec() {
+  local vault_addr="$1"
+  local vault_token="$2"
+  shift 2
+
+  if command -v vault >/dev/null 2>&1; then
+    VAULT_ADDR="${vault_addr}" VAULT_TOKEN="${vault_token}" vault "$@"
+    return
+  fi
+
+  local ns pod
+  ns="${VAULT_K8S_NAMESPACE:-default}"
+  pod="${VAULT_K8S_POD:-vault-0}"
+  kubectl exec -i -n "${ns}" "${pod}" -- env VAULT_ADDR="${vault_addr}" VAULT_TOKEN="${vault_token}" vault "$@"
+}
+
+vault_put_env() {
+  local env_name="$1"
+  local suffix="$(printf '%s' "${env_name}" | tr '[:lower:]' '[:upper:]')"
+  local path_var="VAULT_SECRET_PATH_${suffix}"
+
+  local kv_mount secret_path
+  local ps_server ps_db ps_user ps_pass ps_port jwt cookie
+  local s3_endpoint s3_region s3_bucket s3_access_key s3_secret_key
+
+  kv_mount="$(env_or_fail VAULT_KV_MOUNT)"
+  secret_path="${!path_var:-}"
+  if [ -z "${secret_path}" ]; then
+    if [ "${env_name}" = "staging" ] && [ -n "${VAULT_SECRET_PATH_STAGGING:-}" ]; then
+      secret_path="${VAULT_SECRET_PATH_STAGGING}"
+    else
+      secret_path="let-note/${env_name}"
+    fi
+  fi
+
+  ps_server="$(env_or_fail PS_BDD_SERVER_${suffix})"
+  ps_db="$(env_or_fail PS_BDD_DB_${suffix})"
+  ps_user="$(env_or_fail PS_BDD_USER_${suffix})"
+  ps_pass="$(env_or_fail PS_BDD_PASS_${suffix})"
+  ps_port="$(env_or_fail PS_BDD_PORT_${suffix})"
+  jwt="$(env_or_fail JWT_SECRET_${suffix})"
+  cookie="$(env_or_fail COOKIE_SECURE_${suffix})"
+  s3_endpoint="$(env_or_fail S3_ENDPOINT_${suffix})"
+  s3_region="$(env_or_fail S3_REGION_${suffix})"
+  s3_bucket="$(env_or_fail S3_BUCKET_${suffix})"
+  s3_access_key="$(env_or_fail S3_ACCESS_KEY_${suffix})"
+  s3_secret_key="$(env_or_fail S3_SECRET_KEY_${suffix})"
+
+  sub "Sync Vault path: ${kv_mount}/${secret_path}"
+  vault_exec "${VAULT_ADDR}" "${VAULT_ADMIN_TOKEN}" kv put "${kv_mount}/${secret_path}" \
+    PS_BDD_SERVER="${ps_server}" \
+    PS_BDD_DB="${ps_db}" \
+    PS_BDD_USER="${ps_user}" \
+    PS_BDD_PASS="${ps_pass}" \
+    PS_BDD_PORT="${ps_port}" \
+    JWT_SECRET="${jwt}" \
+    COOKIE_SECURE="${cookie}" \
+    S3_ENDPOINT="${s3_endpoint}" \
+    S3_REGION="${s3_region}" \
+    S3_BUCKET="${s3_bucket}" \
+    S3_ACCESS_KEY="${s3_access_key}" \
+    S3_SECRET_KEY="${s3_secret_key}" >/dev/null
+
+  ok "Vault variables synchronisees pour ${env_name}"
+}
+
+if [ -z "${TARGET}" ]; then
+  if [ -t 0 ]; then
+    title "Selection environnement"
+    select choice in dev staging prod all; do
+      case "${choice}" in
+        dev|staging|prod|all)
+          TARGET="${choice}"
+          break
+          ;;
+        *) warn "Choix invalide" ;;
+      esac
+    done
+  else
+    usage
+    exit 1
+  fi
+fi
 
 if [[ "${TARGET}" == "-h" || "${TARGET}" == "--help" ]]; then
   usage
   exit 0
-fi
-
-if [ -z "${TARGET}" ]; then
-  if [ -t 0 ]; then
-    choose_target_interactive
-  else
-    err "Aucun environnement fourni."
-    usage
-    exit 1
-  fi
 fi
 
 shift || true
@@ -105,6 +183,10 @@ while [[ $# -gt 0 ]]; do
       CLI_ARCH="${2:-}"
       shift 2
       ;;
+    --skip-vault-sync)
+      SKIP_VAULT_SYNC="true"
+      shift
+      ;;
     *)
       err "Argument inconnu: $1"
       usage
@@ -113,86 +195,90 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# Load deployment env file only (root of deployment folder).
+require_cmd kubectl
 load_env_file "${SCRIPT_DIR}/.env"
 
-# Compatibility: allow using VAULT_TOKEN in .env.
 if [ -z "${VAULT_APP_TOKEN:-}" ] && [ -n "${VAULT_TOKEN:-}" ]; then
   VAULT_APP_TOKEN="${VAULT_TOKEN}"
 fi
+if [ -z "${VAULT_ADMIN_TOKEN:-}" ] && [ -n "${VAULT_TOKEN:-}" ]; then
+  VAULT_ADMIN_TOKEN="${VAULT_TOKEN}"
+fi
 
-if [ -z "${VAULT_APP_TOKEN:-}" ]; then
-  err "VAULT_APP_TOKEN introuvable (.env, env vars)."
-  info "Definis VAULT_APP_TOKEN (ou VAULT_TOKEN) dans .env ou l'environnement."
-  exit 1
+if [ -z "${VAULT_ADDR:-}" ]; then
+  VAULT_ADDR="http://vault.default.svc.cluster.local:8200"
+fi
+if [ -z "${VAULT_KV_MOUNT:-}" ]; then
+  VAULT_KV_MOUNT="secret"
 fi
 
 if [ -n "${CLI_VERSION}" ] && [[ ! "${CLI_VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
-  err "Version invalide '${CLI_VERSION}' (ex: 0.1.0)"
+  err "Version invalide: ${CLI_VERSION}"
   exit 1
 fi
-
 if [ -n "${CLI_ARCH}" ] && [[ "${CLI_ARCH}" != "multi" && "${CLI_ARCH}" != "amd64" && "${CLI_ARCH}" != "arm64" ]]; then
-  err "Arch invalide '${CLI_ARCH}'"
-  info "Valeurs autorisees: multi, amd64, arm64"
+  err "Arch invalide: ${CLI_ARCH}"
   exit 1
 fi
 
 IMAGE_VERSION="${CLI_VERSION:-${LET_NOTE_VERSION:-}}"
 if [ -z "${IMAGE_VERSION}" ]; then
-  err "Version image introuvable."
-  info "Definis --version <x.y.z> ou LET_NOTE_VERSION dans infrastructure/deployment/.env"
+  err "LET_NOTE_VERSION manquante (.env ou --version)"
+  exit 1
+fi
+IMAGE_ARCH="${CLI_ARCH:-${LET_NOTE_ARCH:-amd64}}"
+case "${IMAGE_ARCH}" in
+  multi) IMAGE_TAG="${IMAGE_VERSION}" ;;
+  amd64|arm64) IMAGE_TAG="${IMAGE_VERSION}-${IMAGE_ARCH}" ;;
+  *) err "Arch invalide: ${IMAGE_ARCH}"; exit 1 ;;
+esac
+
+if [ -z "${VAULT_APP_TOKEN:-}" ]; then
+  err "VAULT_APP_TOKEN (ou VAULT_TOKEN) manquant pour injecter secret/vault-app-auth"
   exit 1
 fi
 
-IMAGE_ARCH="${CLI_ARCH:-${LET_NOTE_ARCH:-amd64}}"
-case "${IMAGE_ARCH}" in
-  multi)
-    IMAGE_TAG="${IMAGE_VERSION}"
-    ;;
-  amd64|arm64)
-    IMAGE_TAG="${IMAGE_VERSION}-${IMAGE_ARCH}"
-    ;;
-  *)
-    err "Arch invalide: ${IMAGE_ARCH}"
-    info "Valeurs autorisees: multi, amd64, arm64"
-    exit 1
-    ;;
-esac
+sync_vault() {
+  local env="$1"
+  [ "${SKIP_VAULT_SYNC}" = "true" ] && { warn "Vault sync desactive (--skip-vault-sync)"; return; }
+  if [ -z "${VAULT_ADMIN_TOKEN:-}" ]; then
+    warn "VAULT_ADMIN_TOKEN absent: sync Vault sautee."
+    warn "Definis VAULT_ADMIN_TOKEN (ou VAULT_TOKEN admin) pour automatiser l'ecriture des secrets Vault."
+    return
+  fi
+
+  title "Vault sync ${env}"
+  vault_put_env "${env}"
+}
 
 deploy_env() {
   local env="$1"
   local overlay="${SCRIPT_DIR}/environments/${env}"
-  local escaped_token=""
-  local escaped_vault_secret_path=""
-  local upper_env=""
-  local env_path_var=""
-  local vault_secret_path=""
-  local backend_expected="${BACKEND_IMAGE_REPO}:${IMAGE_TAG}"
-  local front_expected="${FRONTEND_IMAGE_REPO}:${IMAGE_TAG}"
-  local backend_images=""
-  local front_images=""
+  local escaped_token escaped_vault_secret_path upper_env env_path_var vault_secret_path
+  local backend_expected front_expected backend_images front_images
 
-  if [ ! -d "${overlay}" ]; then
-    err "Overlay introuvable ${overlay}"
-    exit 1
-  fi
+  [ -d "${overlay}" ] || { err "Overlay introuvable: ${overlay}"; exit 1; }
 
   escaped_token="$(escape_sed_replacement "${VAULT_APP_TOKEN}")"
-
   upper_env="$(printf '%s' "${env}" | tr '[:lower:]' '[:upper:]')"
   env_path_var="VAULT_SECRET_PATH_${upper_env}"
   vault_secret_path="${!env_path_var:-}"
-  if [ -z "${vault_secret_path}" ] && [ "${env}" = "staging" ]; then
-    # Backward compatibility with previous typo.
-    vault_secret_path="${VAULT_SECRET_PATH_STAGGING:-}"
-  fi
   if [ -z "${vault_secret_path}" ]; then
-    vault_secret_path="let-note/${env}"
+    if [ "${env}" = "staging" ] && [ -n "${VAULT_SECRET_PATH_STAGGING:-}" ]; then
+      vault_secret_path="${VAULT_SECRET_PATH_STAGGING}"
+    else
+      vault_secret_path="let-note/${env}"
+    fi
   fi
   escaped_vault_secret_path="$(escape_sed_replacement "${vault_secret_path}")"
 
-  info "Deploy ${env} (tag=${IMAGE_TAG}, arch=${IMAGE_ARCH}, vault_path=${vault_secret_path})"
+  backend_expected="${BACKEND_IMAGE_REPO}:${IMAGE_TAG}"
+  front_expected="${FRONTEND_IMAGE_REPO}:${IMAGE_TAG}"
+
+  title "Deploy ${env}"
+  sub "Image tag: ${IMAGE_TAG}"
+  sub "Vault path: ${vault_secret_path}"
+
   kubectl kustomize "${overlay}" \
     | sed "s|${BACKEND_IMAGE_REPO}:latest|${BACKEND_IMAGE_REPO}:${IMAGE_TAG}|g" \
     | sed "s|${FRONTEND_IMAGE_REPO}:latest|${FRONTEND_IMAGE_REPO}:${IMAGE_TAG}|g" \
@@ -200,80 +286,49 @@ deploy_env() {
     | sed "s|\${VAULT_APP_TOKEN}|${escaped_token}|g" \
     | kubectl apply -f -
 
-  info "Rollout status postgres ${env}"
+  info "Rollout postgres (${env})"
   kubectl -n "${env}" rollout status deploy/postgres --timeout="${WAIT_TIMEOUT}"
 
   if [ -d "${MIGRATIONS_DIR}" ]; then
-    info "Apply SQL migrations ${env}"
-    migrated_count=0
+    info "Apply migrations (${env})"
     while IFS= read -r -d '' migration_file; do
-      info "  -> $(basename "${migration_file}")"
+      sub "$(basename "${migration_file}")"
       kubectl -n "${env}" exec deploy/postgres -- sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < "${migration_file}"
-      migrated_count=$((migrated_count + 1))
-    done < <(find "${MIGRATIONS_DIR}" -maxdepth 1 -type f -name "*.up.sql" -print0 | sort -z)
-
-    if [ "${migrated_count}" -eq 0 ]; then
-      warn "Aucun fichier *.up.sql trouve dans ${MIGRATIONS_DIR}"
-    fi
+    done < <(find "${MIGRATIONS_DIR}" -maxdepth 1 -type f -name '*.up.sql' -print0 | sort -z)
   fi
 
-  info "Verify database schema ${env}"
-  kubectl -n "${env}" exec deploy/postgres -- sh -c '
-    psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "
-      CREATE TABLE IF NOT EXISTS etudiant (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        nom TEXT NOT NULL,
-        prenom TEXT NOT NULL,
-        email TEXT NOT NULL UNIQUE,
-        date_naissance DATE NOT NULL,
-        mot_de_passe TEXT NOT NULL
-      );
-      ALTER TABLE etudiant
-      ADD COLUMN IF NOT EXISTS mot_de_passe TEXT NOT NULL DEFAULT '\'''\'';"
-  '
-
-  info "Rollout status ${env}"
+  info "Rollout backend/front (${env})"
   kubectl -n "${env}" rollout status deploy/backend --timeout="${WAIT_TIMEOUT}"
   kubectl -n "${env}" rollout status deploy/front --timeout="${WAIT_TIMEOUT}"
 
   backend_images="$(kubectl -n "${env}" get pods -l app=backend -o jsonpath='{range .items[*]}{.spec.containers[0].image}{"\n"}{end}' | sort -u)"
   front_images="$(kubectl -n "${env}" get pods -l app=front -o jsonpath='{range .items[*]}{.spec.containers[0].image}{"\n"}{end}' | sort -u)"
 
-  if [ "${backend_images}" != "${backend_expected}" ]; then
-    err "Images backend deployees inattendues en ${env}"
-    info "Attendu: ${backend_expected}"
-    info "Observe:"
-    printf '%s\n' "${backend_images}"
-    exit 1
-  fi
-
-  if [ "${front_images}" != "${front_expected}" ]; then
-    err "Images frontend deployees inattendues en ${env}"
-    info "Attendu: ${front_expected}"
-    info "Observe:"
-    printf '%s\n' "${front_images}"
-    exit 1
-  fi
+  [ "${backend_images}" = "${backend_expected}" ] || { err "Images backend inattendues (${env})"; printf '%s\n' "${backend_images}"; exit 1; }
+  [ "${front_images}" = "${front_expected}" ] || { err "Images front inattendues (${env})"; printf '%s\n' "${front_images}"; exit 1; }
 
   ok "Deploiement valide sur ${env}"
-  info "Etat ${env}"
   kubectl -n "${env}" get deploy,pods,svc,ingress
 }
 
-info "Apply namespaces/quotas"
+title "Bootstrap cluster"
 kubectl apply -f "${SCRIPT_DIR}/cluster/namespaces.yaml"
 kubectl apply -f "${SCRIPT_DIR}/cluster/quotas-limits.yaml"
 info "Image version: ${IMAGE_VERSION}"
 info "Image arch: ${IMAGE_ARCH}"
-info "Image tag used: ${IMAGE_TAG}"
+info "Image tag: ${IMAGE_TAG}"
 
 case "${TARGET}" in
   all)
+    sync_vault dev
     deploy_env dev
+    sync_vault staging
     deploy_env staging
+    sync_vault prod
     deploy_env prod
     ;;
   dev|staging|prod)
+    sync_vault "${TARGET}"
     deploy_env "${TARGET}"
     ;;
   *)
@@ -283,4 +338,4 @@ case "${TARGET}" in
     ;;
 esac
 
-ok "Deploiement termine (${TARGET})"
+ok "Pipeline termine (${TARGET})"
