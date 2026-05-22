@@ -4,7 +4,6 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
-CONFIG_FILE="${SCRIPT_DIR}/config-let-note.toml"
 TARGET="${1:-}"
 WAIT_TIMEOUT="${WAIT_TIMEOUT:-180s}"
 BACKEND_IMAGE_REPO="ghcr.io/laflut3/let-note-backend"
@@ -32,14 +31,23 @@ warn() { printf '%b\n' "${C_WARN}[WARN]${C_RESET} $*"; }
 ok() { printf '%b\n' "${C_OK}[OK]${C_RESET} $*"; }
 err() { printf '%b\n' "${C_ERR}[ERR]${C_RESET} $*" >&2; }
 
+load_env_file() {
+  local env_file="$1"
+  if [ -f "${env_file}" ]; then
+    info "Load env file: ${env_file}"
+    set -a
+    # shellcheck disable=SC1090
+    . "${env_file}"
+    set +a
+  fi
+}
+
+escape_sed_replacement() {
+  printf '%s' "$1" | sed 's/[&|]/\\&/g'
+}
+
 if ! command -v kubectl >/dev/null 2>&1; then
   err "kubectl est requis."
-  exit 1
-fi
-
-if [ -z "${VAULT_APP_TOKEN:-}" ]; then
-  err "VAULT_APP_TOKEN n'est pas exporte."
-  info "Exemple: export VAULT_APP_TOKEN='<token-let-note-read>'"
   exit 1
 fi
 
@@ -105,6 +113,20 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# Load deployment env file only (root of deployment folder).
+load_env_file "${SCRIPT_DIR}/.env"
+
+# Compatibility: allow using VAULT_TOKEN in .env.
+if [ -z "${VAULT_APP_TOKEN:-}" ] && [ -n "${VAULT_TOKEN:-}" ]; then
+  VAULT_APP_TOKEN="${VAULT_TOKEN}"
+fi
+
+if [ -z "${VAULT_APP_TOKEN:-}" ]; then
+  err "VAULT_APP_TOKEN introuvable (.env, env vars)."
+  info "Definis VAULT_APP_TOKEN (ou VAULT_TOKEN) dans .env ou l'environnement."
+  exit 1
+fi
+
 if [ -n "${CLI_VERSION}" ] && [[ ! "${CLI_VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
   err "Version invalide '${CLI_VERSION}' (ex: 0.1.0)"
   exit 1
@@ -116,22 +138,14 @@ if [ -n "${CLI_ARCH}" ] && [[ "${CLI_ARCH}" != "multi" && "${CLI_ARCH}" != "amd6
   exit 1
 fi
 
-if [ -f "${CONFIG_FILE}" ]; then
-  CONFIG_VERSION="$(sed -n 's/^[[:space:]]*version[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' "${CONFIG_FILE}" | head -n1)"
-  CONFIG_ARCH="$(sed -n 's/^[[:space:]]*arch[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' "${CONFIG_FILE}" | head -n1)"
-else
-  CONFIG_VERSION=""
-  CONFIG_ARCH=""
-fi
-
-IMAGE_VERSION="${CLI_VERSION:-${LET_NOTE_VERSION:-${CONFIG_VERSION:-}}}"
+IMAGE_VERSION="${CLI_VERSION:-${LET_NOTE_VERSION:-}}"
 if [ -z "${IMAGE_VERSION}" ]; then
   err "Version image introuvable."
-  info "Definis --version <x.y.z>, LET_NOTE_VERSION, ou version dans ${CONFIG_FILE}"
+  info "Definis --version <x.y.z> ou LET_NOTE_VERSION dans infrastructure/deployment/.env"
   exit 1
 fi
 
-IMAGE_ARCH="${CLI_ARCH:-${LET_NOTE_ARCH:-${CONFIG_ARCH:-amd64}}}"
+IMAGE_ARCH="${CLI_ARCH:-${LET_NOTE_ARCH:-amd64}}"
 case "${IMAGE_ARCH}" in
   multi)
     IMAGE_TAG="${IMAGE_VERSION}"
@@ -150,6 +164,10 @@ deploy_env() {
   local env="$1"
   local overlay="${SCRIPT_DIR}/environments/${env}"
   local escaped_token=""
+  local escaped_vault_secret_path=""
+  local upper_env=""
+  local env_path_var=""
+  local vault_secret_path=""
   local backend_expected="${BACKEND_IMAGE_REPO}:${IMAGE_TAG}"
   local front_expected="${FRONTEND_IMAGE_REPO}:${IMAGE_TAG}"
   local backend_images=""
@@ -160,12 +178,25 @@ deploy_env() {
     exit 1
   fi
 
-  escaped_token="$(printf '%s' "${VAULT_APP_TOKEN}" | sed 's/[&|]/\\&/g')"
+  escaped_token="$(escape_sed_replacement "${VAULT_APP_TOKEN}")"
 
-  info "Deploy ${env} (tag=${IMAGE_TAG}, arch=${IMAGE_ARCH})"
+  upper_env="$(printf '%s' "${env}" | tr '[:lower:]' '[:upper:]')"
+  env_path_var="VAULT_SECRET_PATH_${upper_env}"
+  vault_secret_path="${!env_path_var:-}"
+  if [ -z "${vault_secret_path}" ] && [ "${env}" = "staging" ]; then
+    # Backward compatibility with previous typo.
+    vault_secret_path="${VAULT_SECRET_PATH_STAGGING:-}"
+  fi
+  if [ -z "${vault_secret_path}" ]; then
+    vault_secret_path="let-note/${env}"
+  fi
+  escaped_vault_secret_path="$(escape_sed_replacement "${vault_secret_path}")"
+
+  info "Deploy ${env} (tag=${IMAGE_TAG}, arch=${IMAGE_ARCH}, vault_path=${vault_secret_path})"
   kubectl kustomize "${overlay}" \
     | sed "s|${BACKEND_IMAGE_REPO}:latest|${BACKEND_IMAGE_REPO}:${IMAGE_TAG}|g" \
     | sed "s|${FRONTEND_IMAGE_REPO}:latest|${FRONTEND_IMAGE_REPO}:${IMAGE_TAG}|g" \
+    | sed "s|value: let-note/${env}|value: ${escaped_vault_secret_path}|g" \
     | sed "s|\${VAULT_APP_TOKEN}|${escaped_token}|g" \
     | kubectl apply -f -
 

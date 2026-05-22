@@ -15,7 +15,7 @@ Le Vault est deploie separement via `infrastructure/deploiement-vault`.
    - `secret/let-note/staging`
    - `secret/let-note/prod`
 3. Token Vault applicatif cree avec policy read sur `secret/data/let-note/*`.
-4. `VAULT_APP_TOKEN` exporte dans votre shell.
+4. `VAULT_APP_TOKEN` (ou `VAULT_TOKEN`) defini dans `infrastructure/deployment/.env`.
 
 ## Variables Vault attendues pour chaque env
 
@@ -76,9 +76,14 @@ kubectl get deploy,pods,svc,ingress -n prod
 
 Script: [deploy-app.sh](/home/ltorres/perso/let-note/infrastructure/deployment/deploy-app.sh)
 
-```bash
-export VAULT_APP_TOKEN='<token-let-note-read>'
+Le script charge automatiquement `infrastructure/deployment/.env`.
 
+Pour Vault:
+- `VAULT_APP_TOKEN` est utilise en priorite
+- fallback compatible: `VAULT_TOKEN`
+- chemin secret par environnement possible via `VAULT_SECRET_PATH_DEV`, `VAULT_SECRET_PATH_STAGING`, `VAULT_SECRET_PATH_PROD`
+
+```bash
 ./infrastructure/deployment/deploy-app.sh all
 # ou un seul environnement
 ./infrastructure/deployment/deploy-app.sh dev
@@ -88,13 +93,8 @@ export VAULT_APP_TOKEN='<token-let-note-read>'
 
 ## Deploy versionne (recommande)
 
-Par defaut, le script lit `infrastructure/deployment/config-let-note.toml`:
-
-```toml
-[images]
-version = "1.0.0"
-arch = "amd64"
-```
+Par defaut, le script lit `LET_NOTE_VERSION` et `LET_NOTE_ARCH` depuis `infrastructure/deployment/.env`.
+Si `LET_NOTE_ARCH` est absent, la valeur par defaut est `amd64`.
 
 Vous pouvez aussi surcharger a l'execution:
 
@@ -109,4 +109,3 @@ Vous pouvez aussi surcharger a l'execution:
 Priorite des valeurs:
 1. arguments CLI `--version/--arch`
 2. variables d'environnement `LET_NOTE_VERSION/LET_NOTE_ARCH`
-3. `infrastructure/deployment/config-let-note.toml`

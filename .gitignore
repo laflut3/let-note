@@ -13,8 +13,7 @@ frontend/coverage
 
 # Environment files
 .env
-.env.*
-!*.example
+!.env.*
 
 # AI tools artifacts
 .codex
