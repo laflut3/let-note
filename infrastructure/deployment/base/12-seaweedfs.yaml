@@ -17,7 +17,16 @@ spec:
       containers:
       - name: seaweed-master
         image: chrislusf/seaweedfs:latest
-        args: ["master", "-ip=seaweed-master", "-mdir=/data/master"]
+        env:
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        args:
+        - master
+        - -ip=$(POD_IP)
+        - -ip.bind=0.0.0.0
+        - -mdir=/data/master
         ports:
         - containerPort: 9333
         volumeMounts:
