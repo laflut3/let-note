@@ -10,8 +10,8 @@ spec:
     requests.memory: 2Gi
     limits.cpu: "3"
     limits.memory: 4Gi
-    persistentvolumeclaims: "10"
-    requests.storage: 10Gi
+    persistentvolumeclaims: "20"
+    requests.storage: 30Gi
 ---
 apiVersion: v1
 kind: LimitRange
@@ -40,8 +40,8 @@ spec:
     requests.memory: 4Gi
     limits.cpu: "5"
     limits.memory: 8Gi
-    persistentvolumeclaims: "12"
-    requests.storage: 20Gi
+    persistentvolumeclaims: "25"
+    requests.storage: 50Gi
 ---
 apiVersion: v1
 kind: LimitRange
@@ -70,8 +70,8 @@ spec:
     requests.memory: 6Gi
     limits.cpu: "8"
     limits.memory: 12Gi
-    persistentvolumeclaims: "15"
-    requests.storage: 40Gi
+    persistentvolumeclaims: "30"
+    requests.storage: 100Gi
 ---
 apiVersion: v1
 kind: LimitRange
