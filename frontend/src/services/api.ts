@@ -155,6 +155,8 @@ export type AdminMatiere = {
   code_matiere: string;
   nom_matiere: string;
   promotion_count: number;
+  linked_promo_ids: string[];
+  linked_promotions: string[];
 };
 
 export type AdminMatiereResource = {
@@ -479,6 +481,15 @@ export async function adminLinkMatierePromotionRequest(
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(payload),
+  });
+}
+
+export async function adminUnlinkMatierePromotionRequest(
+  codeMatiere: string,
+  promoId: string
+): Promise<Response> {
+  return jsonRequest(`/admin/matieres/${codeMatiere}/link-promotion/${promoId}`, {
+    method: 'DELETE',
   });
 }
 

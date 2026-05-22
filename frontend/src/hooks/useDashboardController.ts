@@ -23,7 +23,7 @@ import {
   type ScheduleEvent,
 } from '@/lib/dashboard/schedule';
 
-export type DashboardTab = 'accueil' | 'edt' | 'notes' | 'profil';
+export type DashboardTab = 'accueil' | 'matieres' | 'edt' | 'notes' | 'profil';
 
 async function extractError(response: Response, fallback: string): Promise<string> {
   const data = (await response.json().catch(() => null)) as { message?: string } | null;
@@ -80,6 +80,7 @@ export function useDashboardController(navigate: NavigateFunction) {
   const selectedPromotion =
     promotions.find((promotion) => promotion.id === selectedPromoId) ?? null;
   const canManageSelectedPromotion = selectedPromotion?.can_manage ?? false;
+  const hasPromotionContext = promotions.length > 0 && !!selectedPromotion;
 
   const loadBaseData = async () => {
     setIsLoading(true);
@@ -224,6 +225,15 @@ export function useDashboardController(navigate: NavigateFunction) {
     void loadSchedule(selectedPromoId);
   }, [selectedPromoId]);
 
+  useEffect(() => {
+    if (
+      !hasPromotionContext &&
+      (activeTab === 'matieres' || activeTab === 'edt' || activeTab === 'notes')
+    ) {
+      setActiveTab('accueil');
+    }
+  }, [hasPromotionContext, activeTab]);
+
   const handleLogout = async () => {
     setIsLoggingOut(true);
     try {
@@ -348,6 +358,7 @@ export function useDashboardController(navigate: NavigateFunction) {
     handleLogout,
     promoLabel,
     canManageSelectedPromotion,
+    hasPromotionContext,
   };
 }
 

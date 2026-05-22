@@ -7,6 +7,7 @@ import {
   adminCreateProfesseurRequest,
   adminDeleteMatiereResourceRequest,
   adminLinkMatierePromotionRequest,
+  adminUnlinkMatierePromotionRequest,
   adminCreatePromotionRequest,
   adminListMatiereResourcesRequest,
   adminListPromotionStudentsRequest,
@@ -588,6 +589,14 @@ export function useAdminController(navigate: NavigateFunction) {
       });
       return;
     }
+    const selectedMatiere = matieres.find((item) => item.code_matiere === selectedMatiereCode);
+    if (selectedMatiere?.linked_promo_ids.includes(linkPromoId)) {
+      setFeedback({
+        type: 'error',
+        message: 'Cette matiere est deja liee a cette promotion.',
+      });
+      return;
+    }
 
     await runAction(
       () =>
@@ -598,6 +607,18 @@ export function useAdminController(navigate: NavigateFunction) {
           referent_prof_id: linkReferentProfId,
         }),
       'Matiere liee a la promotion.'
+    );
+  };
+
+  const handleUnlinkMatiereFromPromotion = async (promoId: string) => {
+    if (!selectedMatiereCode || !promoId) {
+      setFeedback({ type: 'error', message: 'Matiere et promotion requises.' });
+      return;
+    }
+
+    await runAction(
+      () => adminUnlinkMatierePromotionRequest(selectedMatiereCode, promoId),
+      'Matiere desaffectee de la promotion.'
     );
   };
 
@@ -905,6 +926,7 @@ export function useAdminController(navigate: NavigateFunction) {
     handleCreateMatiereResource,
     handleDeleteMatiereResource,
     handleLinkMatiereToPromotion,
+    handleUnlinkMatiereFromPromotion,
     handleCreateUeForLinkPromo,
     handleUpdateUeForLinkPromo,
     handleDeleteUeForLinkPromo,

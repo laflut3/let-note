@@ -68,6 +68,11 @@ export function SubjectsTab({ controller }: Props) {
     matiereSort,
     setMatiereSort,
   } = controller;
+  const selectedMatiere = controller.matieres.find(
+    (item) => item.code_matiere === selectedMatiereCode
+  );
+  const isSelectedPromoAlreadyLinked =
+    !!linkPromoId && !!selectedMatiere?.linked_promo_ids.includes(linkPromoId);
 
   return (
     <section className={adminUi.panel}>
@@ -125,6 +130,11 @@ export function SubjectsTab({ controller }: Props) {
                 <p className="text-xs text-muted-foreground">
                   {matiere.promotion_count} promotion(s)
                 </p>
+                {matiere.linked_promotions.length > 0 && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Promotions liees: {matiere.linked_promotions.join(' • ')}
+                  </p>
+                )}
               </div>
               <div className="flex flex-wrap gap-2">
                 <Button
@@ -246,7 +256,13 @@ export function SubjectsTab({ controller }: Props) {
             <Button
               type="button"
               className={adminUi.primaryBtn}
-              disabled={!selectedMatiereCode || !linkPromoId || !linkUeId || !linkReferentProfId}
+              disabled={
+                !selectedMatiereCode ||
+                !linkPromoId ||
+                !linkUeId ||
+                !linkReferentProfId ||
+                isSelectedPromoAlreadyLinked
+              }
               onClick={() => void handleLinkMatiereToPromotion()}
             >
               Lier la matiere
@@ -300,6 +316,53 @@ export function SubjectsTab({ controller }: Props) {
             className={adminUi.input}
           />
         </div>
+        {selectedMatiere && selectedMatiere.linked_promotions.length > 0 && (
+          <div className="mt-3 rounded-xl border border-[var(--surface-border)] bg-[var(--surface-2)] p-3">
+            <p className="text-sm font-semibold text-foreground">
+              Promotions deja liees a cette matiere
+            </p>
+            <div className="mt-2 space-y-2">
+              {selectedMatiere.linked_promotions.map((entry, index) => {
+                const promoId = selectedMatiere.linked_promo_ids[index];
+                return (
+                  <div
+                    key={`${promoId}-${entry}`}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[var(--surface-border)] bg-[var(--surface-1)] px-3 py-2"
+                  >
+                    <p className="text-xs text-muted-foreground">{entry}</p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-8 rounded-lg border-rose-300 text-rose-700 hover:bg-rose-50"
+                      disabled={!promoId}
+                      onClick={() => {
+                        if (!promoId) return;
+                        openConfirmDialog({
+                          title: 'Desaffecter la matiere',
+                          description:
+                            'Confirmer la desaffectation de cette matiere pour cette promotion ?',
+                          confirmLabel: 'Desaffecter',
+                          isDanger: true,
+                          onConfirm: () => {
+                            void controller.handleUnlinkMatiereFromPromotion(promoId);
+                          },
+                        });
+                      }}
+                    >
+                      Desaffecter
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+        {isSelectedPromoAlreadyLinked && (
+          <p className="mt-2 text-xs text-amber-700">
+            Cette matiere est deja liee a cette promotion. Elle ne peut pas etre reliee a une autre
+            UE pour cette promo.
+          </p>
+        )}
         <div className="mt-4 rounded-xl border border-[var(--surface-border)] p-3">
           <p className="text-sm font-semibold text-foreground">Gestion des UE de la promo</p>
           <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -385,8 +448,8 @@ export function SubjectsTab({ controller }: Props) {
           </div>
         </div>
         <p className="mt-2 text-xs text-muted-foreground">
-          L’admin peut lier cette matiere a n’importe quelle promo. Le professeur referent doit etre
-          rattache a la promo cible.
+          Une matiere ne peut etre liee qu une seule fois par promotion. Le professeur referent doit
+          etre rattache a la promo cible.
         </p>
       </Modal>
 

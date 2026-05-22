@@ -1,14 +1,15 @@
-import { Calendar, Home, LogOut, Shield, UserCircle, Users } from 'lucide-react';
+import { BookOpen, Calendar, Home, LogOut, Shield, UserCircle, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/auth/ThemeToggle';
 import { useThemeContext } from '@/context/theme-context';
 import { adminUi } from '@/lib/admin-ui';
 
-export type DashboardTab = 'accueil' | 'edt' | 'notes' | 'profil';
+export type DashboardTab = 'accueil' | 'matieres' | 'edt' | 'notes' | 'profil';
 
 type TopNavProps = {
   activeTab: DashboardTab;
   setActiveTab: (tab: DashboardTab) => void;
+  hasPromotionContext: boolean;
   hasDelegueScope: boolean;
   isAdmin: boolean;
   onDelegue: () => void;
@@ -20,6 +21,7 @@ type TopNavProps = {
 export function TopNav({
   activeTab,
   setActiveTab,
+  hasPromotionContext,
   hasDelegueScope,
   isAdmin,
   onDelegue,
@@ -35,8 +37,13 @@ export function TopNav({
         {(
           [
             ['accueil', 'Accueil'],
-            ['edt', 'EDT'],
-            ['notes', 'Notes'],
+            ...(hasPromotionContext ? ([['matieres', 'Matieres']] as const) : []),
+            ...(hasPromotionContext
+              ? ([
+                  ['edt', 'EDT'],
+                  ['notes', 'Notes'],
+                ] as const)
+              : []),
             ['profil', 'Profil'],
           ] as const
         ).map(([key, label]) => (
@@ -50,6 +57,7 @@ export function TopNav({
             ].join(' ')}
           >
             {key === 'accueil' && <Home className="h-4 w-4" />}
+            {key === 'matieres' && <BookOpen className="h-4 w-4" />}
             {key === 'edt' && <Calendar className="h-4 w-4" />}
             {key === 'notes' && <Users className="h-4 w-4" />}
             {key === 'profil' && <UserCircle className="h-4 w-4" />}

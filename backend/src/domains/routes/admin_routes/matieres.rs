@@ -164,3 +164,13 @@ async fn link_matiere_promotion(
     Err(error) => error.into_response(),
   }
 }
+
+async fn unlink_matiere_promotion(
+  State(db): State<PgPool>,
+  Path((code_matiere, promo_id)): Path<(String, Uuid)>,
+) -> impl IntoResponse {
+  match admin_service::unlink_matiere_from_promotion(&db, &code_matiere, promo_id).await {
+    Ok(ack) => (StatusCode::OK, Json(ack)).into_response(),
+    Err(error) => error.into_response(),
+  }
+}

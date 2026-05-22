@@ -33,6 +33,7 @@ export function ResultsModule({
   const [session, setSession] = useState('');
   const [note, setNote] = useState('');
   const [coef, setCoef] = useState('');
+  const [createEtudiantId, setCreateEtudiantId] = useState('');
   const [message, setMessage] = useState('');
   const [editingId, setEditingId] = useState('');
   const [editingLibelle, setEditingLibelle] = useState('');
@@ -119,11 +120,17 @@ export function ResultsModule({
 
   const canManageResultat = (studentId: string) =>
     canManagePromotion || studentId === currentUserId;
+  const canCreateResult = canManagePromotion || canCreateOwnResult;
 
   const saveResult = async () => {
     if (!promoId || !createMatiereId) return;
+    if (canManagePromotion && !createEtudiantId) {
+      setMessage('Selectionnez un etudiant de la promotion.');
+      return;
+    }
     setMessage('');
     const response = await createResultatRequest(promoId, createMatiereId, {
+      etudiant_id: canManagePromotion ? createEtudiantId : undefined,
       libelle,
       session: session ? Number(session) : undefined,
       note: Number(note),
@@ -137,6 +144,7 @@ export function ResultsModule({
     setSession('');
     setNote('');
     setCoef('');
+    setCreateEtudiantId('');
     setIsCreateModalOpen(false);
     setMessage('Note enregistree.');
     await onSaved();
@@ -150,6 +158,7 @@ export function ResultsModule({
     setSession('');
     setNote('');
     setCoef('');
+    setCreateEtudiantId('');
   };
 
   const computeMatiereAverage = (
@@ -259,7 +268,7 @@ export function ResultsModule({
                           (moyenne: {computeMatiereAverage(matiere.resultats)?.toFixed(2) ?? '-'})
                         </span>
                       </button>
-                      {canCreateOwnResult && (
+                      {canCreateResult && (
                         <Button
                           type="button"
                           onClick={() => openCreateModal(code, matiere.nom)}
@@ -490,12 +499,26 @@ export function ResultsModule({
         </div>
       )}
 
-      {canCreateOwnResult && isCreateModalOpen && (
+      {canCreateResult && isCreateModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-3 sm:p-4">
           <div className="w-full max-w-xl rounded-2xl border border-[var(--surface-border)] bg-[var(--surface-2)] p-5 shadow-2xl">
             <h3 className="text-base font-semibold text-foreground">Ajouter une note</h3>
             <p className="mt-1 text-sm text-muted-foreground">Matiere: {createMatiereName}</p>
             <div className="mt-4 grid gap-2 sm:grid-cols-2">
+              {canManagePromotion && (
+                <select
+                  value={createEtudiantId}
+                  onChange={(event) => setCreateEtudiantId(event.target.value)}
+                  className="h-10 rounded-xl border border-[var(--surface-border)] bg-[var(--surface-2)] px-3 text-sm text-foreground sm:col-span-2"
+                >
+                  <option value="">Selectionner un etudiant</option>
+                  {(dashboard?.etudiants ?? []).map((etu) => (
+                    <option key={etu.id} value={etu.id}>
+                      {etu.prenom} {etu.nom} ({etu.numero_etudiant ?? 'n/a'})
+                    </option>
+                  ))}
+                </select>
+              )}
               <Input
                 value={libelle}
                 onChange={(event) => setLibelle(event.target.value)}
@@ -539,7 +562,7 @@ export function ResultsModule({
               </Button>
               <Button
                 type="button"
-                disabled={!note}
+                disabled={!note || (canManagePromotion && !createEtudiantId)}
                 onClick={() => void saveResult()}
                 className="h-10 rounded-lg bg-[var(--surface-strong)] text-white hover:bg-[var(--surface-strong-hover)] dark:text-zinc-900"
               >

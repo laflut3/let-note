@@ -75,6 +75,10 @@ pub fn admin_routes(db: PgPool) -> Router<PgPool> {
       middleware::right_admin(post(link_matiere_promotion), db.clone()),
     )
     .route(
+      "/matieres/{code_matiere}/link-promotion/{promo_id}",
+      middleware::right_admin(axum::routing::delete(unlink_matiere_promotion), db.clone()),
+    )
+    .route(
       "/matieres/{code_matiere}/resources",
       middleware::right_admin(
         get(list_matiere_resources).post(create_matiere_resource),

@@ -45,6 +45,8 @@ pub struct AdminMatiereSummary {
   pub code_matiere: String,
   pub nom_matiere: String,
   pub promotion_count: i64,
+  pub linked_promo_ids: Vec<Uuid>,
+  pub linked_promotions: Vec<String>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]

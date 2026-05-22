@@ -4,9 +4,33 @@ pub async fn list_matieres(db: &PgPool) -> Result<Vec<AdminMatiereSummary>, ApiE
     SELECT
       m.code_matiere,
       m.nom_matiere,
-      COUNT(DISTINCT mp.id_promo)::BIGINT AS promotion_count
+      COUNT(DISTINCT mp.id_promo)::BIGINT AS promotion_count,
+      COALESCE(
+        ARRAY_AGG(DISTINCT mp.id_promo) FILTER (WHERE mp.id_promo IS NOT NULL),
+        ARRAY[]::uuid[]
+      ) AS linked_promo_ids,
+      COALESCE(
+        ARRAY_AGG(
+          DISTINCT CASE
+            WHEN p.id IS NULL THEN NULL
+            WHEN u.id IS NULL THEN FORMAT('%s (%s-%s)', p.nom, p.annee_arrivee, p.annee_depart)
+            ELSE FORMAT(
+              '%s (%s-%s) - %s semestre %s',
+              p.nom,
+              p.annee_arrivee,
+              p.annee_depart,
+              u.nom_ue,
+              u.semestre
+            )
+          END
+        ) FILTER (WHERE p.id IS NOT NULL),
+        ARRAY[]::text[]
+      ) AS linked_promotions
     FROM matiere m
     LEFT JOIN mat_promo mp ON mp.id_mat = m.code_matiere
+    LEFT JOIN promotion p ON p.id = mp.id_promo
+    LEFT JOIN matiere_ue mu ON mu.id_promo = mp.id_promo AND mu.id_matiere = m.code_matiere
+    LEFT JOIN ue u ON u.id = mu.id_ue
     GROUP BY m.code_matiere, m.nom_matiere
     ORDER BY m.nom_matiere, m.code_matiere
     "#,
@@ -266,6 +290,29 @@ pub async fn link_matiere_to_all_promotions(
   .map_err(map_schema_error("unable to upsert subject"))?;
 
   for promo_id in promo_ids {
+    let already_linked_to_other_ue = sqlx::query_scalar::<_, bool>(
+      r#"
+      SELECT EXISTS (
+        SELECT 1
+        FROM matiere_ue
+        WHERE id_promo = $1
+          AND id_matiere = $2
+          AND id_ue <> $3
+      )
+      "#,
+    )
+    .bind(promo_id)
+    .bind(&code)
+    .bind(payload.ue_id)
+    .fetch_one(&mut *tx)
+    .await
+    .map_err(map_schema_error("unable to validate existing subject links"))?;
+    if already_linked_to_other_ue {
+      return Err(ApiError::conflict(
+        "subject is already linked to another UE for this promotion",
+      ));
+    }
+
     sqlx::query(
       r#"
       INSERT INTO promo_ue (id_promo, id_ue)
@@ -389,6 +436,29 @@ pub async fn link_matiere_to_promotion(
     return Err(ApiError::bad_request("UE does not exist"));
   }
 
+  let already_linked_to_other_ue = sqlx::query_scalar::<_, bool>(
+    r#"
+    SELECT EXISTS (
+      SELECT 1
+      FROM matiere_ue
+      WHERE id_promo = $1
+        AND id_matiere = $2
+        AND id_ue <> $3
+    )
+    "#,
+  )
+  .bind(payload.promo_id)
+  .bind(&code)
+  .bind(payload.ue_id)
+  .fetch_one(db)
+  .await
+  .map_err(map_schema_error("unable to validate existing subject links"))?;
+  if already_linked_to_other_ue {
+    return Err(ApiError::conflict(
+      "subject is already linked to another UE for this promotion",
+    ));
+  }
+
   let provided_nom = payload
     .nom_matiere
     .as_deref()
@@ -495,5 +565,71 @@ pub async fn link_matiere_to_promotion(
 
   Ok(MutationAck {
     message: "subject linked to promotion",
+  })
+}
+
+pub async fn unlink_matiere_from_promotion(
+  db: &PgPool,
+  code_matiere: &str,
+  promo_id: Uuid,
+) -> Result<MutationAck, ApiError> {
+  let code = code_matiere.trim().to_uppercase();
+  if code.is_empty() {
+    return Err(ApiError::bad_request("code_matiere is required"));
+  }
+
+  let mut tx = db
+    .begin()
+    .await
+    .map_err(|_| ApiError::internal("unable to unlink subject from promotion"))?;
+
+  let removed = sqlx::query(
+    r#"
+    DELETE FROM matiere_ue
+    WHERE id_promo = $1 AND id_matiere = $2
+    "#,
+  )
+  .bind(promo_id)
+  .bind(&code)
+  .execute(&mut *tx)
+  .await
+  .map_err(map_schema_error("unable to unlink subject from UE"))?;
+
+  if removed.rows_affected() == 0 {
+    return Err(ApiError::bad_request(
+      "subject is not linked to this promotion",
+    ));
+  }
+
+  sqlx::query(
+    r#"
+    DELETE FROM referent_matiere_promo
+    WHERE id_promo = $1 AND id_mat = $2
+    "#,
+  )
+  .bind(promo_id)
+  .bind(&code)
+  .execute(&mut *tx)
+  .await
+  .map_err(map_schema_error("unable to clear subject referent"))?;
+
+  sqlx::query(
+    r#"
+    DELETE FROM mat_promo
+    WHERE id_promo = $1 AND id_mat = $2
+    "#,
+  )
+  .bind(promo_id)
+  .bind(&code)
+  .execute(&mut *tx)
+  .await
+  .map_err(map_schema_error("unable to unlink subject from promotion"))?;
+
+  tx.commit()
+    .await
+    .map_err(|_| ApiError::internal("unable to finalize subject unlink"))?;
+
+  Ok(MutationAck {
+    message: "subject unlinked from promotion",
   })
 }

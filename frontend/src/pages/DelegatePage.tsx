@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BookOpen, Home, Layers, LogOut, Shield, Users } from 'lucide-react';
+import { BookOpen, Home, Layers, LogOut, Shield, User, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { NumberInput } from '@/components/ui/number-input';
@@ -9,12 +9,12 @@ import { useThemeContext } from '@/context/theme-context';
 import { adminUi } from '@/lib/admin-ui';
 import { UeManagementSection } from '@/components/ue/UeManagementSection';
 import { DevoirsSection } from '@/components/devoirs/DevoirsSection';
+import { ResultsModule } from '@/components/dashboard/ResultsModule';
 import {
   addMatiereRequest,
   addProfesseurRequest,
   authMeRequest,
   createCatalogUeRequest,
-  createResultatRequest,
   deleteCatalogUeRequest,
   getPromotionDashboardRequest,
   listAllUesRequest,
@@ -76,14 +76,6 @@ export function DelegatePage() {
   const [profEmail, setProfEmail] = useState('');
   const [referentMatiere, setReferentMatiere] = useState('');
   const [referentProf, setReferentProf] = useState('');
-
-  const [resultMatiereId, setResultMatiereId] = useState('');
-  const [resultEtudiantId, setResultEtudiantId] = useState('');
-  const [resultLibelle, setResultLibelle] = useState('');
-  const [resultSession, setResultSession] = useState('');
-  const [resultValue, setResultValue] = useState('');
-  const [resultCoef, setResultCoef] = useState('');
-  const [resultSemester, setResultSemester] = useState('all');
 
   const isAdmin = roles.includes('admin');
 
@@ -150,8 +142,6 @@ export function DelegatePage() {
       setDashboard(dashboardData);
       setReferentMatiere(dashboardData.matieres[0]?.code_matiere ?? '');
       setReferentProf(dashboardData.professeurs[0]?.id ?? '');
-      setResultMatiereId(dashboardData.matieres[0]?.code_matiere ?? '');
-      setResultEtudiantId('');
 
       if (uesRes.ok) {
         const ueData = (await uesRes.json()) as UeItem[];
@@ -224,49 +214,6 @@ export function DelegatePage() {
     return `${promotion.nom} (${promotion.annee_arrivee}-${promotion.annee_depart})`;
   }, [promotions, selectedPromoId]);
 
-  const resultSemesters = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          (dashboard?.matieres ?? [])
-            .map((matiere) => matiere.ue_semestre)
-            .filter((semestre): semestre is number => semestre !== null)
-        )
-      ).sort((a, b) => a - b),
-    [dashboard?.matieres]
-  );
-
-  const resultUeGroups = useMemo(() => {
-    const selectedSemester = resultSemester === 'all' ? null : Number(resultSemester);
-    const groups = new Map<
-      string,
-      {
-        id: string;
-        nom: string;
-        semestre: number;
-        matieres: NonNullable<PromotionDashboardPayload['matieres']>;
-      }
-    >();
-
-    for (const matiere of dashboard?.matieres ?? []) {
-      if (!matiere.ue_id || !matiere.ue_semestre) continue;
-      if (selectedSemester !== null && matiere.ue_semestre !== selectedSemester) continue;
-      const current = groups.get(matiere.ue_id) ?? {
-        id: matiere.ue_id,
-        nom: matiere.ue_nom ?? 'UE sans nom',
-        semestre: matiere.ue_semestre,
-        matieres: [],
-      };
-      current.matieres.push(matiere);
-      groups.set(matiere.ue_id, current);
-    }
-
-    return Array.from(groups.values()).sort((a, b) => {
-      if (a.semestre !== b.semestre) return a.semestre - b.semestre;
-      return a.nom.localeCompare(b.nom, 'fr');
-    });
-  }, [dashboard?.matieres, resultSemester]);
-
   const refreshDelegateUes = async () => {
     await loadAllUes();
     if (selectedPromoId) {
@@ -323,15 +270,6 @@ export function DelegatePage() {
       'w-full max-w-xl rounded-3xl border border-[var(--surface-border)] bg-[var(--surface-2)] p-6 shadow-2xl',
   };
 
-  useEffect(() => {
-    const visibleMatiereIds = resultUeGroups.flatMap((ue) =>
-      ue.matieres.map((matiere) => matiere.code_matiere)
-    );
-    if (!visibleMatiereIds.includes(resultMatiereId)) {
-      setResultMatiereId(visibleMatiereIds[0] ?? '');
-    }
-  }, [resultMatiereId, resultUeGroups]);
-
   return (
     <main className={adminUi.pageBg}>
       <section className={adminUi.shell}>
@@ -340,10 +278,10 @@ export function DelegatePage() {
             {(
               [
                 ['general', 'Vue generale'],
-                ['ues', 'UE'],
-                ['matieres', 'Matieres'],
-                ['professeurs', 'Professeurs'],
                 ['etudiants', 'Etudiants'],
+                ['professeurs', 'Professeurs'],
+                ['matieres', 'Matieres'],
+                ['ues', 'UE'],
                 ['devoirs', 'Devoirs'],
                 ['resultats', 'Resultats'],
               ] as const
@@ -360,7 +298,7 @@ export function DelegatePage() {
                 {value === 'general' && <Home className="h-4 w-4" />}
                 {value === 'ues' && <Layers className="h-4 w-4" />}
                 {value === 'matieres' && <BookOpen className="h-4 w-4" />}
-                {value === 'professeurs' && <Users className="h-4 w-4" />}
+                {value === 'professeurs' && <User className="h-4 w-4" />}
                 {value === 'etudiants' && <Users className="h-4 w-4" />}
                 {value === 'devoirs' && <BookOpen className="h-4 w-4" />}
                 {value === 'resultats' && <Shield className="h-4 w-4" />}
@@ -711,123 +649,18 @@ export function DelegatePage() {
           )}
 
           {activeTab === 'resultats' && selectedPromoId && (
-            <div className="mt-4 space-y-4">
-              <div className="rounded-xl border border-[var(--surface-border)] bg-[var(--surface-muted)] p-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <select
-                    value={resultSemester}
-                    onChange={(e) => setResultSemester(e.target.value)}
-                    className="h-11 rounded-xl border border-[var(--surface-border)] bg-[var(--surface-2)] px-3"
-                  >
-                    <option value="all">Tous les semestres</option>
-                    {resultSemesters.map((semester) => (
-                      <option key={semester} value={String(semester)}>
-                        Semestre {semester}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="mt-3 space-y-3">
-                  {resultUeGroups.map((ue) => (
-                    <div
-                      key={ue.id}
-                      className="rounded-lg border border-[var(--surface-border)] bg-[var(--surface-2)] p-3"
-                    >
-                      <p className="text-sm font-semibold text-foreground">
-                        {ue.nom} - semestre {ue.semestre}
-                      </p>
-                      <div className="mt-2 space-y-2 pl-4">
-                        {ue.matieres.map((matiere) => (
-                          <button
-                            key={matiere.code_matiere}
-                            type="button"
-                            onClick={() => setResultMatiereId(matiere.code_matiere)}
-                            className={[
-                              'block w-full rounded-lg border px-3 py-2 text-left text-sm transition',
-                              resultMatiereId === matiere.code_matiere
-                                ? 'border-[var(--surface-strong)] bg-[var(--surface-strong)] text-white dark:text-zinc-900'
-                                : 'border-[var(--surface-border)] bg-[var(--surface-muted)] text-foreground hover:border-[var(--surface-strong)]',
-                            ].join(' ')}
-                          >
-                            {matiere.nom_matiere}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                  {resultUeGroups.length === 0 && (
-                    <p className="text-sm text-muted-foreground">
-                      Aucune matiere pour ce semestre.
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <select
-                  value={resultEtudiantId}
-                  onChange={(e) => setResultEtudiantId(e.target.value)}
-                  className="h-11 rounded-xl border border-[var(--surface-border)] bg-[var(--surface-2)] px-3 text-foreground"
-                >
-                  <option value="">Selectionner etudiant</option>
-                  {(dashboard?.etudiants ?? []).map((etu) => (
-                    <option key={etu.id} value={etu.id}>
-                      {etu.prenom} {etu.nom} ({etu.numero_etudiant ?? 'n/a'})
-                    </option>
-                  ))}
-                </select>
-                <Input
-                  value={resultLibelle}
-                  onChange={(e) => setResultLibelle(e.target.value)}
-                  placeholder="Libelle"
-                  className="h-11"
-                />
-                <NumberInput
-                  value={resultSession}
-                  onChange={(e) => setResultSession(e.target.value)}
-                  placeholder="Session"
-                  min="1"
-                  step="1"
-                  className="h-11"
-                />
-                <NumberInput
-                  value={resultValue}
-                  onChange={(e) => setResultValue(e.target.value)}
-                  placeholder="Note"
-                  min="0"
-                  max="20"
-                  step="0.01"
-                  className="h-11"
-                />
-                <NumberInput
-                  value={resultCoef}
-                  onChange={(e) => setResultCoef(e.target.value)}
-                  placeholder="Coef"
-                  min="0"
-                  step="0.1"
-                  className="h-11"
-                />
-                <Button
-                  type="button"
-                  className="h-10 rounded-xl bg-[var(--surface-strong)] text-white hover:bg-[var(--surface-strong-hover)] dark:text-zinc-900 sm:col-span-2"
-                  disabled={!resultMatiereId}
-                  onClick={() =>
-                    void runAction(
-                      () =>
-                        createResultatRequest(selectedPromoId, resultMatiereId, {
-                          etudiant_id: resultEtudiantId || undefined,
-                          libelle: resultLibelle,
-                          session: resultSession ? Number(resultSession) : undefined,
-                          note: Number(resultValue),
-                          coef: Number(resultCoef),
-                        }),
-                      'Resultat ajoute.'
-                    )
+            <div className="mt-4">
+              <ResultsModule
+                dashboard={dashboard}
+                promoId={selectedPromoId}
+                canManagePromotion
+                currentUserId=""
+                onSaved={async () => {
+                  if (selectedPromoId) {
+                    await loadPromotionData(selectedPromoId);
                   }
-                >
-                  Ajouter resultat
-                </Button>
-              </div>
+                }}
+              />
             </div>
           )}
 

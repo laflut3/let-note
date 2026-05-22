@@ -11,6 +11,7 @@ import { SubjectsModule } from '@/components/dashboard/SubjectsModule';
 import { StudentProfileModule } from '@/components/dashboard/StudentProfileModule';
 import { WeeklyScheduleModule } from '@/components/dashboard/WeeklyScheduleModule';
 import { ResultsModule } from '@/components/dashboard/ResultsModule';
+import { SubjectsLibraryTab } from '@/components/dashboard/SubjectsLibraryTab';
 import { useDashboardController } from '@/hooks/useDashboardController';
 import { adminUi } from '@/lib/admin-ui';
 
@@ -28,6 +29,7 @@ export function DashboardPage() {
         <TopNav
           activeTab={controller.activeTab}
           setActiveTab={controller.setActiveTab}
+          hasPromotionContext={controller.hasPromotionContext}
           hasDelegueScope={controller.hasDelegueScope}
           isAdmin={controller.isAdmin}
           onDelegue={() => navigate('/delegue')}
@@ -38,33 +40,44 @@ export function DashboardPage() {
 
         {controller.activeTab === 'accueil' && (
           <section className="rounded-3xl border border-[var(--surface-border)] bg-[var(--surface-1)] p-4">
-            <PromoHeader
-              promoLabel={controller.promoLabel}
-              referentPrenom={controller.dashboard?.promotion.referent_prof_prenom}
-              referentNom={controller.dashboard?.promotion.referent_prof_nom}
-            />
-
-            <div className="grid gap-4 xl:grid-cols-[72px_1fr_1.4fr]">
-              <PromotionPills
-                promotions={controller.promotions}
-                selectedPromoId={controller.selectedPromoId}
-                onSelectPromo={controller.setSelectedPromoId}
-              />
-
-              <div className="space-y-4">
-                <TodayScheduleModule
-                  isLoadingSchedule={controller.isLoadingSchedule}
-                  scheduleError={controller.scheduleError}
-                  events={safeTodayEvents}
+            {!controller.hasPromotionContext ? (
+              <section className="rounded-2xl border border-[var(--surface-border)] bg-[var(--surface-2)] p-6 text-sm text-muted-foreground">
+                Pour l&apos;instant, vous n&apos;appartenez a aucune promotion.
+              </section>
+            ) : (
+              <>
+                <PromoHeader
+                  promoLabel={controller.promoLabel}
+                  referentPrenom={controller.dashboard?.promotion.referent_prof_prenom}
+                  referentNom={controller.dashboard?.promotion.referent_prof_nom}
                 />
-                <HomeworkModule dashboard={controller.dashboard} />
-                <RecentNotesModule dashboard={controller.dashboard} />
-              </div>
 
-              <div className="space-y-4">
-                <SubjectsModule dashboard={controller.dashboard} />
-              </div>
-            </div>
+                <div className="grid gap-4 xl:grid-cols-[72px_1fr_1.4fr]">
+                  <PromotionPills
+                    promotions={controller.promotions}
+                    selectedPromoId={controller.selectedPromoId}
+                    onSelectPromo={controller.setSelectedPromoId}
+                  />
+
+                  <div className="space-y-4">
+                    <TodayScheduleModule
+                      isLoadingSchedule={controller.isLoadingSchedule}
+                      scheduleError={controller.scheduleError}
+                      events={safeTodayEvents}
+                    />
+                    <HomeworkModule dashboard={controller.dashboard} />
+                    <RecentNotesModule dashboard={controller.dashboard} />
+                  </div>
+
+                  <div className="space-y-4">
+                    <SubjectsModule
+                      dashboard={controller.dashboard}
+                      onOpenAllMatieres={() => controller.setActiveTab('matieres')}
+                    />
+                  </div>
+                </div>
+              </>
+            )}
           </section>
         )}
 
@@ -77,6 +90,10 @@ export function DashboardPage() {
             />
 
             <section className="space-y-4">
+              {controller.activeTab === 'matieres' && (
+                <SubjectsLibraryTab dashboard={controller.dashboard} />
+              )}
+
               {controller.activeTab === 'edt' && (
                 <WeeklyScheduleModule
                   allEvents={safeAllEvents}
