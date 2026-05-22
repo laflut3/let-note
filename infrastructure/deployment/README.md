@@ -88,7 +88,7 @@ export VAULT_APP_TOKEN='<token-let-note-read>'
 
 ## Deploy versionne (recommande)
 
-Par defaut, le script lit `config-let-note.toml`:
+Par defaut, le script lit `infrastructure/deployment/config-let-note.toml`:
 
 ```toml
 [images]
@@ -109,4 +109,4 @@ Vous pouvez aussi surcharger a l'execution:
 Priorite des valeurs:
 1. arguments CLI `--version/--arch`
 2. variables d'environnement `LET_NOTE_VERSION/LET_NOTE_ARCH`
-3. `config-let-note.toml`
+3. `infrastructure/deployment/config-let-note.toml`

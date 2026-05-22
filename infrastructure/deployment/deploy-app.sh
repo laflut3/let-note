@@ -4,7 +4,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
-CONFIG_FILE="${REPO_ROOT}/config-let-note.toml"
+CONFIG_FILE="${SCRIPT_DIR}/config-let-note.toml"
 TARGET="${1:-}"
 WAIT_TIMEOUT="${WAIT_TIMEOUT:-180s}"
 BACKEND_IMAGE_REPO="ghcr.io/laflut3/let-note-backend"
