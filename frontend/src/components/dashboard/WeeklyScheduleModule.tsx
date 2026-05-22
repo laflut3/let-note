@@ -169,6 +169,11 @@ export function WeeklyScheduleModule({
                     <p className="text-xs text-foreground/80 dark:text-zinc-200">
                       {formatHourRange(event.start, event.end)}
                     </p>
+                    {event.room ? (
+                      <p className="text-xs font-medium text-foreground/80 dark:text-zinc-200">
+                        Salle: {event.room}
+                      </p>
+                    ) : null}
                     {event.location ? (
                       <p className="text-xs text-foreground/75 dark:text-zinc-300">
                         {event.location}
@@ -253,6 +258,7 @@ export function WeeklyScheduleModule({
                       >
                         <p className="font-semibold">{event.title}</p>
                         <p className="text-[10px]">{formatHourRange(event.start, event.end)}</p>
+                        {event.room ? <p className="text-[10px]">Salle: {event.room}</p> : null}
                       </article>
                     );
                   })}

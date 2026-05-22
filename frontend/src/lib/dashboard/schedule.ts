@@ -2,6 +2,7 @@ export type ScheduleEvent = {
   id: string;
   title: string;
   location: string;
+  room: string;
   description: string;
   start: Date;
   end: Date;
@@ -44,6 +45,36 @@ function parseIcsDate(value: string): Date | null {
   return null;
 }
 
+function decodeIcsText(value: string): string {
+  return value
+    .replace(/\\n/gi, '\n')
+    .replace(/\\,/g, ',')
+    .replace(/\\;/g, ';')
+    .replace(/\\\\/g, '\\')
+    .trim();
+}
+
+function extractRoom(location: string, description: string): string {
+  const roomHints = [location, description]
+    .filter(Boolean)
+    .flatMap((value) =>
+      decodeIcsText(value)
+        .split('\n')
+        .map((line) => line.trim())
+    )
+    .filter(Boolean);
+
+  for (const line of roomHints) {
+    const lower = line.toLowerCase();
+    if (lower.includes('salle')) return line;
+    if (/^tp\s*\d+[a-z]?$/i.test(line)) return line;
+    if (/^do\s*[a-z0-9_-]+$/i.test(line)) return line;
+    if (/^[a-z]{1,5}\s*\d{1,4}[a-z]?$/i.test(line)) return line;
+  }
+
+  return '';
+}
+
 export function parseIcsEvents(rawIcs: string): ScheduleEvent[] {
   const content = unfoldIcs(rawIcs);
   const lines = content.split(/\r?\n/);
@@ -65,11 +96,14 @@ export function parseIcsEvents(rawIcs: string): ScheduleEvent[] {
         const end = dtEndRaw ? parseIcsDate(dtEndRaw) : null;
 
         if (start && end) {
+          const location = decodeIcsText(current.LOCATION ?? '');
+          const description = decodeIcsText(current.DESCRIPTION ?? '');
           events.push({
             id: current.UID ?? `${start.toISOString()}-${current.SUMMARY ?? ''}`,
-            title: current.SUMMARY ?? 'Cours',
-            location: current.LOCATION ?? '',
-            description: current.DESCRIPTION ?? '',
+            title: decodeIcsText(current.SUMMARY ?? 'Cours'),
+            location,
+            room: extractRoom(location, description),
+            description,
             start,
             end,
           });

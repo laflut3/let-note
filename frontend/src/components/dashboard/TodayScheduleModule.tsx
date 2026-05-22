@@ -40,6 +40,9 @@ export function TodayScheduleModule({
                 {formatHourRange(event.start, event.end)}
               </p>
               <p className="text-sm font-semibold text-foreground">{event.title}</p>
+              {event.room ? (
+                <p className="text-xs font-medium text-foreground/85">Salle: {event.room}</p>
+              ) : null}
               {event.location ? (
                 <p className="text-xs text-muted-foreground">{event.location}</p>
               ) : null}

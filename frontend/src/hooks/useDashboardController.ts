@@ -23,7 +23,7 @@ import {
   type ScheduleEvent,
 } from '@/lib/dashboard/schedule';
 
-export type DashboardTab = 'accueil' | 'matieres' | 'edt' | 'notes' | 'profil';
+export type DashboardTab = 'accueil' | 'matieres' | 'devoirs' | 'edt' | 'notes' | 'profil';
 
 async function extractError(response: Response, fallback: string): Promise<string> {
   const data = (await response.json().catch(() => null)) as { message?: string } | null;
@@ -228,7 +228,10 @@ export function useDashboardController(navigate: NavigateFunction) {
   useEffect(() => {
     if (
       !hasPromotionContext &&
-      (activeTab === 'matieres' || activeTab === 'edt' || activeTab === 'notes')
+      (activeTab === 'matieres' ||
+        activeTab === 'devoirs' ||
+        activeTab === 'edt' ||
+        activeTab === 'notes')
     ) {
       setActiveTab('accueil');
     }

@@ -1,10 +1,19 @@
-import { BookOpen, Calendar, Home, LogOut, Shield, UserCircle, Users } from 'lucide-react';
+import {
+  BookOpen,
+  Calendar,
+  ClipboardList,
+  Home,
+  LogOut,
+  Shield,
+  UserCircle,
+  Users,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/auth/ThemeToggle';
 import { useThemeContext } from '@/context/theme-context';
 import { adminUi } from '@/lib/admin-ui';
 
-export type DashboardTab = 'accueil' | 'matieres' | 'edt' | 'notes' | 'profil';
+export type DashboardTab = 'accueil' | 'matieres' | 'devoirs' | 'edt' | 'notes' | 'profil';
 
 type TopNavProps = {
   activeTab: DashboardTab;
@@ -38,6 +47,7 @@ export function TopNav({
           [
             ['accueil', 'Accueil'],
             ...(hasPromotionContext ? ([['matieres', 'Matieres']] as const) : []),
+            ...(hasPromotionContext ? ([['devoirs', 'Devoirs']] as const) : []),
             ...(hasPromotionContext
               ? ([
                   ['edt', 'EDT'],
@@ -58,6 +68,7 @@ export function TopNav({
           >
             {key === 'accueil' && <Home className="h-4 w-4" />}
             {key === 'matieres' && <BookOpen className="h-4 w-4" />}
+            {key === 'devoirs' && <ClipboardList className="h-4 w-4" />}
             {key === 'edt' && <Calendar className="h-4 w-4" />}
             {key === 'notes' && <Users className="h-4 w-4" />}
             {key === 'profil' && <UserCircle className="h-4 w-4" />}

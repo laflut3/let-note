@@ -4,12 +4,32 @@ type HomeworkModuleProps = {
   dashboard: PromotionDashboardPayload | null;
 };
 
+function toDueTimestamp(value: string | null): number | null {
+  if (!value) return null;
+  const normalized = value.includes('T') ? value : `${value}T23:59:59`;
+  const ts = new Date(normalized).getTime();
+  return Number.isNaN(ts) ? null : ts;
+}
+
 export function HomeworkModule({ dashboard }: HomeworkModuleProps) {
+  const now = new Date();
+  const upcoming = (dashboard?.devoirs ?? [])
+    .filter((devoir) => {
+      const dueTs = toDueTimestamp(devoir.date_rendu);
+      if (dueTs === null) return true;
+      return dueTs >= now.getTime();
+    })
+    .sort((a, b) => {
+      const aTs = toDueTimestamp(a.date_rendu) ?? Number.MAX_SAFE_INTEGER;
+      const bTs = toDueTimestamp(b.date_rendu) ?? Number.MAX_SAFE_INTEGER;
+      return aTs - bTs;
+    });
+
   return (
     <section className="rounded-2xl border border-[var(--surface-border)] bg-[var(--surface-2)] p-4">
       <h3 className="text-sm font-semibold text-foreground">Homework</h3>
       <div className="mt-2 space-y-2">
-        {(dashboard?.devoirs ?? []).map((devoir) => (
+        {upcoming.map((devoir) => (
           <article
             key={devoir.id}
             className="rounded-lg border border-[var(--surface-border)] bg-[var(--surface-muted)] p-3"
@@ -30,8 +50,8 @@ export function HomeworkModule({ dashboard }: HomeworkModuleProps) {
             )}
           </article>
         ))}
-        {(dashboard?.devoirs ?? []).length === 0 && (
-          <p className="text-sm text-muted-foreground">Aucun devoir.</p>
+        {upcoming.length === 0 && (
+          <p className="text-sm text-muted-foreground">Aucun devoir en cours.</p>
         )}
       </div>
     </section>

@@ -12,6 +12,7 @@ import { StudentProfileModule } from '@/components/dashboard/StudentProfileModul
 import { WeeklyScheduleModule } from '@/components/dashboard/WeeklyScheduleModule';
 import { ResultsModule } from '@/components/dashboard/ResultsModule';
 import { SubjectsLibraryTab } from '@/components/dashboard/SubjectsLibraryTab';
+import { ArchivedHomeworkTab } from '@/components/dashboard/ArchivedHomeworkTab';
 import { useDashboardController } from '@/hooks/useDashboardController';
 import { adminUi } from '@/lib/admin-ui';
 
@@ -92,6 +93,10 @@ export function DashboardPage() {
             <section className="space-y-4">
               {controller.activeTab === 'matieres' && (
                 <SubjectsLibraryTab dashboard={controller.dashboard} />
+              )}
+
+              {controller.activeTab === 'devoirs' && (
+                <ArchivedHomeworkTab dashboard={controller.dashboard} />
               )}
 
               {controller.activeTab === 'edt' && (
