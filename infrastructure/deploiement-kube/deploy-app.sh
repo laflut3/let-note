@@ -83,6 +83,17 @@ env_or_fail() {
   printf '%s' "${val}"
 }
 
+vault_cli_safe_value() {
+  local value="$1"
+  # Vault CLI treats values starting with '@' as file paths (key=@file).
+  # Escape leading '@' to force literal string.
+  if [[ "${value}" == @* ]]; then
+    printf '\\%s' "${value}"
+  else
+    printf '%s' "${value}"
+  fi
+}
+
 vault_exec() {
   local vault_addr="$1"
   local vault_token="$2"
@@ -136,17 +147,53 @@ vault_put_env() {
     PS_BDD_SERVER="${ps_server}" \
     PS_BDD_DB="${ps_db}" \
     PS_BDD_USER="${ps_user}" \
-    PS_BDD_PASS="${ps_pass}" \
+    PS_BDD_PASS="$(vault_cli_safe_value "${ps_pass}")" \
     PS_BDD_PORT="${ps_port}" \
-    JWT_SECRET="${jwt}" \
+    JWT_SECRET="$(vault_cli_safe_value "${jwt}")" \
     COOKIE_SECURE="${cookie}" \
-    S3_ENDPOINT="${s3_endpoint}" \
+    S3_ENDPOINT="$(vault_cli_safe_value "${s3_endpoint}")" \
     S3_REGION="${s3_region}" \
     S3_BUCKET="${s3_bucket}" \
-    S3_ACCESS_KEY="${s3_access_key}" \
-    S3_SECRET_KEY="${s3_secret_key}" >/dev/null
+    S3_ACCESS_KEY="$(vault_cli_safe_value "${s3_access_key}")" \
+    S3_SECRET_KEY="$(vault_cli_safe_value "${s3_secret_key}")" >/dev/null
 
   ok "Vault variables synchronisees pour ${env_name}"
+}
+
+ensure_db_credentials() {
+  local env_name="$1"
+  local suffix="$(printf '%s' "${env_name}" | tr '[:lower:]' '[:upper:]')"
+  local app_db_user app_db_pass app_db_name escaped_pass
+
+  app_db_user="$(env_or_fail PS_BDD_USER_${suffix})"
+  app_db_pass="$(env_or_fail PS_BDD_PASS_${suffix})"
+  app_db_name="$(env_or_fail PS_BDD_DB_${suffix})"
+  escaped_pass="${app_db_pass//\'/\'\'}"
+
+  title "DB credentials sync ${env_name}"
+  sub "Role: ${app_db_user}"
+  sub "Database: ${app_db_name}"
+
+  kubectl -n "${env_name}" exec deploy/postgres -- sh -c "
+    psql -v ON_ERROR_STOP=1 -U \"\$POSTGRES_USER\" -d \"\$POSTGRES_DB\" <<'SQL'
+DO \$\$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = '${app_db_user}') THEN
+    EXECUTE format('CREATE ROLE %I LOGIN PASSWORD %L', '${app_db_user}', '${escaped_pass}');
+  ELSE
+    EXECUTE format('ALTER ROLE %I WITH LOGIN PASSWORD %L', '${app_db_user}', '${escaped_pass}');
+  END IF;
+END
+\$\$;
+SQL
+  "
+
+  kubectl -n "${env_name}" exec deploy/postgres -- sh -c "
+    psql -v ON_ERROR_STOP=1 -U \"\$POSTGRES_USER\" -d \"\$POSTGRES_DB\" -c \
+    \"GRANT CONNECT ON DATABASE \\\"${app_db_name}\\\" TO \\\"${app_db_user}\\\";\"
+  " >/dev/null || true
+
+  ok "Postgres credentials alignees pour ${env_name}"
 }
 
 if [ -z "${TARGET}" ]; then
@@ -254,12 +301,13 @@ sync_vault() {
 deploy_env() {
   local env="$1"
   local overlay="${SCRIPT_DIR}/environments/${env}"
-  local escaped_token escaped_vault_secret_path upper_env env_path_var vault_secret_path
+  local escaped_token escaped_vault_secret_path escaped_vault_addr upper_env env_path_var vault_secret_path
   local backend_expected front_expected backend_images front_images
 
   [ -d "${overlay}" ] || { err "Overlay introuvable: ${overlay}"; exit 1; }
 
   escaped_token="$(escape_sed_replacement "${VAULT_APP_TOKEN}")"
+  escaped_vault_addr="$(escape_sed_replacement "${VAULT_ADDR}")"
   upper_env="$(printf '%s' "${env}" | tr '[:lower:]' '[:upper:]')"
   env_path_var="VAULT_SECRET_PATH_${upper_env}"
   vault_secret_path="${!env_path_var:-}"
@@ -278,24 +326,55 @@ deploy_env() {
   title "Deploy ${env}"
   sub "Image tag: ${IMAGE_TAG}"
   sub "Vault path: ${vault_secret_path}"
+  sub "Vault addr: ${VAULT_ADDR}"
 
   kubectl kustomize "${overlay}" \
     | sed "s|${BACKEND_IMAGE_REPO}:latest|${BACKEND_IMAGE_REPO}:${IMAGE_TAG}|g" \
     | sed "s|${FRONTEND_IMAGE_REPO}:latest|${FRONTEND_IMAGE_REPO}:${IMAGE_TAG}|g" \
+    | sed "s|value: http://vault.default.svc.cluster.local:8200|value: ${escaped_vault_addr}|g" \
     | sed "s|value: let-note/${env}|value: ${escaped_vault_secret_path}|g" \
     | sed "s|\${VAULT_APP_TOKEN}|${escaped_token}|g" \
     | kubectl apply -f -
 
   info "Rollout postgres (${env})"
   kubectl -n "${env}" rollout status deploy/postgres --timeout="${WAIT_TIMEOUT}"
+  ensure_db_credentials "${env}"
 
-  if [ -d "${MIGRATIONS_DIR}" ]; then
-    info "Apply migrations (${env})"
-    while IFS= read -r -d '' migration_file; do
-      sub "$(basename "${migration_file}")"
-      kubectl -n "${env}" exec deploy/postgres -- sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < "${migration_file}"
-    done < <(find "${MIGRATIONS_DIR}" -maxdepth 1 -type f -name '*.up.sql' -print0 | sort -z)
+  info "Apply migrations (${env})"
+  if [ ! -d "${MIGRATIONS_DIR}" ]; then
+    err "Dossier migrations introuvable: ${MIGRATIONS_DIR}"
+    exit 1
   fi
+
+  mapfile -t migration_files < <(find "${MIGRATIONS_DIR}" -maxdepth 1 -type f -name '*.up.sql' | sort)
+  if [ "${#migration_files[@]}" -eq 0 ]; then
+    err "Aucune migration trouvee dans ${MIGRATIONS_DIR}"
+    exit 1
+  fi
+
+  for migration_file in "${migration_files[@]}"; do
+    sub "$(basename "${migration_file}")"
+    kubectl -n "${env}" exec -i deploy/postgres -- sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < "${migration_file}"
+  done
+
+  info "Verify expected schema (${env})"
+  kubectl -n "${env}" exec deploy/postgres -- sh -c '
+    psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" <<'\''SQL'\''
+DO $$
+BEGIN
+  IF to_regclass('\''public.etudiant'\'') IS NULL THEN
+    RAISE EXCEPTION '\''Missing required table: etudiant'\'';
+  END IF;
+  IF to_regclass('\''public.role'\'') IS NULL THEN
+    RAISE EXCEPTION '\''Missing required table: role'\'';
+  END IF;
+  IF to_regclass('\''public.role_etu'\'') IS NULL THEN
+    RAISE EXCEPTION '\''Missing required table: role_etu'\'';
+  END IF;
+END
+$$;
+SQL
+  '
 
   info "Rollout backend/front (${env})"
   kubectl -n "${env}" rollout status deploy/backend --timeout="${WAIT_TIMEOUT}"
