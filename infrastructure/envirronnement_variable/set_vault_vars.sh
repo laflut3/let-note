@@ -81,6 +81,7 @@ push_env() {
 
   local vault_addr vault_token kv_mount secret_path
   local ps_server ps_db ps_user ps_pass ps_port jwt cookie
+  local s3_endpoint s3_region s3_bucket s3_access_key s3_secret_key
 
   vault_addr="$(must_get VAULT_ADDR)"
   vault_token="$(must_get VAULT_TOKEN)"
@@ -94,6 +95,11 @@ push_env() {
   ps_port="$(must_get PS_BDD_PORT_${suffix})"
   jwt="$(must_get JWT_SECRET_${suffix})"
   cookie="$(must_get COOKIE_SECURE_${suffix})"
+  s3_endpoint="$(must_get S3_ENDPOINT_${suffix})"
+  s3_region="$(must_get S3_REGION_${suffix})"
+  s3_bucket="$(must_get S3_BUCKET_${suffix})"
+  s3_access_key="$(must_get S3_ACCESS_KEY_${suffix})"
+  s3_secret_key="$(must_get S3_SECRET_KEY_${suffix})"
 
   vault_exec "$vault_addr" "$vault_token" kv put "${kv_mount}/${secret_path}" \
     PS_BDD_SERVER="$ps_server" \
@@ -102,7 +108,12 @@ push_env() {
     PS_BDD_PASS="$ps_pass" \
     PS_BDD_PORT="$ps_port" \
     JWT_SECRET="$jwt" \
-    COOKIE_SECURE="$cookie" >/dev/null
+    COOKIE_SECURE="$cookie" \
+    S3_ENDPOINT="$s3_endpoint" \
+    S3_REGION="$s3_region" \
+    S3_BUCKET="$s3_bucket" \
+    S3_ACCESS_KEY="$s3_access_key" \
+    S3_SECRET_KEY="$s3_secret_key" >/dev/null
 
   echo "OK: $env_name -> ${kv_mount}/${secret_path}"
 }

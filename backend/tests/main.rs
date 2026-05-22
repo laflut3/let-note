@@ -17,7 +17,7 @@ fn test_router() -> axum::Router {
   let pool = PgPoolOptions::new()
     .connect_lazy(&database_url)
     .expect("failed to create lazy pool");
-  create_router().with_state(pool)
+  create_router(pool.clone()).with_state(pool)
 }
 
 #[tokio::test]

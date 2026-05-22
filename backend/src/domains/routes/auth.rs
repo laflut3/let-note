@@ -9,6 +9,7 @@ use sqlx::PgPool;
 
 use crate::domains::{
   entities::auth::{AuthMessage, AuthUser, LoginInfo},
+  middleware,
   services::auth_service,
 };
 
@@ -55,15 +56,20 @@ async fn logout() -> impl IntoResponse {
   response
 }
 
-async fn me(headers: HeaderMap) -> impl IntoResponse {
-  let Some(token) = extract_cookie_token(&headers) else {
-    return StatusCode::UNAUTHORIZED.into_response();
+async fn me(State(db): State<PgPool>, headers: HeaderMap) -> impl IntoResponse {
+  let auth = match middleware::extract_auth_context(&headers, &db).await {
+    Ok(value) => value,
+    Err(error) => return error.into_response(),
   };
 
-  match auth_service::parse_token(&token) {
-    Ok(claims) => (StatusCode::OK, Json(AuthUser { email: claims.sub })).into_response(),
-    Err(error) => error.into_response(),
-  }
+  (
+    StatusCode::OK,
+    Json(AuthUser {
+      email: auth.email,
+      roles: auth.roles,
+    }),
+  )
+    .into_response()
 }
 
 fn build_auth_cookie(token: &str, expire_immediately: bool) -> String {
@@ -85,14 +91,4 @@ fn build_auth_cookie(token: &str, expire_immediately: bool) -> String {
   }
 
   cookie
-}
-
-fn extract_cookie_token(headers: &HeaderMap) -> Option<String> {
-  let cookies = headers.get(header::COOKIE)?.to_str().ok()?;
-
-  cookies
-    .split(';')
-    .map(str::trim)
-    .find_map(|part| part.strip_prefix(&format!("{AUTH_COOKIE_NAME}=")))
-    .map(str::to_string)
 }

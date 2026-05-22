@@ -5,6 +5,7 @@ use uuid::Uuid;
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow, PartialEq, Eq)]
 pub struct GetEtudiant {
   pub id: Uuid,
+  pub numero_etudiant: Option<String>,
   pub nom: String,
   pub prenom: String,
   pub email: String,
@@ -13,6 +14,7 @@ pub struct GetEtudiant {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct CreateEtudiant {
+  pub numero_etudiant: String,
   pub nom: String,
   pub prenom: String,
   pub email: String,

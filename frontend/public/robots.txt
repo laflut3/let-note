@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+
+# Zones privees / authentifiees
+Disallow: /dashboard
+Disallow: /admin
+Disallow: /delegue
+
+Sitemap: https://let-note.app/sitemap.xml

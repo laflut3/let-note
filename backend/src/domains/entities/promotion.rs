@@ -5,14 +5,25 @@ use uuid::Uuid;
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct GetPromotion {
   pub id: Uuid,
+  pub nom: String,
+  pub image_url: String,
+  pub ical_url: Option<String>,
+  pub annee_arrivee: i32,
+  pub annee_depart: i32,
+  pub referent_prof_id: Option<Uuid>,
   pub annee_debut: NaiveDate,
   pub annee_fin: NaiveDate,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct CreatePromotion {
-  pub annee_debut: NaiveDate,
-  pub annee_fin: NaiveDate,
+  pub nom: String,
+  pub image_url: String,
+  pub ical_url: Option<String>,
+  pub annee_arrivee: i32,
+  pub annee_depart: i32,
+  pub referent_prof_id: Option<Uuid>,
+  pub etudiant_ids: Vec<Uuid>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

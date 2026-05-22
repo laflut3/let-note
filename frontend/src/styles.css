@@ -26,19 +26,19 @@
   :root {
     color-scheme: light;
     --radius: 0.75rem;
-    --border: hsl(24 15% 82%);
-    --input: hsl(24 15% 82%);
-    --ring: hsl(20 85% 42%);
-    --background: hsl(35 100% 94%);
-    --foreground: hsl(25 18% 14%);
-    --primary: hsl(20 90% 45%);
-    --primary-foreground: hsl(35 100% 98%);
-    --secondary: hsl(35 70% 88%);
-    --secondary-foreground: hsl(25 18% 14%);
-    --muted: hsl(32 42% 90%);
-    --muted-foreground: hsl(25 10% 35%);
+    --border: hsl(328 12% 82%);
+    --input: hsl(328 12% 82%);
+    --ring: hsl(321 59% 42%);
+    --background: hsl(318 26% 96%);
+    --foreground: hsl(320 24% 16%);
+    --primary: hsl(326 60% 35%);
+    --primary-foreground: hsl(0 0% 100%);
+    --secondary: hsl(321 33% 92%);
+    --secondary-foreground: hsl(320 24% 16%);
+    --muted: hsl(320 14% 92%);
+    --muted-foreground: hsl(320 13% 37%);
     --card: hsl(0 0% 100%);
-    --card-foreground: hsl(25 18% 14%);
+    --card-foreground: hsl(320 24% 16%);
     --auth-overlay: rgba(18, 8, 19, 0.46);
     --auth-split-panel: #963f2f;
     --auth-card-bg: rgba(80, 23, 48, 0.75);
@@ -52,21 +52,28 @@
     --auth-button-text: #2b151f;
     --auth-button-shadow: rgba(36, 14, 30, 0.3);
     --auth-muted-text: rgba(255, 241, 247, 0.88);
+    --surface-1: rgba(255, 255, 255, 0.86);
+    --surface-2: rgba(255, 255, 255, 0.95);
+    --surface-muted: rgba(255, 255, 255, 0.64);
+    --surface-strong: #6d2745;
+    --surface-strong-hover: #4f1730;
+    --surface-border: hsl(328 15% 80%);
+    --surface-soft-border: hsl(325 14% 86%);
   }
 
   .dark {
-    --border: hsl(278 18% 36%);
-    --input: hsl(278 18% 36%);
-    --ring: hsl(286 75% 72%);
-    --background: hsl(269 24% 11%);
-    --foreground: hsl(280 28% 95%);
-    --primary: hsl(18 88% 72%);
+    --border: hsl(286 18% 34%);
+    --input: hsl(286 18% 34%);
+    --ring: hsl(291 76% 72%);
+    --background: hsl(266 27% 12%);
+    --foreground: hsl(289 30% 94%);
+    --primary: hsl(20 88% 72%);
     --primary-foreground: hsl(275 32% 14%);
     --secondary: hsl(280 22% 21%);
     --secondary-foreground: hsl(283 30% 94%);
     --muted: hsl(278 14% 18%);
-    --muted-foreground: hsl(280 17% 74%);
-    --card: hsl(273 20% 15%);
+    --muted-foreground: hsl(284 16% 78%);
+    --card: hsl(272 21% 16%);
     --card-foreground: hsl(283 30% 94%);
     --auth-overlay: rgba(11, 10, 15, 0.72);
     --auth-split-panel: #5a2346;
@@ -81,6 +88,13 @@
     --auth-button-text: #291f2f;
     --auth-button-shadow: rgba(0, 0, 0, 0.42);
     --auth-muted-text: rgba(246, 237, 255, 0.9);
+    --surface-1: rgba(33, 27, 41, 0.82);
+    --surface-2: rgba(40, 32, 49, 0.95);
+    --surface-muted: rgba(54, 43, 66, 0.84);
+    --surface-strong: #d49bb7;
+    --surface-strong-hover: #c586a6;
+    --surface-border: hsl(280 13% 30%);
+    --surface-soft-border: hsl(279 11% 24%);
   }
 
   * {
@@ -90,5 +104,11 @@
   body {
     @apply bg-background text-foreground antialiased;
     font-family: 'Sora', sans-serif;
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--muted-foreground);
+    opacity: 0.9;
   }
 }
