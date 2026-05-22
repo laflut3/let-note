@@ -114,7 +114,7 @@ export function AuthCard({
                 inputMode="numeric"
                 pattern="[0-9]{8}"
                 maxLength={8}
-                placeholder="22303078"
+                placeholder="20202020"
                 value={fields.studentNumber}
                 onChange={handleInputChange('studentNumber')}
               />
