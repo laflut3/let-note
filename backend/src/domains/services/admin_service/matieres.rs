@@ -155,6 +155,8 @@ pub async fn create_matiere_resource_from_upload(
     return Err(ApiError::bad_request("file is required"));
   }
 
+  let content_type = normalize_resource_content_type(payload.content_type.as_deref())?;
+
   let s3_config =
     s3::read_s3_config().map_err(|_| ApiError::internal("unable to read S3 config"))?;
   let resource_id = Uuid::new_v4();
@@ -167,7 +169,7 @@ pub async fn create_matiere_resource_from_upload(
   );
 
   let content_size = i64::try_from(payload.bytes.len()).unwrap_or(i64::MAX);
-  s3::upload_bytes(&object_key, payload.bytes, payload.content_type.as_deref())
+  s3::upload_bytes(&object_key, payload.bytes, content_type.as_deref())
     .await
     .map_err(|_| ApiError::internal("unable to upload file to S3"))?;
 
@@ -186,7 +188,7 @@ pub async fn create_matiere_resource_from_upload(
   .bind(payload.description.map(|v| v.trim().to_string()))
   .bind(s3_config.bucket)
   .bind(object_key)
-  .bind(payload.content_type.map(|v| v.trim().to_string()))
+  .bind(content_type)
   .bind(content_size)
   .bind(created_by)
   .execute(db)
@@ -196,6 +198,47 @@ pub async fn create_matiere_resource_from_upload(
   Ok(MutationAck {
     message: "subject resource created",
   })
+}
+
+fn normalize_resource_content_type(content_type: Option<&str>) -> Result<Option<String>, ApiError> {
+  let Some(raw_content_type) = content_type else {
+    return Ok(None);
+  };
+
+  let media_type = raw_content_type
+    .split(';')
+    .next()
+    .unwrap_or("")
+    .trim()
+    .to_ascii_lowercase();
+
+  if media_type.is_empty() {
+    return Ok(None);
+  }
+
+  if is_active_resource_content_type(&media_type) {
+    return Err(ApiError::bad_request(
+      "file content type is not allowed for course resources",
+    ));
+  }
+
+  Ok(Some(media_type))
+}
+
+fn is_active_resource_content_type(media_type: &str) -> bool {
+  matches!(
+    media_type,
+    "text/html"
+      | "application/xhtml+xml"
+      | "image/svg+xml"
+      | "application/xml"
+      | "text/xml"
+      | "application/javascript"
+      | "application/x-javascript"
+      | "text/javascript"
+      | "text/ecmascript"
+      | "application/ecmascript"
+  ) || media_type.ends_with("+xml")
 }
 
 pub async fn delete_matiere_resource(

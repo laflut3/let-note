@@ -11,16 +11,14 @@ async fn get_resource_file(
 
   match promo_service::get_resource_file_for_user(&db, &auth, resource_id).await {
     Ok((bytes, content_type, title)) => {
-      let disposition = if query.download.unwrap_or(false) {
-        format!("attachment; filename=\"{}\"", title.replace('"', "_"))
-      } else {
-        format!("inline; filename=\"{}\"", title.replace('"', "_"))
-      };
+      let _requested_download = query.download.unwrap_or(false);
+      let disposition = format!("attachment; filename=\"{}\"", title.replace('"', "_"));
       (
         [
           (header::CONTENT_TYPE, content_type),
           (header::CONTENT_DISPOSITION, disposition),
           (header::CACHE_CONTROL, "no-store".to_string()),
+          (header::X_CONTENT_TYPE_OPTIONS, "nosniff".to_string()),
         ],
         Body::from(bytes),
       )
