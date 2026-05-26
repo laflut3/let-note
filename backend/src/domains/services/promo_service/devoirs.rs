@@ -1,3 +1,11 @@
+use std::{
+  net::{IpAddr, Ipv4Addr, Ipv6Addr, ToSocketAddrs},
+  time::Duration,
+};
+
+const ICAL_FETCH_TIMEOUT: Duration = Duration::from_secs(10);
+const ICAL_MAX_RESPONSE_BYTES: usize = 1024 * 1024;
+
 pub async fn list_devoirs_for_promo(
   db: &PgPool,
   auth: &AuthContext,
@@ -171,7 +179,16 @@ pub async fn fetch_promotion_ical(
     .filter(|value| !value.is_empty())
     .ok_or_else(|| ApiError::bad_request("promotion does not have an iCal URL"))?;
 
-  let response = reqwest::get(&ical_url)
+  let url = validate_remote_ical_url(&ical_url)?;
+  let client = reqwest::Client::builder()
+    .redirect(reqwest::redirect::Policy::none())
+    .timeout(ICAL_FETCH_TIMEOUT)
+    .build()
+    .map_err(|_| ApiError::internal("unable to prepare remote iCal request"))?;
+
+  let mut response = client
+    .get(url)
+    .send()
     .await
     .map_err(|_| ApiError::internal("unable to fetch remote iCal"))?;
 
@@ -179,8 +196,97 @@ pub async fn fetch_promotion_ical(
     return Err(ApiError::bad_request("unable to fetch remote iCal"));
   }
 
-  response
-    .text()
+  if response
+    .content_length()
+    .is_some_and(|length| length > ICAL_MAX_RESPONSE_BYTES as u64)
+  {
+    return Err(ApiError::bad_request("remote iCal response is too large"));
+  }
+
+  let mut body = Vec::new();
+  while let Some(chunk) = response
+    .chunk()
     .await
-    .map_err(|_| ApiError::internal("unable to read remote iCal response"))
+    .map_err(|_| ApiError::internal("unable to read remote iCal response"))?
+  {
+    if body.len() + chunk.len() > ICAL_MAX_RESPONSE_BYTES {
+      return Err(ApiError::bad_request("remote iCal response is too large"));
+    }
+    body.extend_from_slice(&chunk);
+  }
+
+  String::from_utf8(body).map_err(|_| ApiError::bad_request("remote iCal response is not UTF-8"))
+}
+
+fn validate_remote_ical_url(value: &str) -> Result<reqwest::Url, ApiError> {
+  let url = reqwest::Url::parse(value).map_err(|_| ApiError::bad_request("invalid iCal URL"))?;
+  if !matches!(url.scheme(), "http" | "https") {
+    return Err(ApiError::bad_request("iCal URL must use http or https"));
+  }
+  if !url.username().is_empty() || url.password().is_some() {
+    return Err(ApiError::bad_request("iCal URL must not contain credentials"));
+  }
+
+  let host = url
+    .host_str()
+    .ok_or_else(|| ApiError::bad_request("invalid iCal URL"))?;
+
+  if let Ok(ip) = host.parse::<IpAddr>() {
+    if !is_allowed_remote_ip(ip) {
+      return Err(ApiError::bad_request("iCal URL host is not allowed"));
+    }
+  }
+
+  let port = url
+    .port_or_known_default()
+    .ok_or_else(|| ApiError::bad_request("invalid iCal URL"))?;
+  let addrs = (host, port)
+    .to_socket_addrs()
+    .map_err(|_| ApiError::bad_request("unable to resolve iCal URL host"))?;
+  let mut resolved_any = false;
+  for addr in addrs {
+    resolved_any = true;
+    if !is_allowed_remote_ip(addr.ip()) {
+      return Err(ApiError::bad_request("iCal URL host is not allowed"));
+    }
+  }
+  if !resolved_any {
+    return Err(ApiError::bad_request("unable to resolve iCal URL host"));
+  }
+
+  Ok(url)
+}
+
+fn is_allowed_remote_ip(ip: IpAddr) -> bool {
+  match ip {
+    IpAddr::V4(ip) => is_allowed_remote_ipv4(ip),
+    IpAddr::V6(ip) => is_allowed_remote_ipv6(ip),
+  }
+}
+
+fn is_allowed_remote_ipv4(ip: Ipv4Addr) -> bool {
+  let octets = ip.octets();
+  !(ip.is_private()
+    || ip.is_loopback()
+    || ip.is_link_local()
+    || ip.is_broadcast()
+    || ip.is_documentation()
+    || ip.is_multicast()
+    || octets[0] == 0
+    || octets[0] >= 224
+    || (octets[0] == 100 && (64..=127).contains(&octets[1]))
+    || (octets[0] == 169 && octets[1] == 254)
+    || (octets[0] == 192 && octets[1] == 0 && octets[2] == 0)
+    || (octets[0] == 198 && (18..=19).contains(&octets[1])))
+}
+
+fn is_allowed_remote_ipv6(ip: Ipv6Addr) -> bool {
+  let segments = ip.segments();
+  (segments[0] & 0xe000) == 0x2000
+    && !(ip.is_unspecified()
+      || ip.is_loopback()
+      || ip.is_multicast()
+      || (segments[0] & 0xfe00) == 0xfc00
+      || (segments[0] & 0xffc0) == 0xfe80
+      || (segments[0] == 0x2001 && segments[1] == 0x0db8))
 }
