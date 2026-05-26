@@ -231,10 +231,10 @@ fn validate_remote_ical_url(value: &str) -> Result<reqwest::Url, ApiError> {
     .host_str()
     .ok_or_else(|| ApiError::bad_request("invalid iCal URL"))?;
 
-  if let Ok(ip) = host.parse::<IpAddr>() {
-    if !is_allowed_remote_ip(ip) {
-      return Err(ApiError::bad_request("iCal URL host is not allowed"));
-    }
+  if let Ok(ip) = host.parse::<IpAddr>()
+    && !is_allowed_remote_ip(ip)
+  {
+    return Err(ApiError::bad_request("iCal URL host is not allowed"));
   }
 
   let port = url
