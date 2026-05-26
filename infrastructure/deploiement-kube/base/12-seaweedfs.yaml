@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
       - name: seaweed-master
-        image: chrislusf/seaweedfs:latest@sha256:d47c7ee99fcb951351d7194915f4e3a5ea604a8e8871183d713907dec4fb9bf5
+        image: chrislusf/seaweedfs:4.28
         env:
         - name: POD_IP
           valueFrom:
@@ -66,7 +66,7 @@ spec:
     spec:
       containers:
       - name: seaweed-volume
-        image: chrislusf/seaweedfs:latest@sha256:d47c7ee99fcb951351d7194915f4e3a5ea604a8e8871183d713907dec4fb9bf5
+        image: chrislusf/seaweedfs:4.28
         args:
         - volume
         - -mserver=seaweed-master:9333
@@ -112,7 +112,7 @@ spec:
     spec:
       containers:
       - name: seaweed-filer
-        image: chrislusf/seaweedfs:latest@sha256:d47c7ee99fcb951351d7194915f4e3a5ea604a8e8871183d713907dec4fb9bf5
+        image: chrislusf/seaweedfs:4.28
         args: ["filer", "-master=seaweed-master:9333", "-ip=seaweed-filer", "-port=8888"]
         ports:
         - containerPort: 8888
@@ -150,7 +150,7 @@ spec:
           name: seaweed-s3-config
       containers:
       - name: seaweed-s3
-        image: chrislusf/seaweedfs:latest@sha256:d47c7ee99fcb951351d7194915f4e3a5ea604a8e8871183d713907dec4fb9bf5
+        image: chrislusf/seaweedfs:4.28
         args:
         - s3
         - -filer=seaweed-filer:8888

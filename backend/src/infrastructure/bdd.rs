@@ -41,23 +41,6 @@ async fn bootstrap_roles_and_admin(pool: &PgPool) -> anyhow::Result<()> {
     .execute(pool)
     .await?;
 
-  let admin_exists = sqlx::query_scalar::<_, i64>(
-    r#"
-    SELECT COUNT(*)
-    FROM etudiant e
-    JOIN role_etu re ON re.id_etu = e.id
-    JOIN role r ON r.id = re.id_role
-    WHERE r.role = 'admin'
-    "#,
-  )
-  .fetch_one(pool)
-  .await?
-    > 0;
-
-  if admin_exists {
-    return Ok(());
-  }
-
   let admin_email =
     std::env::var("ADMIN_EMAIL").unwrap_or_else(|_| "admin@let-note.local".to_string());
   let admin_password =

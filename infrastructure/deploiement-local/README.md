@@ -55,11 +55,36 @@ docker compose up -d --build
 - `PS_BDD_PORT`: port expose PostgreSQL (hote)
 - `BACKEND_PORT`: port expose backend (hote)
 - `FRONTEND_PORT`: port expose frontend (hote)
-- `VITE_API_BASE_URL`: URL API injectee au build frontend
+- `VITE_API_BASE_URL`: base API frontend (recommande: `/api`, proxy Nginx vers backend)
 
 ## Migrations SQL
 
 Les migrations dans `infrastructure/BDD/migration` sont executees automatiquement au demarrage par le service `db-migrate`.
+
+Commandes utiles:
+
+```bash
+# lancer uniquement la migration (si postgres est deja demarre)
+docker compose up db-migrate
+
+# relancer explicitement la migration sans tout redemarrer
+docker compose run --rm db-migrate
+
+# voir les scripts de migration detectes
+ls -1 ../BDD/migration/*.up.sql
+
+# verifier les logs de migration
+docker compose logs --tail=200 db-migrate
+```
+
+Rejouer les migrations depuis une BDD propre:
+
+```bash
+docker compose down -v
+docker compose up -d postgres
+docker compose run --rm db-migrate
+docker compose up -d backend frontend
+```
 
 Pour verifier:
 
@@ -82,6 +107,7 @@ curl http://127.0.0.1:8081/api/health
   - verifier que PostgreSQL est `healthy` avec `docker compose ps`
 - Frontend ne joint pas l'API:
   - verifier `VITE_API_BASE_URL` dans `.env`
+  - en local, utiliser `VITE_API_BASE_URL=/api` (evite les problemes de cookies entre `localhost` et `127.0.0.1`)
   - rebuild frontend: `docker compose up -d --build frontend`
 - Migrations rejouees proprement:
   - `docker compose down -v` puis `docker compose up -d --build`
