@@ -12,6 +12,25 @@ use crate::domains::{
 };
 use crate::infrastructure::s3;
 
+pub async fn create_public_etudiant(
+  db: &PgPool,
+  etudiant: CreateEtudiant,
+) -> Result<GetEtudiant, ApiError> {
+  if !public_registration_enabled() {
+    return Err(ApiError::forbidden(
+      "public student registration is disabled",
+    ));
+  }
+
+  create_etudiant(db, etudiant).await
+}
+
+fn public_registration_enabled() -> bool {
+  std::env::var("ENABLE_PUBLIC_REGISTRATION")
+    .map(|value| value.eq_ignore_ascii_case("true"))
+    .unwrap_or(false)
+}
+
 pub async fn create_etudiant(
   db: &PgPool,
   etudiant: CreateEtudiant,

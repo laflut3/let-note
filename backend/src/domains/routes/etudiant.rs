@@ -25,7 +25,7 @@ async fn create_etudiant(
   State(db): State<PgPool>,
   Json(etudiant): Json<CreateEtudiant>,
 ) -> impl IntoResponse {
-  match etudiant_service::create_etudiant(&db, etudiant).await {
+  match etudiant_service::create_public_etudiant(&db, etudiant).await {
     Ok(created_etudiant) => (StatusCode::CREATED, Json(created_etudiant)).into_response(),
     Err(error) => error.into_response(),
   }

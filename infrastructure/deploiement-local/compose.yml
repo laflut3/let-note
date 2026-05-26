@@ -57,6 +57,7 @@ services:
       APP_HOST: 0.0.0.0
       APP_PORT: 8080
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      ENABLE_PUBLIC_REGISTRATION: ${ENABLE_PUBLIC_REGISTRATION:-false}
       JWT_SECRET: ${JWT_SECRET:-dev_jwt_secret_change_me}
       PS_BDD_SERVER: postgres
       PS_BDD_PORT: 5432
