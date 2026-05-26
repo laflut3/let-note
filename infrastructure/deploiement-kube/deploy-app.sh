@@ -355,8 +355,13 @@ SQL
 
   kubectl -n "${env_name}" exec deploy/postgres -- sh -c "
     psql -v ON_ERROR_STOP=1 -U \"\$POSTGRES_USER\" -d \"\$POSTGRES_DB\" -c \
+    \"CREATE DATABASE \\\"${app_db_name}\\\";\"
+  " >/dev/null 2>&1 || true
+
+  kubectl -n "${env_name}" exec deploy/postgres -- sh -c "
+    psql -v ON_ERROR_STOP=1 -U \"\$POSTGRES_USER\" -d \"\$POSTGRES_DB\" -c \
     \"GRANT CONNECT ON DATABASE \\\"${app_db_name}\\\" TO \\\"${app_db_user}\\\";\"
-  " >/dev/null || true
+  " >/dev/null
 
   ok "Postgres credentials alignees pour ${env_name}"
 }

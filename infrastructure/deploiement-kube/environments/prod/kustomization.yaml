@@ -6,5 +6,6 @@ resources:
 patches:
 - path: patch-configmaps.yaml
 - path: patch-backend-vault.yaml
+- path: patch-postgres-config.yaml
 - path: patch-resources.yaml
 - path: patch-ingress.yaml
