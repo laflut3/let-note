@@ -1,6 +1,7 @@
 use std::collections::HashMap;
+use std::time::Duration;
 
-use reqwest::Client;
+use reqwest::{Client, Url};
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
@@ -19,6 +20,26 @@ pub async fn load_secrets_from_vault() -> anyhow::Result<()> {
     Err(_) => return Ok(()),
   };
 
+  let vault_url = Url::parse(&vault_addr)
+    .map_err(|err| anyhow::anyhow!("VAULT_ADDR must be a valid URL: {err}"))?;
+  let allow_insecure_http = std::env::var("VAULT_ALLOW_INSECURE_HTTP")
+    .map(|value| value.eq_ignore_ascii_case("true"))
+    .unwrap_or(false);
+  match vault_url.scheme() {
+    "https" => {}
+    "http" if allow_insecure_http => {}
+    "http" => {
+      return Err(anyhow::anyhow!(
+        "VAULT_ADDR must use https; set VAULT_ALLOW_INSECURE_HTTP=true only for local/dev Vault"
+      ));
+    }
+    scheme => {
+      return Err(anyhow::anyhow!(
+        "VAULT_ADDR must use http or https, got scheme '{scheme}'"
+      ));
+    }
+  }
+
   let vault_token = std::env::var("VAULT_TOKEN")
     .map_err(|_| anyhow::anyhow!("VAULT_ADDR is set but VAULT_TOKEN is missing"))?;
 
@@ -32,7 +53,14 @@ pub async fn load_secrets_from_vault() -> anyhow::Result<()> {
     path
   );
 
-  let client = Client::builder().build()?;
+  let timeout_seconds = std::env::var("VAULT_TIMEOUT_SECONDS")
+    .ok()
+    .and_then(|value| value.parse::<u64>().ok())
+    .unwrap_or(10);
+
+  let client = Client::builder()
+    .timeout(Duration::from_secs(timeout_seconds))
+    .build()?;
   let response = client
     .get(url)
     .header("X-Vault-Token", vault_token)

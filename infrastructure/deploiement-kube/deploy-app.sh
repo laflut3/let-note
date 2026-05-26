@@ -427,7 +427,7 @@ if [ -z "${VAULT_ADMIN_TOKEN:-}" ] && [ -n "${VAULT_TOKEN:-}" ]; then
 fi
 
 if [ -z "${VAULT_ADDR:-}" ]; then
-  VAULT_ADDR="http://vault.default.svc.cluster.local:8200"
+  VAULT_ADDR="https://vault.default.svc.cluster.local:8200"
 fi
 if [ -z "${VAULT_KV_MOUNT:-}" ]; then
   VAULT_KV_MOUNT="secret"
@@ -514,7 +514,7 @@ deploy_env() {
   kubectl kustomize "${overlay}" \
     | sed "s|${BACKEND_IMAGE_REPO}:latest|${BACKEND_IMAGE_REPO}:${IMAGE_TAG}|g" \
     | sed "s|${FRONTEND_IMAGE_REPO}:latest|${FRONTEND_IMAGE_REPO}:${IMAGE_TAG}|g" \
-    | sed "s|value: http://vault.default.svc.cluster.local:8200|value: ${escaped_vault_addr}|g" \
+    | sed "s|value: https://vault.default.svc.cluster.local:8200|value: ${escaped_vault_addr}|g" \
     | sed "s|host: ${env}.app.local|host: ${escaped_ingress_host}|g" \
     | sed "s|value: let-note/${env}|value: ${escaped_vault_secret_path}|g" \
     | sed "s|\${VAULT_APP_TOKEN}|${escaped_token}|g" \
