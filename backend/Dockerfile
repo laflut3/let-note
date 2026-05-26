@@ -22,7 +22,7 @@ COPY . .
 RUN cargo build --release --target "$(cat /rust-target)"
 RUN cp "/app/target/$(cat /rust-target)/release/let-note-backend" /app/let-note-backend
 
-FROM gcr.io/distroless/static-debian13@sha256:47b2d72ff90843eb8a768b5c2f89b40741843b639d065b9b937b07cd59b479c6 AS runtime
+FROM gcr.io/distroless/static-debian13@sha256:3592aa8171c77482f62bbc4164e6a2d141c6122554ace66e5cc910cadb961ff0 AS runtime
 
 LABEL org.opencontainers.image.title="let-note-backend"
 LABEL org.opencontainers.image.description="Backend service for let-note, written in Rust."
