@@ -118,9 +118,6 @@ vault_put_env() {
   local path_var="VAULT_SECRET_PATH_${suffix}"
 
   local kv_mount secret_path
-  local ps_server ps_db ps_user ps_pass ps_port jwt cookie
-  local admin_email admin_password admin_prenom admin_nom
-  local s3_endpoint s3_region s3_bucket s3_access_key s3_secret_key
 
   kv_mount="$(env_or_fail VAULT_KV_MOUNT)"
   secret_path="${!path_var:-}"
@@ -132,51 +129,55 @@ vault_put_env() {
     fi
   fi
 
-  ps_server="$(env_or_fail PS_BDD_SERVER_${suffix})"
-  ps_db="$(env_or_fail PS_BDD_DB_${suffix})"
-  ps_user="$(env_or_fail PS_BDD_USER_${suffix})"
-  ps_pass="$(env_or_fail PS_BDD_PASS_${suffix})"
-  ps_port="$(env_or_fail PS_BDD_PORT_${suffix})"
-  jwt="$(env_or_fail JWT_SECRET_${suffix})"
-  cookie="$(env_or_fail COOKIE_SECURE_${suffix})"
-  admin_email="$(env_or_fail ADMIN_EMAIL_${suffix})"
-  admin_password="$(env_or_fail ADMIN_PASSWORD_${suffix})"
-  admin_prenom="$(env_or_fail ADMIN_PRENOM_${suffix})"
-  admin_nom="$(env_or_fail ADMIN_NOM_${suffix})"
-  s3_endpoint="$(env_or_fail S3_ENDPOINT_${suffix})"
-  s3_region="$(env_or_fail S3_REGION_${suffix})"
-  s3_bucket="$(env_or_fail S3_BUCKET_${suffix})"
-  s3_access_key="$(env_or_fail S3_ACCESS_KEY_${suffix})"
-  s3_secret_key="$(env_or_fail S3_SECRET_KEY_${suffix})"
-
   sub "Sync Vault path: ${kv_mount}/${secret_path}"
 
-  local -a all_pairs
-  all_pairs=(
-    "PS_BDD_SERVER=${ps_server}"
-    "PS_BDD_DB=${ps_db}"
-    "PS_BDD_USER=${ps_user}"
-    "PS_BDD_PASS=$(vault_cli_safe_value "${ps_pass}")"
-    "PS_BDD_PORT=${ps_port}"
-    "JWT_SECRET=$(vault_cli_safe_value "${jwt}")"
-    "COOKIE_SECURE=${cookie}"
-    "ADMIN_EMAIL=$(vault_cli_safe_value "${admin_email}")"
-    "ADMIN_PASSWORD=$(vault_cli_safe_value "${admin_password}")"
-    "ADMIN_PRENOM=$(vault_cli_safe_value "${admin_prenom}")"
-    "ADMIN_NOM=$(vault_cli_safe_value "${admin_nom}")"
-    "S3_ENDPOINT=$(vault_cli_safe_value "${s3_endpoint}")"
-    "S3_REGION=${s3_region}"
-    "S3_BUCKET=${s3_bucket}"
-    "S3_ACCESS_KEY=$(vault_cli_safe_value "${s3_access_key}")"
-    "S3_SECRET_KEY=$(vault_cli_safe_value "${s3_secret_key}")"
+  local -a key_map
+  key_map=(
+    "PS_BDD_SERVER:PS_BDD_SERVER_${suffix}"
+    "PS_BDD_DB:PS_BDD_DB_${suffix}"
+    "PS_BDD_USER:PS_BDD_USER_${suffix}"
+    "PS_BDD_PASS:PS_BDD_PASS_${suffix}"
+    "PS_BDD_PORT:PS_BDD_PORT_${suffix}"
+    "JWT_SECRET:JWT_SECRET_${suffix}"
+    "COOKIE_SECURE:COOKIE_SECURE_${suffix}"
+    "ADMIN_EMAIL:ADMIN_EMAIL_${suffix}"
+    "ADMIN_PASSWORD:ADMIN_PASSWORD_${suffix}"
+    "ADMIN_PRENOM:ADMIN_PRENOM_${suffix}"
+    "ADMIN_NOM:ADMIN_NOM_${suffix}"
+    "S3_ENDPOINT:S3_ENDPOINT_${suffix}"
+    "S3_REGION:S3_REGION_${suffix}"
+    "S3_BUCKET:S3_BUCKET_${suffix}"
+    "S3_ACCESS_KEY:S3_ACCESS_KEY_${suffix}"
+    "S3_SECRET_KEY:S3_SECRET_KEY_${suffix}"
   )
+
+  pair_from_env() {
+    local vault_key="$1"
+    local env_key="$2"
+    local raw="${!env_key:-}"
+    if [ -z "${raw}" ]; then
+      err "Variable requise manquante: ${env_key}"
+      return 1
+    fi
+    printf '%s=%s' "${vault_key}" "$(vault_cli_safe_value "${raw}")"
+  }
 
   local vault_path_exists="false"
   if vault_exec "${VAULT_ADDR}" "${VAULT_ADMIN_TOKEN}" kv get "${kv_mount}/${secret_path}" >/dev/null 2>&1; then
     vault_path_exists="true"
   fi
 
+  local -a all_pairs
+  all_pairs=()
+
+  local m kv_key env_key maybe_pair
   if [ "${FORCE_VAULT_SYNC}" = "true" ] || [ "${vault_path_exists}" = "false" ]; then
+    for m in "${key_map[@]}"; do
+      kv_key="${m%%:*}"
+      env_key="${m#*:}"
+      maybe_pair="$(pair_from_env "${kv_key}" "${env_key}")" || exit 1
+      all_pairs+=("${maybe_pair}")
+    done
     vault_exec "${VAULT_ADDR}" "${VAULT_ADMIN_TOKEN}" kv put "${kv_mount}/${secret_path}" "${all_pairs[@]}" >/dev/null
     ok "Vault variables synchronisees (${FORCE_VAULT_SYNC:+force=on}) pour ${env_name}"
     return
@@ -184,11 +185,13 @@ vault_put_env() {
 
   local -a missing_pairs
   missing_pairs=()
-  local pair key
-  for pair in "${all_pairs[@]}"; do
-    key="${pair%%=*}"
-    if ! vault_exec "${VAULT_ADDR}" "${VAULT_ADMIN_TOKEN}" kv get -field="${key}" "${kv_mount}/${secret_path}" >/dev/null 2>&1; then
-      missing_pairs+=("${pair}")
+  local key
+  for m in "${key_map[@]}"; do
+    kv_key="${m%%:*}"
+    env_key="${m#*:}"
+    if ! vault_exec "${VAULT_ADDR}" "${VAULT_ADMIN_TOKEN}" kv get -field="${kv_key}" "${kv_mount}/${secret_path}" >/dev/null 2>&1; then
+      maybe_pair="$(pair_from_env "${kv_key}" "${env_key}")" || exit 1
+      missing_pairs+=("${maybe_pair}")
     fi
   done
 
@@ -286,15 +289,55 @@ ensure_db_credentials() {
   local env_name="$1"
   local suffix="$(printf '%s' "${env_name}" | tr '[:lower:]' '[:upper:]')"
   local app_db_user app_db_pass app_db_name escaped_pass
+  local env_path_var vault_secret_path vault_token_for_read
+  local env_user_key env_pass_key env_db_key
 
-  app_db_user="$(env_or_fail PS_BDD_USER_${suffix})"
-  app_db_pass="$(env_or_fail PS_BDD_PASS_${suffix})"
-  app_db_name="$(env_or_fail PS_BDD_DB_${suffix})"
+  env_path_var="VAULT_SECRET_PATH_${suffix}"
+  vault_secret_path="${!env_path_var:-}"
+  if [ -z "${vault_secret_path}" ]; then
+    if [ "${env_name}" = "staging" ] && [ -n "${VAULT_SECRET_PATH_STAGGING:-}" ]; then
+      vault_secret_path="${VAULT_SECRET_PATH_STAGGING}"
+    else
+      vault_secret_path="let-note/${env_name}"
+    fi
+  fi
+
+  vault_token_for_read="${VAULT_ADMIN_TOKEN:-${VAULT_APP_TOKEN:-}}"
+  read_env_or_vault() {
+    local env_var="$1"
+    local vault_field="$2"
+    local v="${!env_var:-}"
+    if [ -n "${v}" ]; then
+      printf '%s' "${v}"
+      return 0
+    fi
+    if [ -z "${vault_token_for_read}" ]; then
+      err "Variable requise manquante: ${env_var} (et aucun token Vault disponible pour fallback)"
+      return 1
+    fi
+    if ! v="$(vault_exec "${VAULT_ADDR}" "${vault_token_for_read}" kv get -field="${vault_field}" "${VAULT_KV_MOUNT}/${vault_secret_path}" 2>/dev/null)"; then
+      err "Variable requise manquante: ${env_var} (fallback Vault ${vault_field} indisponible)"
+      return 1
+    fi
+    printf '%s' "${v}"
+  }
+
+  app_db_user="$(read_env_or_vault "PS_BDD_USER_${suffix}" "PS_BDD_USER")" || exit 1
+  app_db_pass="$(read_env_or_vault "PS_BDD_PASS_${suffix}" "PS_BDD_PASS")" || exit 1
+  app_db_name="$(read_env_or_vault "PS_BDD_DB_${suffix}" "PS_BDD_DB")" || exit 1
+  env_user_key="PS_BDD_USER_${suffix}"
+  env_pass_key="PS_BDD_PASS_${suffix}"
+  env_db_key="PS_BDD_DB_${suffix}"
   escaped_pass="${app_db_pass//\'/\'\'}"
 
   title "DB credentials sync ${env_name}"
   sub "Role: ${app_db_user}"
   sub "Database: ${app_db_name}"
+  if [ -z "${!env_user_key:-}" ] || [ -z "${!env_pass_key:-}" ] || [ -z "${!env_db_key:-}" ]; then
+    sub "Source credentials: Vault fallback (${VAULT_KV_MOUNT}/${vault_secret_path})"
+  else
+    sub "Source credentials: .env"
+  fi
 
   kubectl -n "${env_name}" exec deploy/postgres -- sh -c "
     psql -v ON_ERROR_STOP=1 -U \"\$POSTGRES_USER\" -d \"\$POSTGRES_DB\" <<'SQL'
