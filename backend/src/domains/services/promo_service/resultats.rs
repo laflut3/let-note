@@ -5,19 +5,13 @@ pub async fn create_resultat_for_matiere(
   matiere_id: String,
   payload: CreateResultatInput,
 ) -> Result<MutationAck, ApiError> {
-  let can_manage = can_manage_promo(db, auth, promo_id).await?;
+  if !can_manage_promo(db, auth, promo_id).await? {
+    return Err(ApiError::forbidden(
+      "you are not allowed to create results for this promotion",
+    ));
+  }
 
-  let target_student = match (can_manage, payload.etudiant_id) {
-    (true, Some(id)) => id,
-    (true, None) => auth.user_id,
-    (false, Some(id)) if id == auth.user_id => auth.user_id,
-    (false, Some(_)) => {
-      return Err(ApiError::forbidden(
-        "you can only create results for your own account",
-      ));
-    }
-    (false, None) => auth.user_id,
-  };
+  let target_student = payload.etudiant_id.unwrap_or(auth.user_id);
 
   let code = matiere_id.trim().to_uppercase();
   if code.is_empty() || payload.libelle.trim().is_empty() {
@@ -85,10 +79,9 @@ pub async fn update_resultat(
   ensure_student_in_promo(db, row.0, promo_id).await?;
   ensure_subject_in_promo(db, &row.1, promo_id).await?;
 
-  let can_manage = can_manage_promo(db, auth, promo_id).await?;
-  if !can_manage && row.0 != auth.user_id {
+  if !can_manage_promo(db, auth, promo_id).await? {
     return Err(ApiError::forbidden(
-      "you can only update results for your own account",
+      "you are not allowed to update results for this promotion",
     ));
   }
 
@@ -166,10 +159,9 @@ pub async fn delete_resultat(
     ));
   }
 
-  let can_manage = can_manage_promo(db, auth, promo_id).await?;
-  if !can_manage && row.0 != auth.user_id {
+  if !can_manage_promo(db, auth, promo_id).await? {
     return Err(ApiError::forbidden(
-      "you can only delete results for your own account",
+      "you are not allowed to delete results for this promotion",
     ));
   }
 
