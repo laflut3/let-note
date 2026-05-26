@@ -20,35 +20,18 @@ pub async fn list_ues_for_promo(
   .map_err(map_schema_error("unable to list UE"))
 }
 
-async fn ensure_can_manage_ue_catalog(db: &PgPool, auth: &AuthContext) -> Result<(), ApiError> {
+fn ensure_can_manage_ue_catalog(auth: &AuthContext) -> Result<(), ApiError> {
   if auth.roles.iter().any(|role| role == "admin") {
     return Ok(());
   }
 
-  let is_delegue = sqlx::query_scalar::<_, i64>(
-    r#"
-    SELECT COUNT(*)
-    FROM delegue_promo
-    WHERE id_etu = $1
-    "#,
-  )
-  .bind(auth.user_id)
-  .fetch_one(db)
-  .await
-  .map_err(map_schema_error("unable to validate UE permissions"))?
-    > 0;
-
-  if is_delegue {
-    return Ok(());
-  }
-
   Err(ApiError::forbidden(
-    "insufficient permissions for UE catalog",
+    "admin role required to manage UE catalog",
   ))
 }
 
 pub async fn list_ues(db: &PgPool, auth: &AuthContext) -> Result<Vec<UePayload>, ApiError> {
-  ensure_can_manage_ue_catalog(db, auth).await?;
+  ensure_can_manage_ue_catalog(auth)?;
 
   sqlx::query_as::<_, UePayload>(
     r#"
@@ -67,7 +50,7 @@ pub async fn create_ue(
   auth: &AuthContext,
   payload: CreateUeInput,
 ) -> Result<UePayload, ApiError> {
-  ensure_can_manage_ue_catalog(db, auth).await?;
+  ensure_can_manage_ue_catalog(auth)?;
 
   let nom_ue = payload.nom_ue.trim().to_string();
   if nom_ue.is_empty() {
@@ -145,7 +128,7 @@ pub async fn update_ue(
   ue_id: Uuid,
   payload: UpdateUeInput,
 ) -> Result<UePayload, ApiError> {
-  ensure_can_manage_ue_catalog(db, auth).await?;
+  ensure_can_manage_ue_catalog(auth)?;
 
   let nom_ue = payload
     .nom_ue
@@ -179,7 +162,7 @@ pub async fn delete_ue(
   auth: &AuthContext,
   ue_id: Uuid,
 ) -> Result<MutationAck, ApiError> {
-  ensure_can_manage_ue_catalog(db, auth).await?;
+  ensure_can_manage_ue_catalog(auth)?;
 
   let used = sqlx::query_scalar::<_, i64>(
     r#"
@@ -225,7 +208,7 @@ pub async fn list_ue_promotions(
   auth: &AuthContext,
   ue_id: Uuid,
 ) -> Result<Vec<UePromotionLinkPayload>, ApiError> {
-  ensure_can_manage_ue_catalog(db, auth).await?;
+  ensure_can_manage_ue_catalog(auth)?;
 
   let ue_exists = sqlx::query_scalar::<_, i64>(
     r#"
