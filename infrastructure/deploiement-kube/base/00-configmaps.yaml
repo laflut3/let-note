@@ -3,9 +3,9 @@ kind: ConfigMap
 metadata:
   name: backend-config
 data:
-  PS_BDD_SERVER: postgres.database.svc.cluster.local
+  PS_BDD_SERVER: postgres
   PS_BDD_PORT: "5432"
-  S3_ENDPOINT: http://seaweed-s3.storage.svc.cluster.local:8333
+  S3_ENDPOINT: http://seaweed-s3:8333
   S3_REGION: us-east-1
   S3_BUCKET: let-note-files
 ---
