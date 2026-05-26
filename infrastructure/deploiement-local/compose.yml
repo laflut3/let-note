@@ -9,7 +9,7 @@ services:
     ports:
       - "${PS_BDD_PORT:-5432}:5432"
     volumes:
-      - db_data:/var/lib/postgresql/data
+      - db_data_pg18:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${PS_BDD_USER:-let_note} -d ${PS_BDD_DB:-let_note_dev}"]
       interval: 5s
@@ -145,6 +145,6 @@ services:
       - ./seaweed/s3.conf:/etc/seaweedfs/s3.conf:ro
 
 volumes:
-  db_data:
+  db_data_pg18:
   seaweed_master_data:
   seaweed_volume_data:
