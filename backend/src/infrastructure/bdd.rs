@@ -58,10 +58,9 @@ async fn bootstrap_roles_and_admin(pool: &PgPool) -> anyhow::Result<()> {
     return Ok(());
   }
 
-  let admin_email =
-    std::env::var("ADMIN_EMAIL").unwrap_or_else(|_| "admin@let-note.local".to_string());
-  let admin_password =
-    std::env::var("ADMIN_PASSWORD").unwrap_or_else(|_| "Admin123456!".to_string());
+  let admin_email = required_env("ADMIN_EMAIL")?;
+  let admin_password = required_env("ADMIN_PASSWORD")?;
+  validate_admin_password(&admin_password)?;
   let admin_prenom = std::env::var("ADMIN_PRENOM").unwrap_or_else(|_| "Super".to_string());
   let admin_nom = std::env::var("ADMIN_NOM").unwrap_or_else(|_| "Admin".to_string());
 
@@ -95,6 +94,29 @@ async fn bootstrap_roles_and_admin(pool: &PgPool) -> anyhow::Result<()> {
   .await?;
 
   tx.commit().await?;
+  Ok(())
+}
+
+fn required_env(name: &str) -> anyhow::Result<String> {
+  let value = std::env::var(name)
+    .map_err(|_| anyhow::anyhow!("{name} is required to bootstrap the first admin account"))?;
+
+  if value.trim().is_empty() {
+    anyhow::bail!("{name} must not be empty when bootstrapping the first admin account");
+  }
+
+  Ok(value)
+}
+
+fn validate_admin_password(password: &str) -> anyhow::Result<()> {
+  const MIN_ADMIN_PASSWORD_LENGTH: usize = 12;
+
+  if password.chars().count() < MIN_ADMIN_PASSWORD_LENGTH {
+    anyhow::bail!(
+      "ADMIN_PASSWORD must be at least {MIN_ADMIN_PASSWORD_LENGTH} characters long when bootstrapping the first admin account"
+    );
+  }
+
   Ok(())
 }
 
