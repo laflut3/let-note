@@ -18,7 +18,7 @@ serde = { version = "=1.0.228", features = ["derive"] }
 sqlx = { version = "=0.8.6", features = ["runtime-tokio", "postgres", "chrono", "uuid"] }
 thiserror = "=2.0.18"
 tokio = { version = "=1.52.1", features = ["full"] }
-tower-http = { version = "=0.6.8", features = ["cors"] }
+tower-http = { version = "=0.6.11", features = ["cors"] }
 uuid = { version = "=1.23.1", features = ["serde", "v4"] }
 
 [dev-dependencies]
