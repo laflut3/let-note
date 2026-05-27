@@ -13,6 +13,7 @@ CLI_VERSION=""
 CLI_ARCH=""
 SKIP_VAULT_SYNC="false"
 FORCE_VAULT_SYNC="false"
+ALLOW_PG_MAJOR_UPGRADE="false"
 
 if [ -t 1 ]; then
   C_RESET="$(printf '\033[0m')"
@@ -56,7 +57,7 @@ escape_sed_replacement() {
 
 usage() {
   cat <<USAGE
-Usage: $0 [all|dev|staging|prod] [--version <semver>] [--arch <multi|amd64|arm64>] [--skip-vault-sync] [--force-vault-sync]
+Usage: $0 [all|dev|staging|prod] [--version <semver>] [--arch <multi|amd64|arm64>] [--skip-vault-sync] [--force-vault-sync] [--allow-pg-major-upgrade]
 
 Examples:
   $0 all
@@ -64,7 +65,29 @@ Examples:
   $0 prod --version 1.0.0 --arch multi
   $0 staging --skip-vault-sync
   $0 dev --force-vault-sync
+  $0 dev --allow-pg-major-upgrade
 USAGE
+}
+
+extract_pg_major_from_image() {
+  local image="$1"
+  local image_no_digest="${image%%@*}"
+  local image_tag="${image_no_digest##*:}"
+  if [[ "${image_tag}" =~ ^([0-9]+) ]]; then
+    printf '%s' "${BASH_REMATCH[1]}"
+    return 0
+  fi
+  return 1
+}
+
+get_target_postgres_image() {
+  local postgres_manifest="${SCRIPT_DIR}/base/10-postgres.yaml"
+  awk '$1=="image:"{print $2; exit}' "${postgres_manifest}"
+}
+
+get_current_postgres_image() {
+  local env_name="$1"
+  kubectl -n "${env_name}" get deploy/postgres -o jsonpath='{.spec.template.spec.containers[?(@.name=="postgres")].image}' 2>/dev/null || true
 }
 
 require_cmd() {
@@ -408,6 +431,10 @@ while [[ $# -gt 0 ]]; do
       FORCE_VAULT_SYNC="true"
       shift
       ;;
+    --allow-pg-major-upgrade)
+      ALLOW_PG_MAJOR_UPGRADE="true"
+      shift
+      ;;
     *)
       err "Argument inconnu: $1"
       usage
@@ -477,6 +504,8 @@ deploy_env() {
   local overlay="${SCRIPT_DIR}/environments/${env}"
   local escaped_token escaped_vault_secret_path escaped_vault_addr escaped_ingress_host upper_env env_path_var vault_secret_path ingress_host
   local backend_expected front_expected backend_images front_images
+  local pg_target_image pg_current_image pg_target_major pg_current_major
+  local rendered_manifest skip_pg_image_update
 
   [ -d "${overlay}" ] || { err "Overlay introuvable: ${overlay}"; exit 1; }
 
@@ -511,6 +540,28 @@ deploy_env() {
 
   ensure_https_tls_secret "${env}" "${ingress_host}"
 
+  pg_target_image="$(get_target_postgres_image)"
+  pg_current_image="$(get_current_postgres_image "${env}")"
+  pg_target_major=""
+  pg_current_major=""
+  skip_pg_image_update="false"
+
+  if [ -n "${pg_target_image}" ] && [ -n "${pg_current_image}" ]; then
+    pg_target_major="$(extract_pg_major_from_image "${pg_target_image}" || true)"
+    pg_current_major="$(extract_pg_major_from_image "${pg_current_image}" || true)"
+    if [ -n "${pg_target_major}" ] && [ -n "${pg_current_major}" ] && [ "${pg_target_major}" != "${pg_current_major}" ]; then
+      if [ "${ALLOW_PG_MAJOR_UPGRADE}" != "true" ]; then
+        skip_pg_image_update="true"
+        warn "Postgres major upgrade detecte (${pg_current_major} -> ${pg_target_major}) sans migration."
+        warn "Le script conserve automatiquement l'image Postgres actuelle pour eviter un CrashLoop et une indisponibilite."
+        warn "Pour autoriser l'upgrade majeur: lancez avec --allow-pg-major-upgrade apres migration de donnees."
+      else
+        warn "Postgres major upgrade force (${pg_current_major} -> ${pg_target_major}). Assurez-vous qu'une migration de donnees est faite."
+      fi
+    fi
+  fi
+
+  rendered_manifest="$(mktemp)"
   kubectl kustomize "${overlay}" \
     | sed "s|${BACKEND_IMAGE_REPO}:latest|${BACKEND_IMAGE_REPO}:${IMAGE_TAG}|g" \
     | sed "s|${FRONTEND_IMAGE_REPO}:latest|${FRONTEND_IMAGE_REPO}:${IMAGE_TAG}|g" \
@@ -518,7 +569,15 @@ deploy_env() {
     | sed "s|host: ${env}.app.local|host: ${escaped_ingress_host}|g" \
     | sed "s|value: let-note/${env}|value: ${escaped_vault_secret_path}|g" \
     | sed "s|\${VAULT_APP_TOKEN}|${escaped_token}|g" \
-    | kubectl apply -f -
+    > "${rendered_manifest}"
+
+  if [ "${skip_pg_image_update}" = "true" ]; then
+    sub "Postgres image conservee: ${pg_current_image}"
+    sed -i "s|image: ${pg_target_image}|image: ${pg_current_image}|g" "${rendered_manifest}"
+  fi
+
+  kubectl apply -f "${rendered_manifest}"
+  rm -f "${rendered_manifest}"
 
   info "Rollout postgres (${env})"
   kubectl -n "${env}" rollout status deploy/postgres --timeout="${WAIT_TIMEOUT}"
