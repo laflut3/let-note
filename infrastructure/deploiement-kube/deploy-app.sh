@@ -538,7 +538,11 @@ deploy_env() {
   sub "Vault addr: ${VAULT_ADDR}"
   sub "Ingress host: ${ingress_host}"
 
-  ensure_https_tls_secret "${env}" "${ingress_host}"
+  if [ "${env}" = "prod" ]; then
+    info "TLS local secret skippe pour prod (cert-manager/Cloudflare gere app-tls)"
+  else
+    ensure_https_tls_secret "${env}" "${ingress_host}"
+  fi
 
   pg_target_image="$(get_target_postgres_image)"
   pg_current_image="$(get_current_postgres_image "${env}")"
