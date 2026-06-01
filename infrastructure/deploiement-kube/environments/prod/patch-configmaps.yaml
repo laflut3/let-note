@@ -15,16 +15,16 @@ data:
       name: let-note
       env: prod
     routes:
-      frontend_base_url: http://prod.app.local
-      backend_base_url: http://prod.app.local/api
+      frontend_base_url: https://let-note.polydo.dev
+      backend_base_url: https://let-note.polydo.dev/api
       health_path: /api/health
       auth:
         login_path: /api/auth/login
         logout_path: /api/auth/logout
     ingress:
-      host: prod.app.local
+      host: let-note.polydo.dev
       frontend_path: /
       api_path: /api
     cors:
       allowed_origins:
-        - http://prod.app.local
+        - https://let-note.polydo.dev

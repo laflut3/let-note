@@ -10,7 +10,10 @@ metadata:
 spec:
   replicas: 1
   strategy:
-    type: Recreate
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
   selector:
     matchLabels:
       app: front
@@ -29,12 +32,14 @@ spec:
       - name: front
         image: ghcr.io/laflut3/let-note-frontend:latest
         securityContext:
-          runAsUser: 0
-          runAsGroup: 0
+          runAsNonRoot: true
+          runAsUser: 101
+          runAsGroup: 101
           allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
           capabilities:
             drop:
-            - NET_RAW
+            - ALL
         ports:
         - containerPort: 80
         envFrom:
@@ -47,6 +52,12 @@ spec:
         - name: app-config-volume
           mountPath: /etc/let-note
           readOnly: true
+        - name: nginx-cache
+          mountPath: /var/cache/nginx
+        - name: nginx-run
+          mountPath: /var/run
+        - name: nginx-tmp
+          mountPath: /tmp
         readinessProbe:
           tcpSocket:
             port: 80
@@ -68,6 +79,12 @@ spec:
       - name: app-config-volume
         configMap:
           name: app-config
+      - name: nginx-cache
+        emptyDir: {}
+      - name: nginx-run
+        emptyDir: {}
+      - name: nginx-tmp
+        emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
