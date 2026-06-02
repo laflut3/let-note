@@ -4,24 +4,24 @@ metadata:
   name: app-ingress
 spec:
   tls:
-  - hosts:
-    - staging.app.local
-    secretName: app-tls
+    - hosts:
+        - staging.app.local
+      secretName: app-tls
   rules:
-  - host: staging.app.local
-    http:
-      paths:
-      - path: /api
-        pathType: Prefix
-        backend:
-          service:
-            name: backend
-            port:
-              number: 80
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: front
-            port:
-              number: 80
+    - host: staging.app.local
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: backend
+                port:
+                  number: 80
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: front
+                port:
+                  number: 80

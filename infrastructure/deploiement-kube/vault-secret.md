@@ -91,7 +91,7 @@ vault kv put secret/prod/let-note \
   PS_BDD_PORT="5432" \
   JWT_SECRET="prod-jwt-secret-very-long-random-string" \
   COOKIE_SECURE="true" \
-  ADMIN_EMAIL="admin@let-note.polydo.dev" \
+  ADMIN_EMAIL="admin@let-note.prod.polydo.dev" \
   ADMIN_PASSWORD="AdminProd#2026" \
   ADMIN_PRENOM="Super" \
   ADMIN_NOM="Admin" \
@@ -100,7 +100,7 @@ vault kv put secret/prod/let-note \
   S3_BUCKET="let-note-prod-files" \
   S3_ACCESS_KEY="letnote-prod-ak" \
   S3_SECRET_KEY="letnote-prod-sk" \
-  INGRESS_HOST="let-note.polydo.dev"
+  INGRESS_HOST="let-note.prod.polydo.dev"
 ```
 
 ## 2) Auth Vault Kubernetes/OIDC

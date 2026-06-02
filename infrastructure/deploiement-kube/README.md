@@ -9,7 +9,7 @@ Deployer Let-Note sur Kubernetes (`dev`, `staging`, `prod`) avec un seul script:
 
 - `kubectl`
 - cluster accessible
-- DNS prod vers l'ingress (`let-note.polydo.dev`)
+- DNS prod vers l'ingress (`let-note.prod.polydo.dev`)
 - Vault configure (voir [`vault.md`](/home/ltorres/perso/let-note/infrastructure/deploiement-kube/vault.md))
 
 ## Configuration
