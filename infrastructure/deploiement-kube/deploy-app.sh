@@ -12,6 +12,7 @@ MIGRATIONS_DIR="${REPO_ROOT}/infrastructure/BDD/migration"
 DEPLOY_CONFIG_TOML="${SCRIPT_DIR}/deploy-config.toml"
 ALLOW_PG_MAJOR_UPGRADE="false"
 FORCE_RESTART="false"
+ALLOW_CERT_CHANGE="false"
 DEPLOY_SCOPE="${DEPLOY_SCOPE:-auto}"
 APPLY_ARGOCD="${APPLY_ARGOCD:-false}"
 CLUSTER_BOOTSTRAPPED="false"
@@ -107,7 +108,7 @@ escape_sed_replacement() {
 
 usage() {
   cat <<USAGE
-Usage: $0 [all|dev|staging|prod] [--app-only|--full] [--argocd] [--allow-pg-major-upgrade] [--force-restart]
+Usage: $0 [all|dev|staging|prod] [--app-only|--full] [--argocd] [--allow-cert-change] [--allow-pg-major-upgrade] [--force-restart]
 
 Examples:
   $0 all
@@ -116,6 +117,7 @@ Examples:
   $0 staging
   $0 prod --app-only
   $0 prod --full
+  $0 prod --full --allow-cert-change
   $0 prod --full --argocd
   $0 dev --allow-pg-major-upgrade
   $0 prod --force-restart
@@ -124,6 +126,7 @@ Modes:
   --app-only  applique uniquement les deployments backend/front
   --full      applique tout l'overlay et les taches infra
   --argocd    applique aussi l'Application ArgoCD (Git doit etre a jour)
+  --allow-cert-change autorise une rotation du certificat TLS existant
   auto        full si l'environnement n'existe pas encore, app-only sinon
 USAGE
 }
@@ -285,6 +288,34 @@ render_env_manifest() {
     | sed "s|value: ${env_name}/${VAULT_APP_NAME}|value: ${escaped_vault_secret_path}|g" \
     | sed "s|let-note.io/deploy-id: latest|let-note.io/deploy-id: ${escaped_deploy_id}|g" \
     > "${rendered_manifest}"
+}
+
+guard_tls_certificate_change() {
+  local env_name="$1"
+  local desired_host="$2"
+  local tls_secret="${TLS_SECRET_NAME:-app-tls}"
+  local current_hosts
+
+  current_hosts="$(kubectl -n "${env_name}" get certificate "${tls_secret}" -o jsonpath='{.spec.dnsNames[*]}' 2>/dev/null || true)"
+  if [ -z "${current_hosts}" ]; then
+    return
+  fi
+
+  if printf '%s\n' "${current_hosts}" | tr ' ' '\n' | awk -v desired="${desired_host}" '$1 == desired { found=1 } END { exit found ? 0 : 1 }'; then
+    sub "Certificat TLS existant conserve: ${current_hosts}"
+    return
+  fi
+
+  if [ "${ALLOW_CERT_CHANGE}" = "true" ]; then
+    warn "Rotation certificat autorisee: ${current_hosts} -> ${desired_host}"
+    return
+  fi
+
+  err "Changement de host TLS bloque pour eviter une recreation de certificat."
+  err "Certificat actuel (${env_name}/${tls_secret}): ${current_hosts}"
+  err "Host demande: ${desired_host}"
+  err "Si c'est volontaire, relance une seule fois avec --allow-cert-change."
+  exit 1
 }
 
 vault_exec() {
@@ -473,6 +504,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --argocd)
       APPLY_ARGOCD="true"
+      shift
+      ;;
+    --allow-cert-change)
+      ALLOW_CERT_CHANGE="true"
       shift
       ;;
     --allow-pg-major-upgrade)
@@ -751,6 +786,7 @@ deploy_env() {
 
     if [ "${env}" = "prod" ]; then
       info "TLS local secret skippe pour prod (cert-manager gere app-tls)"
+      guard_tls_certificate_change "${env}" "${ingress_host}"
     else
       ensure_https_tls_secret "${env}" "${ingress_host}"
     fi
