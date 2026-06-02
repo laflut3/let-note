@@ -12,6 +12,9 @@ MIGRATIONS_DIR="${REPO_ROOT}/infrastructure/BDD/migration"
 DEPLOY_CONFIG_TOML="${SCRIPT_DIR}/deploy-config.toml"
 ALLOW_PG_MAJOR_UPGRADE="false"
 FORCE_RESTART="false"
+DEPLOY_SCOPE="${DEPLOY_SCOPE:-auto}"
+APPLY_ARGOCD="${APPLY_ARGOCD:-false}"
+CLUSTER_BOOTSTRAPPED="false"
 
 if [ -t 1 ]; then
   C_RESET="$(printf '\033[0m')"
@@ -104,15 +107,24 @@ escape_sed_replacement() {
 
 usage() {
   cat <<USAGE
-Usage: $0 [all|dev|staging|prod] [--allow-pg-major-upgrade]
+Usage: $0 [all|dev|staging|prod] [--app-only|--full] [--argocd] [--allow-pg-major-upgrade] [--force-restart]
 
 Examples:
   $0 all
   $0 dev
   $0 prod
   $0 staging
+  $0 prod --app-only
+  $0 prod --full
+  $0 prod --full --argocd
   $0 dev --allow-pg-major-upgrade
   $0 prod --force-restart
+
+Modes:
+  --app-only  applique uniquement les deployments backend/front
+  --full      applique tout l'overlay et les taches infra
+  --argocd    applique aussi l'Application ArgoCD (Git doit etre a jour)
+  auto        full si l'environnement n'existe pas encore, app-only sinon
 USAGE
 }
 
@@ -213,6 +225,66 @@ apply_argocd_application() {
     > "${rendered_app}"
   kubectl apply -f "${rendered_app}"
   rm -f "${rendered_app}"
+}
+
+ensure_cluster_bootstrap() {
+  if [ "${CLUSTER_BOOTSTRAPPED}" = "true" ]; then
+    return
+  fi
+
+  title "Bootstrap cluster"
+  kubectl apply -f "${SCRIPT_DIR}/cluster/namespaces.yaml"
+  kubectl apply -f "${SCRIPT_DIR}/cluster/quotas-limits.yaml"
+  CLUSTER_BOOTSTRAPPED="true"
+}
+
+env_has_app_deployments() {
+  local env_name="$1"
+
+  kubectl -n "${env_name}" get deploy/backend deploy/front >/dev/null 2>&1
+}
+
+deploy_scope_for_env() {
+  local env_name="$1"
+
+  case "${DEPLOY_SCOPE}" in
+    app|app-only)
+      printf '%s' "app"
+      ;;
+    full)
+      printf '%s' "full"
+      ;;
+    auto)
+      if env_has_app_deployments "${env_name}"; then
+        printf '%s' "app"
+      else
+        printf '%s' "full"
+      fi
+      ;;
+    *)
+      err "DEPLOY_SCOPE invalide: ${DEPLOY_SCOPE}"
+      exit 1
+      ;;
+  esac
+}
+
+render_env_manifest() {
+  local overlay="$1"
+  local env_name="$2"
+  local escaped_vault_addr="$3"
+  local escaped_ingress_host="$4"
+  local escaped_vault_secret_path="$5"
+  local escaped_deploy_id="$6"
+  local rendered_manifest="$7"
+
+  kubectl kustomize "${overlay}" \
+    | sed "s|${BACKEND_IMAGE_REPO}:latest|${BACKEND_IMAGE_REPO}:${IMAGE_TAG}|g" \
+    | sed "s|${FRONTEND_IMAGE_REPO}:latest|${FRONTEND_IMAGE_REPO}:${IMAGE_TAG}|g" \
+    | sed "s|value: http://vault.vault.svc.cluster.local:8200|value: ${escaped_vault_addr}|g" \
+    | sed "s|host: ${env_name}.app.local|host: ${escaped_ingress_host}|g" \
+    | sed "s|value: ${env_name}/${VAULT_APP_NAME}|value: ${escaped_vault_secret_path}|g" \
+    | sed "s|let-note.io/deploy-id: latest|let-note.io/deploy-id: ${escaped_deploy_id}|g" \
+    > "${rendered_manifest}"
 }
 
 vault_exec() {
@@ -391,6 +463,18 @@ fi
 shift || true
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --app-only)
+      DEPLOY_SCOPE="app"
+      shift
+      ;;
+    --full)
+      DEPLOY_SCOPE="full"
+      shift
+      ;;
+    --argocd)
+      APPLY_ARGOCD="true"
+      shift
+      ;;
     --allow-pg-major-upgrade)
       ALLOW_PG_MAJOR_UPGRADE="true"
       shift
@@ -600,9 +684,23 @@ deploy_env() {
   local escaped_vault_secret_path escaped_vault_addr escaped_ingress_host upper_env env_path_var vault_secret_path ingress_host
   local backend_expected front_expected backend_images front_images
   local pg_target_image pg_current_image pg_target_major pg_current_major
-  local rendered_manifest skip_pg_image_update deploy_id escaped_deploy_id
+  local rendered_manifest skip_pg_image_update deploy_id escaped_deploy_id deploy_scope
 
   [ -d "${overlay}" ] || { err "Overlay introuvable: ${overlay}"; exit 1; }
+
+  deploy_scope="$(deploy_scope_for_env "${env}")"
+  if [ "${deploy_scope}" = "full" ]; then
+    ensure_cluster_bootstrap
+    if [ "${APPLY_ARGOCD}" = "true" ]; then
+      apply_argocd_application "${env}"
+    elif kubectl -n argocd get application "let-note-${env}" >/dev/null 2>&1; then
+      warn "Application ArgoCD let-note-${env} existante non modifiee."
+      warn "Si Git n'est pas a jour, ArgoCD peut retablir l'ancien etat."
+    fi
+  elif kubectl -n argocd get application "let-note-${env}" >/dev/null 2>&1; then
+    warn "Mode app-only: Application ArgoCD let-note-${env} existante non modifiee."
+    warn "Si selfHeal est actif, ArgoCD peut retablir l'etat declare dans Git."
+  fi
 
   escaped_vault_addr="$(escape_sed_replacement "${VAULT_ADDR}")"
   upper_env="$(printf '%s' "${env}" | tr '[:lower:]' '[:upper:]')"
@@ -611,18 +709,22 @@ deploy_env() {
   if [ -z "${vault_secret_path}" ]; then
     vault_secret_path="${env}/${VAULT_APP_NAME}"
   fi
-  ensure_deploy_vault_access "${env}"
+  if [ "${deploy_scope}" = "full" ]; then
+    ensure_deploy_vault_access "${env}"
+  fi
 
   env_path_var="INGRESS_HOST_${upper_env}"
   ingress_host="${!env_path_var:-}"
-  if [ -z "${ingress_host}" ]; then
+  if [ -z "${ingress_host}" ] && [ "${deploy_scope}" = "full" ]; then
     ingress_host="$(vault_read_field "${VAULT_KV_MOUNT}/${vault_secret_path}" INGRESS_HOST)"
+  fi
+  if [ -z "${ingress_host}" ]; then
     ingress_host="${ingress_host:-${env}.app.local}"
   fi
   escaped_vault_secret_path="$(escape_sed_replacement "${vault_secret_path}")"
   escaped_ingress_host="$(escape_sed_replacement "${ingress_host}")"
   deploy_id="${env}-${IMAGE_TAG}-${vault_secret_path}-${ingress_host}"
-  if [ "${FORCE_RESTART}" = "true" ]; then
+  if [ "${FORCE_RESTART}" = "true" ] || [ "${deploy_scope}" = "app" ]; then
     deploy_id="${deploy_id}-$(date -u +%Y%m%d%H%M%S)"
   fi
   escaped_deploy_id="$(escape_sed_replacement "${deploy_id}")"
@@ -631,27 +733,33 @@ deploy_env() {
   front_expected="${FRONTEND_IMAGE_REPO}:${IMAGE_TAG}"
 
   title "Deploy ${env}"
+  sub "Mode: ${deploy_scope}"
   sub "Image tag: ${IMAGE_TAG}"
   sub "Vault path: ${vault_secret_path}"
   sub "Vault addr: ${VAULT_ADDR}"
   sub "Ingress host: ${ingress_host}"
   sub "Deploy id: ${deploy_id}"
 
-  validate_runtime_vault_access "${env}" "${vault_secret_path}"
-
-  if [ "${env}" = "prod" ]; then
-    info "TLS local secret skippe pour prod (cert-manager gere app-tls)"
-  else
-    ensure_https_tls_secret "${env}" "${ingress_host}"
-  fi
-
-  pg_target_image="$(get_target_postgres_image)"
-  pg_current_image="$(get_current_postgres_image "${env}")"
+  pg_target_image=""
+  pg_current_image=""
   pg_target_major=""
   pg_current_major=""
   skip_pg_image_update="false"
 
-  if [ -n "${pg_target_image}" ] && [ -n "${pg_current_image}" ]; then
+  if [ "${deploy_scope}" = "full" ]; then
+    validate_runtime_vault_access "${env}" "${vault_secret_path}"
+
+    if [ "${env}" = "prod" ]; then
+      info "TLS local secret skippe pour prod (cert-manager gere app-tls)"
+    else
+      ensure_https_tls_secret "${env}" "${ingress_host}"
+    fi
+
+    pg_target_image="$(get_target_postgres_image)"
+    pg_current_image="$(get_current_postgres_image "${env}")"
+  fi
+
+  if [ "${deploy_scope}" = "full" ] && [ -n "${pg_target_image}" ] && [ -n "${pg_current_image}" ]; then
     pg_target_major="$(extract_pg_major_from_image "${pg_target_image}" || true)"
     pg_current_major="$(extract_pg_major_from_image "${pg_current_image}" || true)"
     if [ -n "${pg_target_major}" ] && [ -n "${pg_current_major}" ] && [ "${pg_target_major}" != "${pg_current_major}" ]; then
@@ -667,49 +775,48 @@ deploy_env() {
   fi
 
   rendered_manifest="$(mktemp)"
-  kubectl kustomize "${overlay}" \
-    | sed "s|${BACKEND_IMAGE_REPO}:latest|${BACKEND_IMAGE_REPO}:${IMAGE_TAG}|g" \
-    | sed "s|${FRONTEND_IMAGE_REPO}:latest|${FRONTEND_IMAGE_REPO}:${IMAGE_TAG}|g" \
-    | sed "s|value: http://vault.vault.svc.cluster.local:8200|value: ${escaped_vault_addr}|g" \
-    | sed "s|host: ${env}.app.local|host: ${escaped_ingress_host}|g" \
-    | sed "s|value: ${env}/${VAULT_APP_NAME}|value: ${escaped_vault_secret_path}|g" \
-    | sed "s|let-note.io/deploy-id: latest|let-note.io/deploy-id: ${escaped_deploy_id}|g" \
-    > "${rendered_manifest}"
+  render_env_manifest "${overlay}" "${env}" "${escaped_vault_addr}" "${escaped_ingress_host}" "${escaped_vault_secret_path}" "${escaped_deploy_id}" "${rendered_manifest}"
 
   if [ "${skip_pg_image_update}" = "true" ]; then
     sub "Postgres image conservee: ${pg_current_image}"
     sed -i "s|image: ${pg_target_image}|image: ${pg_current_image}|g" "${rendered_manifest}"
   fi
 
-  kubectl apply -f "${rendered_manifest}"
+  if [ "${deploy_scope}" = "app" ]; then
+    kubectl apply -f "${rendered_manifest}" -l app=backend
+    kubectl apply -f "${rendered_manifest}" -l app=front
+  else
+    kubectl apply -f "${rendered_manifest}"
+  fi
   rm -f "${rendered_manifest}"
 
-  ensure_runtime_secrets_from_vault "${env}"
+  if [ "${deploy_scope}" = "full" ]; then
+    ensure_runtime_secrets_from_vault "${env}"
 
-  info "Rollout postgres (${env})"
-  rollout_status_or_describe "${env}" postgres postgres
-  ensure_db_credentials "${env}"
+    info "Rollout postgres (${env})"
+    rollout_status_or_describe "${env}" postgres postgres
+    ensure_db_credentials "${env}"
 
-  info "Apply migrations (${env})"
-  if [ ! -d "${MIGRATIONS_DIR}" ]; then
-    err "Dossier migrations introuvable: ${MIGRATIONS_DIR}"
-    exit 1
-  fi
+    info "Apply migrations (${env})"
+    if [ ! -d "${MIGRATIONS_DIR}" ]; then
+      err "Dossier migrations introuvable: ${MIGRATIONS_DIR}"
+      exit 1
+    fi
 
-  mapfile -t migration_files < <(find "${MIGRATIONS_DIR}" -maxdepth 1 -type f -name '*.up.sql' | sort)
-  if [ "${#migration_files[@]}" -eq 0 ]; then
-    err "Aucune migration trouvee dans ${MIGRATIONS_DIR}"
-    exit 1
-  fi
+    mapfile -t migration_files < <(find "${MIGRATIONS_DIR}" -maxdepth 1 -type f -name '*.up.sql' | sort)
+    if [ "${#migration_files[@]}" -eq 0 ]; then
+      err "Aucune migration trouvee dans ${MIGRATIONS_DIR}"
+      exit 1
+    fi
 
-  for migration_file in "${migration_files[@]}"; do
-    sub "$(basename "${migration_file}")"
-    kubectl -n "${env}" exec -i deploy/postgres -- sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < "${migration_file}"
-  done
+    for migration_file in "${migration_files[@]}"; do
+      sub "$(basename "${migration_file}")"
+      kubectl -n "${env}" exec -i deploy/postgres -- sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < "${migration_file}"
+    done
 
-  info "Verify expected schema (${env})"
-  kubectl -n "${env}" exec deploy/postgres -- sh -c '
-    psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" <<'\''SQL'\''
+    info "Verify expected schema (${env})"
+    kubectl -n "${env}" exec deploy/postgres -- sh -c '
+      psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" <<'\''SQL'\''
 DO $$
 BEGIN
   IF to_regclass('\''public.etudiant'\'') IS NULL THEN
@@ -724,7 +831,8 @@ BEGIN
 END
 $$;
 SQL
-  '
+    '
+  fi
 
   info "Rollout backend/front (${env})"
   rollout_status_or_describe "${env}" backend backend "${backend_expected}"
@@ -740,24 +848,17 @@ SQL
   kubectl -n "${env}" get deploy,pods,svc,ingress
 }
 
-title "Bootstrap cluster"
-kubectl apply -f "${SCRIPT_DIR}/cluster/namespaces.yaml"
-kubectl apply -f "${SCRIPT_DIR}/cluster/quotas-limits.yaml"
 info "Image version: ${IMAGE_VERSION}"
 info "Image arch: ${IMAGE_ARCH}"
 info "Image tag: ${IMAGE_TAG}"
 
 case "${TARGET}" in
   all)
-    apply_argocd_application dev
     deploy_env dev
-    apply_argocd_application staging
     deploy_env staging
-    apply_argocd_application prod
     deploy_env prod
     ;;
   dev|staging|prod)
-    apply_argocd_application "${TARGET}"
     deploy_env "${TARGET}"
     ;;
   *)
