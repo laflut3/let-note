@@ -11,6 +11,7 @@ FRONTEND_IMAGE_REPO="ghcr.io/laflut3/let-note-frontend"
 MIGRATIONS_DIR="${REPO_ROOT}/infrastructure/BDD/migration"
 DEPLOY_CONFIG_TOML="${SCRIPT_DIR}/deploy-config.toml"
 ALLOW_PG_MAJOR_UPGRADE="false"
+FORCE_RESTART="false"
 
 if [ -t 1 ]; then
   C_RESET="$(printf '\033[0m')"
@@ -111,6 +112,7 @@ Examples:
   $0 prod
   $0 staging
   $0 dev --allow-pg-major-upgrade
+  $0 prod --force-restart
 USAGE
 }
 
@@ -346,6 +348,10 @@ while [[ $# -gt 0 ]]; do
       ALLOW_PG_MAJOR_UPGRADE="true"
       shift
       ;;
+    --force-restart)
+      FORCE_RESTART="true"
+      shift
+      ;;
     *)
       err "Argument inconnu: $1"
       usage
@@ -547,7 +553,7 @@ deploy_env() {
   local escaped_vault_secret_path escaped_vault_addr escaped_ingress_host upper_env env_path_var vault_secret_path ingress_host
   local backend_expected front_expected backend_images front_images
   local pg_target_image pg_current_image pg_target_major pg_current_major
-  local rendered_manifest skip_pg_image_update
+  local rendered_manifest skip_pg_image_update deploy_id escaped_deploy_id
 
   [ -d "${overlay}" ] || { err "Overlay introuvable: ${overlay}"; exit 1; }
 
@@ -568,6 +574,11 @@ deploy_env() {
   fi
   escaped_vault_secret_path="$(escape_sed_replacement "${vault_secret_path}")"
   escaped_ingress_host="$(escape_sed_replacement "${ingress_host}")"
+  deploy_id="${env}-${IMAGE_TAG}-${vault_secret_path}-${ingress_host}"
+  if [ "${FORCE_RESTART}" = "true" ]; then
+    deploy_id="${deploy_id}-$(date -u +%Y%m%d%H%M%S)"
+  fi
+  escaped_deploy_id="$(escape_sed_replacement "${deploy_id}")"
 
   backend_expected="${BACKEND_IMAGE_REPO}:${IMAGE_TAG}"
   front_expected="${FRONTEND_IMAGE_REPO}:${IMAGE_TAG}"
@@ -577,6 +588,7 @@ deploy_env() {
   sub "Vault path: ${vault_secret_path}"
   sub "Vault addr: ${VAULT_ADDR}"
   sub "Ingress host: ${ingress_host}"
+  sub "Deploy id: ${deploy_id}"
 
   validate_runtime_vault_access "${env}" "${vault_secret_path}"
 
@@ -614,6 +626,7 @@ deploy_env() {
     | sed "s|value: http://vault.vault.svc.cluster.local:8200|value: ${escaped_vault_addr}|g" \
     | sed "s|host: ${env}.app.local|host: ${escaped_ingress_host}|g" \
     | sed "s|value: ${env}/${VAULT_APP_NAME}|value: ${escaped_vault_secret_path}|g" \
+    | sed "s|let-note.io/deploy-id: latest|let-note.io/deploy-id: ${escaped_deploy_id}|g" \
     > "${rendered_manifest}"
 
   if [ "${skip_pg_image_update}" = "true" ]; then

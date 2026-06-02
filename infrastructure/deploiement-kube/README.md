@@ -77,6 +77,12 @@ Exemple:
 ./infrastructure/deploiement-kube/deploy-app.sh prod
 ```
 
+Pour forcer un nouveau rollout avec le meme tag image:
+
+```bash
+./infrastructure/deploiement-kube/deploy-app.sh prod --force-restart
+```
+
 ## Ordre de setup recommande
 
 1. Renseigner `deploy-config.toml` (`version`, `arch`).

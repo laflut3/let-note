@@ -24,6 +24,8 @@ spec:
         app.kubernetes.io/name: front
         app.kubernetes.io/component: frontend
         app.kubernetes.io/part-of: let-note
+      annotations:
+        let-note.io/deploy-id: latest
     spec:
       securityContext:
         seccompProfile:

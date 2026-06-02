@@ -24,6 +24,8 @@ spec:
         app.kubernetes.io/name: backend
         app.kubernetes.io/component: backend
         app.kubernetes.io/part-of: let-note
+      annotations:
+        let-note.io/deploy-id: latest
     spec:
       serviceAccountName: let-note-backend
       securityContext:
