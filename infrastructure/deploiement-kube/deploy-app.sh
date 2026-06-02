@@ -157,15 +157,55 @@ describe_pods_for_app() {
   kubectl -n "${env_name}" describe pods -l "app=${app_name}" || true
 }
 
+app_ready_with_image() {
+  local env_name="$1"
+  local app_name="$2"
+  local deploy_name="$3"
+  local expected_image="$4"
+  local desired ready matching
+
+  desired="$(kubectl -n "${env_name}" get "deploy/${deploy_name}" -o jsonpath='{.spec.replicas}')"
+  desired="${desired:-1}"
+  ready="$(kubectl -n "${env_name}" get pods -l "app=${app_name}" -o jsonpath='{range .items[*]}{.status.containerStatuses[0].ready}{"\n"}{end}' | awk '$1=="true"{count++} END{print count+0}')"
+  matching="$(kubectl -n "${env_name}" get pods -l "app=${app_name}" -o jsonpath='{range .items[*]}{.spec.containers[0].image}{"\n"}{end}' | awk -v expected="${expected_image}" '$1==expected{count++} END{print count+0}')"
+
+  [ "${ready}" -ge "${desired}" ] && [ "${matching}" -ge "${desired}" ]
+}
+
 rollout_status_or_describe() {
   local env_name="$1"
   local app_name="$2"
   local deploy_name="$3"
+  local expected_image="${4:-}"
+
+  if [ -n "${expected_image}" ] && app_ready_with_image "${env_name}" "${app_name}" "${deploy_name}" "${expected_image}"; then
+    info "Rollout ${deploy_name} deja pret (${env_name})"
+    return
+  fi
 
   if ! kubectl -n "${env_name}" rollout status "deploy/${deploy_name}" --timeout="${WAIT_TIMEOUT}"; then
+    if [ -n "${expected_image}" ] && app_ready_with_image "${env_name}" "${app_name}" "${deploy_name}" "${expected_image}"; then
+      warn "Rollout status a expire pour ${deploy_name}, mais les pods sont Ready avec l'image attendue."
+      return
+    fi
     describe_pods_for_app "${env_name}" "${app_name}"
     exit 1
   fi
+}
+
+apply_argocd_application() {
+  local env_name="$1"
+  local app_manifest="${SCRIPT_DIR}/argocd/application-${env_name}.yaml"
+
+  [ -f "${app_manifest}" ] || { warn "Manifest ArgoCD introuvable: ${app_manifest}"; return; }
+
+  if ! kubectl get crd applications.argoproj.io >/dev/null 2>&1; then
+    warn "ArgoCD CRD applications.argoproj.io introuvable, Application ${env_name} non appliquee."
+    return
+  fi
+
+  title "ArgoCD application ${env_name}"
+  kubectl apply -f "${app_manifest}"
 }
 
 vault_exec() {
@@ -680,8 +720,8 @@ SQL
   '
 
   info "Rollout backend/front (${env})"
-  rollout_status_or_describe "${env}" backend backend
-  rollout_status_or_describe "${env}" front front
+  rollout_status_or_describe "${env}" backend backend "${backend_expected}"
+  rollout_status_or_describe "${env}" front front "${front_expected}"
 
   backend_images="$(kubectl -n "${env}" get pods -l app=backend -o jsonpath='{range .items[*]}{.spec.containers[0].image}{"\n"}{end}' | sort -u)"
   front_images="$(kubectl -n "${env}" get pods -l app=front -o jsonpath='{range .items[*]}{.spec.containers[0].image}{"\n"}{end}' | sort -u)"
@@ -702,11 +742,15 @@ info "Image tag: ${IMAGE_TAG}"
 
 case "${TARGET}" in
   all)
+    apply_argocd_application dev
     deploy_env dev
+    apply_argocd_application staging
     deploy_env staging
+    apply_argocd_application prod
     deploy_env prod
     ;;
   dev|staging|prod)
+    apply_argocd_application "${TARGET}"
     deploy_env "${TARGET}"
     ;;
   *)

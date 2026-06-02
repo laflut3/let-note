@@ -83,6 +83,41 @@ Pour forcer un nouveau rollout avec le meme tag image:
 ./infrastructure/deploiement-kube/deploy-app.sh prod --force-restart
 ```
 
+## ArgoCD
+
+Les pods peuvent exister sans apparaitre dans ArgoCD si aucun objet `Application`
+n'est declare dans le namespace ArgoCD.
+
+Verifier les Applications existantes:
+
+```bash
+kubectl get applications -A
+kubectl get app -n argocd
+```
+
+Declarer les applications par environnement:
+
+```bash
+kubectl apply -f infrastructure/deploiement-kube/argocd/
+kubectl get app -n argocd
+```
+
+Le script applique aussi l'Application ArgoCD correspondant a la cible si ArgoCD est installe:
+
+```bash
+./infrastructure/deploiement-kube/deploy-app.sh dev
+./infrastructure/deploiement-kube/deploy-app.sh staging
+./infrastructure/deploiement-kube/deploy-app.sh prod
+```
+
+Applications declarees:
+- `let-note-dev` -> `infrastructure/deploiement-kube/environments/dev`
+- `let-note-staging` -> `infrastructure/deploiement-kube/environments/staging`
+- `let-note-prod` -> `infrastructure/deploiement-kube/environments/prod`
+
+Les Applications utilisent `https://github.com/laflut3/let-note.git` pour eviter une dependance
+a un agent SSH dans ArgoCD.
+
 ## Ordre de setup recommande
 
 1. Renseigner `deploy-config.toml` (`version`, `arch`).
