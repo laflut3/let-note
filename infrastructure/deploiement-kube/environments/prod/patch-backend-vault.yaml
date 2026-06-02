@@ -10,3 +10,5 @@ spec:
         env:
         - name: VAULT_SECRET_PATH
           value: prod/let-note
+        - name: VAULT_K8S_ROLE
+          value: let-note-prod

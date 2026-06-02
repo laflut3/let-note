@@ -5,6 +5,7 @@ resources:
 - 01-secrets.yaml
 - 02-pvc.yaml
 - 03-postgres-config.yaml
+- 04-serviceaccount.yaml
 - 20-backend.yaml
 - 10-postgres.yaml
 - 12-seaweedfs.yaml

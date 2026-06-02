@@ -22,10 +22,6 @@ Sources de verite:
     - `[deploy].version`
     - `[deploy].arch` (`amd64`, `arm64`, `multi`)
 - Vault KVv2:
-  - `secret/shared/let-note/deploy`:
-    - `LET_NOTE_VERSION`
-    - `LET_NOTE_ARCH` (optionnel, `amd64` par defaut)
-    - `VAULT_APP_TOKEN`
   - `secret/dev/let-note`, `secret/staging/let-note`, `secret/prod/let-note`:
     - `PS_BDD_DB`, `PS_BDD_USER`, `PS_BDD_PASS`
     - `S3_ACCESS_KEY`, `S3_SECRET_KEY`
@@ -36,13 +32,32 @@ Sources de verite:
 
 Variables shell optionnelles:
 - `VAULT_ADDR` (defaut: `http://vault.vault.svc.cluster.local:8200`)
-- `VAULT_TOKEN` ou session `vault login`
 - `VAULT_KV_MOUNT` (defaut: `secret`)
+- `VAULT_AUTH_METHOD` (defaut: `kubernetes`)
+- `VAULT_K8S_AUTH_MOUNT` (defaut: `kubernetes`)
+- `VAULT_K8S_SERVICE_ACCOUNT` (defaut: `let-note-backend`)
+- `VAULT_K8S_ROLE_<ENV>` ou `VAULT_K8S_ROLE` (defaut: `let-note-<env>`)
 
-Priorite de resolution pour `version`/`arch`:
-1. options CLI `--version` / `--arch`
-2. `deploy-config.toml`
-3. Vault (`secret/shared/let-note/deploy`)
+Le script n'a pas besoin de token Vault statique: il cree/utilise un ServiceAccount Kubernetes,
+genere un JWT court avec `kubectl create token`, puis s'authentifie a Vault via `auth/<mount>/login`.
+
+Roles Vault attendus par defaut:
+- `let-note-dev`: ServiceAccount `let-note-backend`, namespace `dev`
+- `let-note-staging`: ServiceAccount `let-note-backend`, namespace `staging`
+- `let-note-prod`: ServiceAccount `let-note-backend`, namespace `prod`
+
+Le role Vault doit avoir `bound_service_account_names=let-note-backend` et
+`bound_service_account_namespaces=<env>`. Voir `vault-secret.md` pour les commandes completes.
+
+`version` et `arch` sont lues uniquement dans `deploy-config.toml`.
+
+Exemple `deploy-config.toml`:
+
+```toml
+[deploy]
+version = "1.3.0"
+arch = "amd64"
+```
 
 ## Deploiement
 
@@ -61,6 +76,14 @@ Exemple:
 ```bash
 ./infrastructure/deploiement-kube/deploy-app.sh prod
 ```
+
+## Ordre de setup recommande
+
+1. Renseigner `deploy-config.toml` (`version`, `arch`).
+2. Configurer l'auth Vault Kubernetes/OIDC pour les roles `let-note-<env>`.
+3. Renseigner Vault:
+   - `secret/<env>/let-note` (`dev`, `staging`, `prod`)
+4. Lancer `deploy-app.sh <env>`.
 
 ## TLS prod
 

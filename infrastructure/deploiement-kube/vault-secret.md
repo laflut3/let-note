@@ -2,29 +2,11 @@
 
 Ce fichier liste toutes les donnees Vault necessaires pour deployer Let-Note sans `.env`.
 
-## 1) Secret global de deploiement
+Note:
+- `version` et `arch` ne sont plus stockees dans Vault.
+- Elles sont definies uniquement dans `infrastructure/deploiement-kube/deploy-config.toml`.
 
-Path KVv2: `secret/shared/let-note/deploy`
-
-Champs:
-
-- `LET_NOTE_VERSION`: version image a deployer
-  - Exemple: `1.3.0`
-- `LET_NOTE_ARCH`: architecture image (`amd64`, `arm64`, `multi`)
-  - Exemple: `amd64`
-- `VAULT_APP_TOKEN`: token lu par le backend pour recuperer les secrets applicatifs
-  - Exemple: `hvs.CAESIExampleTokenForLetNoteApp123456789`
-
-Exemple commande:
-
-```bash
-vault kv put secret/shared/let-note/deploy \
-  LET_NOTE_VERSION="1.3.0" \
-  LET_NOTE_ARCH="amd64" \
-  VAULT_APP_TOKEN="hvs.CAESIExampleTokenForLetNoteApp123456789"
-```
-
-## 2) Secrets applicatifs par environnement
+## 1) Secrets applicatifs par environnement
 
 Paths KVv2:
 
@@ -121,10 +103,39 @@ vault kv put secret/prod/let-note \
   INGRESS_HOST="let-note.polydo.dev"
 ```
 
+## 2) Auth Vault Kubernetes/OIDC
+
+Le deploiement utilise un JWT court de ServiceAccount Kubernetes, pas un token Vault statique.
+Les roles Vault attendus par defaut sont:
+
+- `let-note-dev`: ServiceAccount `let-note-backend`, namespace `dev`
+- `let-note-staging`: ServiceAccount `let-note-backend`, namespace `staging`
+- `let-note-prod`: ServiceAccount `let-note-backend`, namespace `prod`
+
+Chaque role doit pouvoir lire le path KVv2 correspondant, par exemple `secret/data/prod/let-note` pour prod.
+
+Exemple de configuration Vault:
+
+```bash
+vault policy write let-note-prod - <<'HCL'
+path "secret/data/prod/let-note" {
+  capabilities = ["read"]
+}
+HCL
+
+vault write auth/kubernetes/role/let-note-prod \
+  bound_service_account_names="let-note-backend" \
+  bound_service_account_namespaces="prod" \
+  policies="let-note-prod" \
+  ttl="1h"
+```
+
+Adapter `prod` en `dev` ou `staging` pour creer les roles `let-note-dev` et `let-note-staging`.
+Si Vault retourne `service account name not authorized`, le role existe mais son binding ne correspond pas au ServiceAccount ou au namespace.
+
 ## 3) Verification rapide
 
 ```bash
-vault kv get secret/shared/let-note/deploy
 vault kv get secret/dev/let-note
 vault kv get secret/staging/let-note
 vault kv get secret/prod/let-note

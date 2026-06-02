@@ -10,8 +10,6 @@ BACKEND_IMAGE_REPO="ghcr.io/laflut3/let-note-backend"
 FRONTEND_IMAGE_REPO="ghcr.io/laflut3/let-note-frontend"
 MIGRATIONS_DIR="${REPO_ROOT}/infrastructure/BDD/migration"
 DEPLOY_CONFIG_TOML="${SCRIPT_DIR}/deploy-config.toml"
-CLI_VERSION=""
-CLI_ARCH=""
 ALLOW_PG_MAJOR_UPGRADE="false"
 
 if [ -t 1 ]; then
@@ -62,7 +60,31 @@ toml_read_deploy_value() {
 vault_read_field() {
   local path="$1"
   local field="$2"
-  vault_exec "${VAULT_ADDR}" "${VAULT_ADMIN_TOKEN:-${VAULT_TOKEN:-}}" kv get -field="${field}" "${path}" 2>/dev/null || true
+  vault_exec "${VAULT_ADDR}" "${DEPLOY_VAULT_TOKEN:-${VAULT_ADMIN_TOKEN:-${VAULT_TOKEN:-}}}" kv get -field="${field}" "${path}" 2>/dev/null || true
+}
+
+vault_read_required_field() {
+  local path="$1"
+  local field="$2"
+  local value error_file
+
+  error_file="$(mktemp)"
+  if value="$(vault_exec "${VAULT_ADDR}" "${DEPLOY_VAULT_TOKEN:-${VAULT_ADMIN_TOKEN:-${VAULT_TOKEN:-}}}" kv get -field="${field}" "${path}" 2>"${error_file}")"; then
+    rm -f "${error_file}"
+    if [ -n "${value}" ]; then
+      printf '%s' "${value}"
+      return 0
+    fi
+    err "${field} vide dans Vault (${path})"
+    exit 1
+  fi
+
+  err "Lecture Vault impossible pour ${field} (${path})"
+  while IFS= read -r line; do
+    [ -n "${line}" ] && err "Vault: ${line}"
+  done < "${error_file}"
+  rm -f "${error_file}"
+  exit 1
 }
 
 first_non_empty() {
@@ -81,12 +103,12 @@ escape_sed_replacement() {
 
 usage() {
   cat <<USAGE
-Usage: $0 [all|dev|staging|prod] [--version <semver>] [--arch <multi|amd64|arm64>] [--allow-pg-major-upgrade]
+Usage: $0 [all|dev|staging|prod] [--allow-pg-major-upgrade]
 
 Examples:
   $0 all
-  $0 dev --version 1.0.0 --arch amd64
-  $0 prod --version 1.0.0 --arch multi
+  $0 dev
+  $0 prod
   $0 staging
   $0 dev --allow-pg-major-upgrade
 USAGE
@@ -105,7 +127,10 @@ extract_pg_major_from_image() {
 
 get_target_postgres_image() {
   local postgres_manifest="${SCRIPT_DIR}/base/10-postgres.yaml"
-  awk '$1=="image:"{print $2; exit}' "${postgres_manifest}"
+  awk '
+    $1=="-" && $2=="name:" && $3=="postgres" { in_postgres=1; next }
+    in_postgres && $1=="image:" { print $2; exit }
+  ' "${postgres_manifest}"
 }
 
 get_current_postgres_image() {
@@ -119,6 +144,26 @@ require_cmd() {
     err "Commande requise manquante: ${cmd}"
     exit 1
   }
+}
+
+describe_pods_for_app() {
+  local env_name="$1"
+  local app_name="$2"
+
+  err "Diagnostic pods app=${app_name} namespace=${env_name}"
+  kubectl -n "${env_name}" get pods -l "app=${app_name}" -o wide || true
+  kubectl -n "${env_name}" describe pods -l "app=${app_name}" || true
+}
+
+rollout_status_or_describe() {
+  local env_name="$1"
+  local app_name="$2"
+  local deploy_name="$3"
+
+  if ! kubectl -n "${env_name}" rollout status "deploy/${deploy_name}" --timeout="${WAIT_TIMEOUT}"; then
+    describe_pods_for_app "${env_name}" "${app_name}"
+    exit 1
+  fi
 }
 
 vault_exec() {
@@ -138,7 +183,11 @@ vault_exec() {
   local ns pod
   ns="${VAULT_K8S_NAMESPACE:-vault}"
   pod="${VAULT_K8S_POD:-vault-0}"
-  kubectl exec -i -n "${ns}" "${pod}" -- env VAULT_ADDR="${vault_addr}" VAULT_TOKEN="${vault_token}" vault "$@"
+  if [ -n "${vault_token}" ]; then
+    kubectl exec -i -n "${ns}" "${pod}" -- env VAULT_ADDR="${vault_addr}" VAULT_TOKEN="${vault_token}" vault "$@"
+  else
+    kubectl exec -i -n "${ns}" "${pod}" -- env VAULT_ADDR="${vault_addr}" vault "$@"
+  fi
 }
 
 ensure_https_tls_secret() {
@@ -230,12 +279,9 @@ ensure_db_credentials() {
 
   env_path_var="VAULT_SECRET_PATH_${suffix}"
   vault_secret_path="${!env_path_var:-${env_name}/${VAULT_APP_NAME}}"
-  app_db_user="$(vault_read_field "${VAULT_KV_MOUNT}/${vault_secret_path}" PS_BDD_USER)"
-  app_db_pass="$(vault_read_field "${VAULT_KV_MOUNT}/${vault_secret_path}" PS_BDD_PASS)"
-  app_db_name="$(vault_read_field "${VAULT_KV_MOUNT}/${vault_secret_path}" PS_BDD_DB)"
-  [ -n "${app_db_user}" ] || { err "PS_BDD_USER manquant dans Vault (${VAULT_KV_MOUNT}/${vault_secret_path})"; exit 1; }
-  [ -n "${app_db_pass}" ] || { err "PS_BDD_PASS manquant dans Vault (${VAULT_KV_MOUNT}/${vault_secret_path})"; exit 1; }
-  [ -n "${app_db_name}" ] || { err "PS_BDD_DB manquant dans Vault (${VAULT_KV_MOUNT}/${vault_secret_path})"; exit 1; }
+  app_db_user="$(vault_read_required_field "${VAULT_KV_MOUNT}/${vault_secret_path}" PS_BDD_USER)"
+  app_db_pass="$(vault_read_required_field "${VAULT_KV_MOUNT}/${vault_secret_path}" PS_BDD_PASS)"
+  app_db_name="$(vault_read_required_field "${VAULT_KV_MOUNT}/${vault_secret_path}" PS_BDD_DB)"
   escaped_pass="${app_db_pass//\'/\'\'}"
 
   title "DB credentials sync ${env_name}"
@@ -296,14 +342,6 @@ fi
 shift || true
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --version)
-      CLI_VERSION="${2:-}"
-      shift 2
-      ;;
-    --arch)
-      CLI_ARCH="${2:-}"
-      shift 2
-      ;;
     --allow-pg-major-upgrade)
       ALLOW_PG_MAJOR_UPGRADE="true"
       shift
@@ -318,9 +356,6 @@ done
 
 require_cmd kubectl
 
-if [ -z "${VAULT_APP_TOKEN:-}" ] && [ -n "${VAULT_TOKEN:-}" ]; then
-  VAULT_APP_TOKEN="${VAULT_TOKEN}"
-fi
 if [ -z "${VAULT_ADMIN_TOKEN:-}" ] && [ -n "${VAULT_TOKEN:-}" ]; then
   VAULT_ADMIN_TOKEN="${VAULT_TOKEN}"
 fi
@@ -334,66 +369,49 @@ fi
 
 VAULT_APP_NAME="${VAULT_APP_NAME:-let-note}"
 VAULT_DEPLOY_PATH="${VAULT_DEPLOY_PATH:-shared/${VAULT_APP_NAME}/deploy}"
+VAULT_AUTH_METHOD="${VAULT_AUTH_METHOD:-kubernetes}"
+VAULT_K8S_AUTH_MOUNT="${VAULT_K8S_AUTH_MOUNT:-kubernetes}"
+VAULT_K8S_SERVICE_ACCOUNT="${VAULT_K8S_SERVICE_ACCOUNT:-let-note-backend}"
+DEPLOY_VAULT_TOKEN="${VAULT_ADMIN_TOKEN:-${VAULT_TOKEN:-}}"
 
-if [ -n "${CLI_VERSION}" ] && [[ ! "${CLI_VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
-  err "Version invalide: ${CLI_VERSION}"
-  exit 1
-fi
-if [ -n "${CLI_ARCH}" ] && [[ "${CLI_ARCH}" != "multi" && "${CLI_ARCH}" != "amd64" && "${CLI_ARCH}" != "arm64" ]]; then
-  err "Arch invalide: ${CLI_ARCH}"
-  exit 1
-fi
-
-vault_version="$(vault_read_field "${VAULT_KV_MOUNT}/${VAULT_DEPLOY_PATH}" LET_NOTE_VERSION)"
 toml_version="$(toml_read_deploy_value "version" "${DEPLOY_CONFIG_TOML}")"
-IMAGE_VERSION="$(first_non_empty "${CLI_VERSION:-}" "$(first_non_empty "${toml_version:-}" "${vault_version}")")"
+IMAGE_VERSION="${toml_version:-}"
 if [ -z "${IMAGE_VERSION}" ]; then
-  err "LET_NOTE_VERSION manquante (--version, TOML ${DEPLOY_CONFIG_TOML} ou Vault ${VAULT_KV_MOUNT}/${VAULT_DEPLOY_PATH})"
+  err "version manquante dans ${DEPLOY_CONFIG_TOML} ([deploy].version)"
   exit 1
 fi
-vault_arch="$(vault_read_field "${VAULT_KV_MOUNT}/${VAULT_DEPLOY_PATH}" LET_NOTE_ARCH)"
 toml_arch="$(toml_read_deploy_value "arch" "${DEPLOY_CONFIG_TOML}")"
-IMAGE_ARCH="$(first_non_empty "${CLI_ARCH:-}" "$(first_non_empty "${toml_arch:-}" "${vault_arch:-amd64}")")"
+IMAGE_ARCH="${toml_arch:-}"
+if [ -z "${IMAGE_ARCH}" ]; then
+  err "arch manquante dans ${DEPLOY_CONFIG_TOML} ([deploy].arch)"
+  exit 1
+fi
+if [[ ! "${IMAGE_VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+  err "Version invalide dans ${DEPLOY_CONFIG_TOML}: ${IMAGE_VERSION}"
+  exit 1
+fi
 case "${IMAGE_ARCH}" in
   multi) IMAGE_TAG="${IMAGE_VERSION}" ;;
   amd64|arm64) IMAGE_TAG="${IMAGE_VERSION}-${IMAGE_ARCH}" ;;
-  *) err "Arch invalide: ${IMAGE_ARCH}"; exit 1 ;;
+  *) err "Arch invalide dans ${DEPLOY_CONFIG_TOML}: ${IMAGE_ARCH}"; exit 1 ;;
 esac
-
-if [ -z "${VAULT_APP_TOKEN:-}" ]; then
-  VAULT_APP_TOKEN="$(vault_read_field "${VAULT_KV_MOUNT}/${VAULT_DEPLOY_PATH}" VAULT_APP_TOKEN)"
-fi
 
 ensure_runtime_secrets_from_vault() {
   local env_name="$1"
   local suffix
   suffix="$(printf '%s' "${env_name}" | tr '[:lower:]' '[:upper:]')"
   local env_path_var env_path db_name db_user db_pass s3_access s3_secret s3_endpoint s3_region s3_bucket
-  local app_token
 
   env_path_var="VAULT_SECRET_PATH_${suffix}"
   env_path="${!env_path_var:-${env_name}/${VAULT_APP_NAME}}"
-  db_name="$(vault_read_field "${VAULT_KV_MOUNT}/${env_path}" PS_BDD_DB)"
-  db_user="$(vault_read_field "${VAULT_KV_MOUNT}/${env_path}" PS_BDD_USER)"
-  db_pass="$(vault_read_field "${VAULT_KV_MOUNT}/${env_path}" PS_BDD_PASS)"
-  s3_access="$(vault_read_field "${VAULT_KV_MOUNT}/${env_path}" S3_ACCESS_KEY)"
-  s3_secret="$(vault_read_field "${VAULT_KV_MOUNT}/${env_path}" S3_SECRET_KEY)"
+  db_name="$(vault_read_required_field "${VAULT_KV_MOUNT}/${env_path}" PS_BDD_DB)"
+  db_user="$(vault_read_required_field "${VAULT_KV_MOUNT}/${env_path}" PS_BDD_USER)"
+  db_pass="$(vault_read_required_field "${VAULT_KV_MOUNT}/${env_path}" PS_BDD_PASS)"
+  s3_access="$(vault_read_required_field "${VAULT_KV_MOUNT}/${env_path}" S3_ACCESS_KEY)"
+  s3_secret="$(vault_read_required_field "${VAULT_KV_MOUNT}/${env_path}" S3_SECRET_KEY)"
   s3_endpoint="$(vault_read_field "${VAULT_KV_MOUNT}/${env_path}" S3_ENDPOINT)"
   s3_region="$(vault_read_field "${VAULT_KV_MOUNT}/${env_path}" S3_REGION)"
   s3_bucket="$(vault_read_field "${VAULT_KV_MOUNT}/${env_path}" S3_BUCKET)"
-
-  [ -n "${db_name}" ] || { err "PS_BDD_DB manquant dans Vault (${VAULT_KV_MOUNT}/${env_path})"; exit 1; }
-  [ -n "${db_user}" ] || { err "PS_BDD_USER manquant dans Vault (${VAULT_KV_MOUNT}/${env_path})"; exit 1; }
-  [ -n "${db_pass}" ] || { err "PS_BDD_PASS manquant dans Vault (${VAULT_KV_MOUNT}/${env_path})"; exit 1; }
-  [ -n "${s3_access}" ] || { err "S3_ACCESS_KEY manquant dans Vault (${VAULT_KV_MOUNT}/${env_path})"; exit 1; }
-  [ -n "${s3_secret}" ] || { err "S3_SECRET_KEY manquant dans Vault (${VAULT_KV_MOUNT}/${env_path})"; exit 1; }
-
-  app_token="$(first_non_empty "${VAULT_APP_TOKEN:-}" "$(vault_read_field "${VAULT_KV_MOUNT}/${VAULT_DEPLOY_PATH}" VAULT_APP_TOKEN)")"
-  [ -n "${app_token}" ] || { err "VAULT_APP_TOKEN manquant dans Vault (${VAULT_KV_MOUNT}/${VAULT_DEPLOY_PATH})"; exit 1; }
-
-  kubectl -n "${env_name}" create secret generic vault-app-auth \
-    --from-literal=token="${app_token}" \
-    --dry-run=client -o yaml | kubectl apply -f - >/dev/null
 
   kubectl -n "${env_name}" create secret generic postgres-secret \
     --from-literal=POSTGRES_PASSWORD="${db_pass}" \
@@ -452,29 +470,101 @@ EOF
   kubectl -n "${env_name}" rollout restart deploy/seaweed-s3 >/dev/null 2>&1 || true
 }
 
+ensure_vault_service_account() {
+  local env_name="$1"
+
+  kubectl -n "${env_name}" create serviceaccount "${VAULT_K8S_SERVICE_ACCOUNT}" \
+    --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+}
+
+vault_kubernetes_role() {
+  local env_name="$1"
+  local suffix
+  suffix="$(printf '%s' "${env_name}" | tr '[:lower:]' '[:upper:]')"
+  local role_var="VAULT_K8S_ROLE_${suffix}"
+  printf '%s' "${!role_var:-${VAULT_K8S_ROLE:-let-note-${env_name}}}"
+}
+
+vault_login_kubernetes() {
+  local env_name="$1"
+  local role jwt token error_file
+
+  role="$(vault_kubernetes_role "${env_name}")"
+  ensure_vault_service_account "${env_name}"
+  jwt="$(kubectl -n "${env_name}" create token "${VAULT_K8S_SERVICE_ACCOUNT}" --duration="${VAULT_K8S_TOKEN_DURATION:-10m}")"
+  error_file="$(mktemp)"
+  if token="$(vault_exec "${VAULT_ADDR}" "" write -field=token "auth/${VAULT_K8S_AUTH_MOUNT}/login" "role=${role}" "jwt=${jwt}" 2>"${error_file}")"; then
+    rm -f "${error_file}"
+    [ -n "${token}" ] || { err "Vault Kubernetes auth a retourne un token vide (role ${role})"; exit 1; }
+    printf '%s' "${token}"
+    return 0
+  fi
+
+  err "Authentification Vault Kubernetes impossible (role ${role}, serviceAccount ${VAULT_K8S_SERVICE_ACCOUNT}, namespace ${env_name})"
+  while IFS= read -r line; do
+    [ -n "${line}" ] && err "Vault: ${line}"
+  done < "${error_file}"
+  err "Verifie le role Vault:"
+  err "vault write auth/${VAULT_K8S_AUTH_MOUNT}/role/${role} bound_service_account_names=${VAULT_K8S_SERVICE_ACCOUNT} bound_service_account_namespaces=${env_name} policies=${role}"
+  rm -f "${error_file}"
+  exit 1
+}
+
+ensure_deploy_vault_access() {
+  local env_name="$1"
+
+  if [ -n "${DEPLOY_VAULT_TOKEN}" ]; then
+    return
+  fi
+  case "${VAULT_AUTH_METHOD}" in
+    kubernetes)
+      DEPLOY_VAULT_TOKEN="$(vault_login_kubernetes "${env_name}")"
+      ;;
+    *)
+      err "VAULT_AUTH_METHOD=${VAULT_AUTH_METHOD} ne permet pas de lire Vault sans VAULT_TOKEN/VAULT_ADMIN_TOKEN."
+      exit 1
+      ;;
+  esac
+}
+
+validate_runtime_vault_access() {
+  local env_name="$1"
+  local env_path="$2"
+  local ignored_value
+
+  ignored_value="$(vault_read_required_field "${VAULT_KV_MOUNT}/${env_path}" PS_BDD_DB)"
+  ignored_value="$(vault_read_required_field "${VAULT_KV_MOUNT}/${env_path}" PS_BDD_USER)"
+  ignored_value="$(vault_read_required_field "${VAULT_KV_MOUNT}/${env_path}" PS_BDD_PASS)"
+  ignored_value="$(vault_read_required_field "${VAULT_KV_MOUNT}/${env_path}" S3_ACCESS_KEY)"
+  ignored_value="$(vault_read_required_field "${VAULT_KV_MOUNT}/${env_path}" S3_SECRET_KEY)"
+
+  ok "Acces Vault valide pour ${env_name}"
+}
+
 deploy_env() {
   local env="$1"
   local overlay="${SCRIPT_DIR}/environments/${env}"
-  local escaped_token escaped_vault_secret_path escaped_vault_addr escaped_ingress_host upper_env env_path_var vault_secret_path ingress_host
+  local escaped_vault_secret_path escaped_vault_addr escaped_ingress_host upper_env env_path_var vault_secret_path ingress_host
   local backend_expected front_expected backend_images front_images
   local pg_target_image pg_current_image pg_target_major pg_current_major
   local rendered_manifest skip_pg_image_update
 
   [ -d "${overlay}" ] || { err "Overlay introuvable: ${overlay}"; exit 1; }
 
-  escaped_token="$(escape_sed_replacement "${VAULT_APP_TOKEN:-}")"
   escaped_vault_addr="$(escape_sed_replacement "${VAULT_ADDR}")"
   upper_env="$(printf '%s' "${env}" | tr '[:lower:]' '[:upper:]')"
   env_path_var="VAULT_SECRET_PATH_${upper_env}"
   vault_secret_path="${!env_path_var:-}"
+  if [ -z "${vault_secret_path}" ]; then
+    vault_secret_path="${env}/${VAULT_APP_NAME}"
+  fi
+  ensure_deploy_vault_access "${env}"
+
   env_path_var="INGRESS_HOST_${upper_env}"
   ingress_host="${!env_path_var:-}"
   if [ -z "${ingress_host}" ]; then
-    ingress_host="$(vault_read_field "${VAULT_KV_MOUNT}/${vault_secret_path:-${env}/${VAULT_APP_NAME}}" INGRESS_HOST)"
+    ingress_host="$(vault_read_field "${VAULT_KV_MOUNT}/${vault_secret_path}" INGRESS_HOST)"
     ingress_host="${ingress_host:-${env}.app.local}"
-  fi
-  if [ -z "${vault_secret_path}" ]; then
-    vault_secret_path="${env}/${VAULT_APP_NAME}"
   fi
   escaped_vault_secret_path="$(escape_sed_replacement "${vault_secret_path}")"
   escaped_ingress_host="$(escape_sed_replacement "${ingress_host}")"
@@ -487,6 +577,8 @@ deploy_env() {
   sub "Vault path: ${vault_secret_path}"
   sub "Vault addr: ${VAULT_ADDR}"
   sub "Ingress host: ${ingress_host}"
+
+  validate_runtime_vault_access "${env}" "${vault_secret_path}"
 
   if [ "${env}" = "prod" ]; then
     info "TLS local secret skippe pour prod (cert-manager gere app-tls)"
@@ -522,7 +614,6 @@ deploy_env() {
     | sed "s|value: http://vault.vault.svc.cluster.local:8200|value: ${escaped_vault_addr}|g" \
     | sed "s|host: ${env}.app.local|host: ${escaped_ingress_host}|g" \
     | sed "s|value: ${env}/${VAULT_APP_NAME}|value: ${escaped_vault_secret_path}|g" \
-    | sed "s|\${VAULT_APP_TOKEN}|${escaped_token}|g" \
     > "${rendered_manifest}"
 
   if [ "${skip_pg_image_update}" = "true" ]; then
@@ -536,7 +627,7 @@ deploy_env() {
   ensure_runtime_secrets_from_vault "${env}"
 
   info "Rollout postgres (${env})"
-  kubectl -n "${env}" rollout status deploy/postgres --timeout="${WAIT_TIMEOUT}"
+  rollout_status_or_describe "${env}" postgres postgres
   ensure_db_credentials "${env}"
 
   info "Apply migrations (${env})"
@@ -576,8 +667,8 @@ SQL
   '
 
   info "Rollout backend/front (${env})"
-  kubectl -n "${env}" rollout status deploy/backend --timeout="${WAIT_TIMEOUT}"
-  kubectl -n "${env}" rollout status deploy/front --timeout="${WAIT_TIMEOUT}"
+  rollout_status_or_describe "${env}" backend backend
+  rollout_status_or_describe "${env}" front front
 
   backend_images="$(kubectl -n "${env}" get pods -l app=backend -o jsonpath='{range .items[*]}{.spec.containers[0].image}{"\n"}{end}' | sort -u)"
   front_images="$(kubectl -n "${env}" get pods -l app=front -o jsonpath='{range .items[*]}{.spec.containers[0].image}{"\n"}{end}' | sort -u)"
