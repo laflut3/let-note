@@ -10,4 +10,4 @@ spec:
       - name: backend
         env:
         - name: VAULT_SECRET_PATH
-          value: let-note/dev
+          value: dev/let-note

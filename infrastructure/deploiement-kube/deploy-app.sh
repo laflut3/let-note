@@ -9,10 +9,10 @@ WAIT_TIMEOUT="${WAIT_TIMEOUT:-180s}"
 BACKEND_IMAGE_REPO="ghcr.io/laflut3/let-note-backend"
 FRONTEND_IMAGE_REPO="ghcr.io/laflut3/let-note-frontend"
 MIGRATIONS_DIR="${REPO_ROOT}/infrastructure/BDD/migration"
+DEPLOY_CONFIG_TOML="${SCRIPT_DIR}/deploy-config.toml"
 CLI_VERSION=""
 CLI_ARCH=""
-SKIP_VAULT_SYNC="false"
-FORCE_VAULT_SYNC="false"
+ALLOW_PG_MAJOR_UPGRADE="false"
 
 if [ -t 1 ]; then
   C_RESET="$(printf '\033[0m')"
@@ -39,14 +39,39 @@ ok() { printf '%b\n' "${C_OK}[ OK ]${C_RESET} $*"; }
 err() { printf '%b\n' "${C_ERR}[ERR ]${C_RESET} $*" >&2; }
 sub() { printf '%b\n' "${C_DIM}  -> $*${C_RESET}"; }
 
-load_env_file() {
-  local env_file="$1"
-  if [ -f "${env_file}" ]; then
-    info "Load env file: ${env_file}"
-    set -a
-    # shellcheck disable=SC1090
-    . "${env_file}"
-    set +a
+toml_read_deploy_value() {
+  local key="$1"
+  local file="$2"
+  [ -f "${file}" ] || return 0
+  awk -F'=' -v wanted="${key}" '
+    BEGIN { in_deploy=0 }
+    /^[[:space:]]*\[deploy\][[:space:]]*$/ { in_deploy=1; next }
+    /^[[:space:]]*\[/ { in_deploy=0 }
+    in_deploy && $1 ~ ("^[[:space:]]*" wanted "[[:space:]]*$") {
+      v=$2
+      sub(/^[[:space:]]*/, "", v)
+      sub(/[[:space:]]*$/, "", v)
+      gsub(/^"/, "", v)
+      gsub(/"$/, "", v)
+      print v
+      exit
+    }
+  ' "${file}"
+}
+
+vault_read_field() {
+  local path="$1"
+  local field="$2"
+  vault_exec "${VAULT_ADDR}" "${VAULT_ADMIN_TOKEN:-${VAULT_TOKEN:-}}" kv get -field="${field}" "${path}" 2>/dev/null || true
+}
+
+first_non_empty() {
+  local a="${1:-}"
+  local b="${2:-}"
+  if [ -n "${a}" ]; then
+    printf '%s' "${a}"
+  else
+    printf '%s' "${b}"
   fi
 }
 
@@ -56,15 +81,36 @@ escape_sed_replacement() {
 
 usage() {
   cat <<USAGE
-Usage: $0 [all|dev|staging|prod] [--version <semver>] [--arch <multi|amd64|arm64>] [--skip-vault-sync] [--force-vault-sync]
+Usage: $0 [all|dev|staging|prod] [--version <semver>] [--arch <multi|amd64|arm64>] [--allow-pg-major-upgrade]
 
 Examples:
   $0 all
   $0 dev --version 1.0.0 --arch amd64
   $0 prod --version 1.0.0 --arch multi
-  $0 staging --skip-vault-sync
-  $0 dev --force-vault-sync
+  $0 staging
+  $0 dev --allow-pg-major-upgrade
 USAGE
+}
+
+extract_pg_major_from_image() {
+  local image="$1"
+  local image_no_digest="${image%%@*}"
+  local image_tag="${image_no_digest##*:}"
+  if [[ "${image_tag}" =~ ^([0-9]+) ]]; then
+    printf '%s' "${BASH_REMATCH[1]}"
+    return 0
+  fi
+  return 1
+}
+
+get_target_postgres_image() {
+  local postgres_manifest="${SCRIPT_DIR}/base/10-postgres.yaml"
+  awk '$1=="image:"{print $2; exit}' "${postgres_manifest}"
+}
+
+get_current_postgres_image() {
+  local env_name="$1"
+  kubectl -n "${env_name}" get deploy/postgres -o jsonpath='{.spec.template.spec.containers[?(@.name=="postgres")].image}' 2>/dev/null || true
 }
 
 require_cmd() {
@@ -75,133 +121,24 @@ require_cmd() {
   }
 }
 
-env_or_fail() {
-  local key="$1"
-  local val="${!key:-}"
-  if [ -z "${val}" ]; then
-    err "Variable requise manquante: ${key}"
-    exit 1
-  fi
-  printf '%s' "${val}"
-}
-
-vault_cli_safe_value() {
-  local value="$1"
-  # Vault CLI treats values starting with '@' as file paths (key=@file).
-  # Escape leading '@' to force literal string.
-  if [[ "${value}" == @* ]]; then
-    printf '\\%s' "${value}"
-  else
-    printf '%s' "${value}"
-  fi
-}
-
 vault_exec() {
   local vault_addr="$1"
   local vault_token="$2"
   shift 2
 
   if command -v vault >/dev/null 2>&1; then
-    VAULT_ADDR="${vault_addr}" VAULT_TOKEN="${vault_token}" vault "$@"
+    if [ -n "${vault_token}" ]; then
+      VAULT_ADDR="${vault_addr}" VAULT_TOKEN="${vault_token}" vault "$@"
+    else
+      VAULT_ADDR="${vault_addr}" vault "$@"
+    fi
     return
   fi
 
   local ns pod
-  ns="${VAULT_K8S_NAMESPACE:-default}"
+  ns="${VAULT_K8S_NAMESPACE:-vault}"
   pod="${VAULT_K8S_POD:-vault-0}"
   kubectl exec -i -n "${ns}" "${pod}" -- env VAULT_ADDR="${vault_addr}" VAULT_TOKEN="${vault_token}" vault "$@"
-}
-
-vault_put_env() {
-  local env_name="$1"
-  local suffix="$(printf '%s' "${env_name}" | tr '[:lower:]' '[:upper:]')"
-  local path_var="VAULT_SECRET_PATH_${suffix}"
-
-  local kv_mount secret_path
-
-  kv_mount="$(env_or_fail VAULT_KV_MOUNT)"
-  secret_path="${!path_var:-}"
-  if [ -z "${secret_path}" ]; then
-    if [ "${env_name}" = "staging" ] && [ -n "${VAULT_SECRET_PATH_STAGGING:-}" ]; then
-      secret_path="${VAULT_SECRET_PATH_STAGGING}"
-    else
-      secret_path="let-note/${env_name}"
-    fi
-  fi
-
-  sub "Sync Vault path: ${kv_mount}/${secret_path}"
-
-  local -a key_map
-  key_map=(
-    "PS_BDD_SERVER:PS_BDD_SERVER_${suffix}"
-    "PS_BDD_DB:PS_BDD_DB_${suffix}"
-    "PS_BDD_USER:PS_BDD_USER_${suffix}"
-    "PS_BDD_PASS:PS_BDD_PASS_${suffix}"
-    "PS_BDD_PORT:PS_BDD_PORT_${suffix}"
-    "JWT_SECRET:JWT_SECRET_${suffix}"
-    "COOKIE_SECURE:COOKIE_SECURE_${suffix}"
-    "ADMIN_EMAIL:ADMIN_EMAIL_${suffix}"
-    "ADMIN_PASSWORD:ADMIN_PASSWORD_${suffix}"
-    "ADMIN_PRENOM:ADMIN_PRENOM_${suffix}"
-    "ADMIN_NOM:ADMIN_NOM_${suffix}"
-    "S3_ENDPOINT:S3_ENDPOINT_${suffix}"
-    "S3_REGION:S3_REGION_${suffix}"
-    "S3_BUCKET:S3_BUCKET_${suffix}"
-    "S3_ACCESS_KEY:S3_ACCESS_KEY_${suffix}"
-    "S3_SECRET_KEY:S3_SECRET_KEY_${suffix}"
-  )
-
-  pair_from_env() {
-    local vault_key="$1"
-    local env_key="$2"
-    local raw="${!env_key:-}"
-    if [ -z "${raw}" ]; then
-      err "Variable requise manquante: ${env_key}"
-      return 1
-    fi
-    printf '%s=%s' "${vault_key}" "$(vault_cli_safe_value "${raw}")"
-  }
-
-  local vault_path_exists="false"
-  if vault_exec "${VAULT_ADDR}" "${VAULT_ADMIN_TOKEN}" kv get "${kv_mount}/${secret_path}" >/dev/null 2>&1; then
-    vault_path_exists="true"
-  fi
-
-  local -a all_pairs
-  all_pairs=()
-
-  local m kv_key env_key maybe_pair
-  if [ "${FORCE_VAULT_SYNC}" = "true" ] || [ "${vault_path_exists}" = "false" ]; then
-    for m in "${key_map[@]}"; do
-      kv_key="${m%%:*}"
-      env_key="${m#*:}"
-      maybe_pair="$(pair_from_env "${kv_key}" "${env_key}")" || exit 1
-      all_pairs+=("${maybe_pair}")
-    done
-    vault_exec "${VAULT_ADDR}" "${VAULT_ADMIN_TOKEN}" kv put "${kv_mount}/${secret_path}" "${all_pairs[@]}" >/dev/null
-    ok "Vault variables synchronisees (${FORCE_VAULT_SYNC:+force=on}) pour ${env_name}"
-    return
-  fi
-
-  local -a missing_pairs
-  missing_pairs=()
-  local key
-  for m in "${key_map[@]}"; do
-    kv_key="${m%%:*}"
-    env_key="${m#*:}"
-    if ! vault_exec "${VAULT_ADDR}" "${VAULT_ADMIN_TOKEN}" kv get -field="${kv_key}" "${kv_mount}/${secret_path}" >/dev/null 2>&1; then
-      maybe_pair="$(pair_from_env "${kv_key}" "${env_key}")" || exit 1
-      missing_pairs+=("${maybe_pair}")
-    fi
-  done
-
-  if [ "${#missing_pairs[@]}" -eq 0 ]; then
-    ok "Vault path deja present, aucune cle manquante (${env_name})"
-    return
-  fi
-
-  vault_exec "${VAULT_ADDR}" "${VAULT_ADMIN_TOKEN}" kv patch "${kv_mount}/${secret_path}" "${missing_pairs[@]}" >/dev/null
-  ok "Vault path complete: ${#missing_pairs[@]} cles ajoutees (${env_name})"
 }
 
 ensure_https_tls_secret() {
@@ -289,55 +226,22 @@ ensure_db_credentials() {
   local env_name="$1"
   local suffix="$(printf '%s' "${env_name}" | tr '[:lower:]' '[:upper:]')"
   local app_db_user app_db_pass app_db_name escaped_pass
-  local env_path_var vault_secret_path vault_token_for_read
-  local env_user_key env_pass_key env_db_key
+  local env_path_var vault_secret_path
 
   env_path_var="VAULT_SECRET_PATH_${suffix}"
-  vault_secret_path="${!env_path_var:-}"
-  if [ -z "${vault_secret_path}" ]; then
-    if [ "${env_name}" = "staging" ] && [ -n "${VAULT_SECRET_PATH_STAGGING:-}" ]; then
-      vault_secret_path="${VAULT_SECRET_PATH_STAGGING}"
-    else
-      vault_secret_path="let-note/${env_name}"
-    fi
-  fi
-
-  vault_token_for_read="${VAULT_ADMIN_TOKEN:-${VAULT_APP_TOKEN:-}}"
-  read_env_or_vault() {
-    local env_var="$1"
-    local vault_field="$2"
-    local v="${!env_var:-}"
-    if [ -n "${v}" ]; then
-      printf '%s' "${v}"
-      return 0
-    fi
-    if [ -z "${vault_token_for_read}" ]; then
-      err "Variable requise manquante: ${env_var} (et aucun token Vault disponible pour fallback)"
-      return 1
-    fi
-    if ! v="$(vault_exec "${VAULT_ADDR}" "${vault_token_for_read}" kv get -field="${vault_field}" "${VAULT_KV_MOUNT}/${vault_secret_path}" 2>/dev/null)"; then
-      err "Variable requise manquante: ${env_var} (fallback Vault ${vault_field} indisponible)"
-      return 1
-    fi
-    printf '%s' "${v}"
-  }
-
-  app_db_user="$(read_env_or_vault "PS_BDD_USER_${suffix}" "PS_BDD_USER")" || exit 1
-  app_db_pass="$(read_env_or_vault "PS_BDD_PASS_${suffix}" "PS_BDD_PASS")" || exit 1
-  app_db_name="$(read_env_or_vault "PS_BDD_DB_${suffix}" "PS_BDD_DB")" || exit 1
-  env_user_key="PS_BDD_USER_${suffix}"
-  env_pass_key="PS_BDD_PASS_${suffix}"
-  env_db_key="PS_BDD_DB_${suffix}"
+  vault_secret_path="${!env_path_var:-${env_name}/${VAULT_APP_NAME}}"
+  app_db_user="$(vault_read_field "${VAULT_KV_MOUNT}/${vault_secret_path}" PS_BDD_USER)"
+  app_db_pass="$(vault_read_field "${VAULT_KV_MOUNT}/${vault_secret_path}" PS_BDD_PASS)"
+  app_db_name="$(vault_read_field "${VAULT_KV_MOUNT}/${vault_secret_path}" PS_BDD_DB)"
+  [ -n "${app_db_user}" ] || { err "PS_BDD_USER manquant dans Vault (${VAULT_KV_MOUNT}/${vault_secret_path})"; exit 1; }
+  [ -n "${app_db_pass}" ] || { err "PS_BDD_PASS manquant dans Vault (${VAULT_KV_MOUNT}/${vault_secret_path})"; exit 1; }
+  [ -n "${app_db_name}" ] || { err "PS_BDD_DB manquant dans Vault (${VAULT_KV_MOUNT}/${vault_secret_path})"; exit 1; }
   escaped_pass="${app_db_pass//\'/\'\'}"
 
   title "DB credentials sync ${env_name}"
   sub "Role: ${app_db_user}"
   sub "Database: ${app_db_name}"
-  if [ -z "${!env_user_key:-}" ] || [ -z "${!env_pass_key:-}" ] || [ -z "${!env_db_key:-}" ]; then
-    sub "Source credentials: Vault fallback (${VAULT_KV_MOUNT}/${vault_secret_path})"
-  else
-    sub "Source credentials: .env"
-  fi
+  sub "Source credentials: Vault (${VAULT_KV_MOUNT}/${vault_secret_path})"
 
   kubectl -n "${env_name}" exec deploy/postgres -- sh -c "
     psql -v ON_ERROR_STOP=1 -U \"\$POSTGRES_USER\" -d \"\$POSTGRES_DB\" <<'SQL'
@@ -400,12 +304,8 @@ while [[ $# -gt 0 ]]; do
       CLI_ARCH="${2:-}"
       shift 2
       ;;
-    --skip-vault-sync)
-      SKIP_VAULT_SYNC="true"
-      shift
-      ;;
-    --force-vault-sync)
-      FORCE_VAULT_SYNC="true"
+    --allow-pg-major-upgrade)
+      ALLOW_PG_MAJOR_UPGRADE="true"
       shift
       ;;
     *)
@@ -417,7 +317,6 @@ while [[ $# -gt 0 ]]; do
 done
 
 require_cmd kubectl
-load_env_file "${SCRIPT_DIR}/.env"
 
 if [ -z "${VAULT_APP_TOKEN:-}" ] && [ -n "${VAULT_TOKEN:-}" ]; then
   VAULT_APP_TOKEN="${VAULT_TOKEN}"
@@ -427,11 +326,14 @@ if [ -z "${VAULT_ADMIN_TOKEN:-}" ] && [ -n "${VAULT_TOKEN:-}" ]; then
 fi
 
 if [ -z "${VAULT_ADDR:-}" ]; then
-  VAULT_ADDR="http://vault.default.svc.cluster.local:8200"
+  VAULT_ADDR="http://vault.vault.svc.cluster.local:8200"
 fi
 if [ -z "${VAULT_KV_MOUNT:-}" ]; then
   VAULT_KV_MOUNT="secret"
 fi
+
+VAULT_APP_NAME="${VAULT_APP_NAME:-let-note}"
+VAULT_DEPLOY_PATH="${VAULT_DEPLOY_PATH:-shared/${VAULT_APP_NAME}/deploy}"
 
 if [ -n "${CLI_VERSION}" ] && [[ ! "${CLI_VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
   err "Version invalide: ${CLI_VERSION}"
@@ -442,12 +344,16 @@ if [ -n "${CLI_ARCH}" ] && [[ "${CLI_ARCH}" != "multi" && "${CLI_ARCH}" != "amd6
   exit 1
 fi
 
-IMAGE_VERSION="${CLI_VERSION:-${LET_NOTE_VERSION:-}}"
+vault_version="$(vault_read_field "${VAULT_KV_MOUNT}/${VAULT_DEPLOY_PATH}" LET_NOTE_VERSION)"
+toml_version="$(toml_read_deploy_value "version" "${DEPLOY_CONFIG_TOML}")"
+IMAGE_VERSION="$(first_non_empty "${CLI_VERSION:-}" "$(first_non_empty "${toml_version:-}" "${vault_version}")")"
 if [ -z "${IMAGE_VERSION}" ]; then
-  err "LET_NOTE_VERSION manquante (.env ou --version)"
+  err "LET_NOTE_VERSION manquante (--version, TOML ${DEPLOY_CONFIG_TOML} ou Vault ${VAULT_KV_MOUNT}/${VAULT_DEPLOY_PATH})"
   exit 1
 fi
-IMAGE_ARCH="${CLI_ARCH:-${LET_NOTE_ARCH:-amd64}}"
+vault_arch="$(vault_read_field "${VAULT_KV_MOUNT}/${VAULT_DEPLOY_PATH}" LET_NOTE_ARCH)"
+toml_arch="$(toml_read_deploy_value "arch" "${DEPLOY_CONFIG_TOML}")"
+IMAGE_ARCH="$(first_non_empty "${CLI_ARCH:-}" "$(first_non_empty "${toml_arch:-}" "${vault_arch:-amd64}")")"
 case "${IMAGE_ARCH}" in
   multi) IMAGE_TAG="${IMAGE_VERSION}" ;;
   amd64|arm64) IMAGE_TAG="${IMAGE_VERSION}-${IMAGE_ARCH}" ;;
@@ -455,21 +361,95 @@ case "${IMAGE_ARCH}" in
 esac
 
 if [ -z "${VAULT_APP_TOKEN:-}" ]; then
-  err "VAULT_APP_TOKEN (ou VAULT_TOKEN) manquant pour injecter secret/vault-app-auth"
-  exit 1
+  VAULT_APP_TOKEN="$(vault_read_field "${VAULT_KV_MOUNT}/${VAULT_DEPLOY_PATH}" VAULT_APP_TOKEN)"
 fi
 
-sync_vault() {
-  local env="$1"
-  [ "${SKIP_VAULT_SYNC}" = "true" ] && { warn "Vault sync desactive (--skip-vault-sync)"; return; }
-  if [ -z "${VAULT_ADMIN_TOKEN:-}" ]; then
-    warn "VAULT_ADMIN_TOKEN absent: sync Vault sautee."
-    warn "Definis VAULT_ADMIN_TOKEN (ou VAULT_TOKEN admin) pour automatiser l'ecriture des secrets Vault."
-    return
+ensure_runtime_secrets_from_vault() {
+  local env_name="$1"
+  local suffix
+  suffix="$(printf '%s' "${env_name}" | tr '[:lower:]' '[:upper:]')"
+  local env_path_var env_path db_name db_user db_pass s3_access s3_secret s3_endpoint s3_region s3_bucket
+  local app_token
+
+  env_path_var="VAULT_SECRET_PATH_${suffix}"
+  env_path="${!env_path_var:-${env_name}/${VAULT_APP_NAME}}"
+  db_name="$(vault_read_field "${VAULT_KV_MOUNT}/${env_path}" PS_BDD_DB)"
+  db_user="$(vault_read_field "${VAULT_KV_MOUNT}/${env_path}" PS_BDD_USER)"
+  db_pass="$(vault_read_field "${VAULT_KV_MOUNT}/${env_path}" PS_BDD_PASS)"
+  s3_access="$(vault_read_field "${VAULT_KV_MOUNT}/${env_path}" S3_ACCESS_KEY)"
+  s3_secret="$(vault_read_field "${VAULT_KV_MOUNT}/${env_path}" S3_SECRET_KEY)"
+  s3_endpoint="$(vault_read_field "${VAULT_KV_MOUNT}/${env_path}" S3_ENDPOINT)"
+  s3_region="$(vault_read_field "${VAULT_KV_MOUNT}/${env_path}" S3_REGION)"
+  s3_bucket="$(vault_read_field "${VAULT_KV_MOUNT}/${env_path}" S3_BUCKET)"
+
+  [ -n "${db_name}" ] || { err "PS_BDD_DB manquant dans Vault (${VAULT_KV_MOUNT}/${env_path})"; exit 1; }
+  [ -n "${db_user}" ] || { err "PS_BDD_USER manquant dans Vault (${VAULT_KV_MOUNT}/${env_path})"; exit 1; }
+  [ -n "${db_pass}" ] || { err "PS_BDD_PASS manquant dans Vault (${VAULT_KV_MOUNT}/${env_path})"; exit 1; }
+  [ -n "${s3_access}" ] || { err "S3_ACCESS_KEY manquant dans Vault (${VAULT_KV_MOUNT}/${env_path})"; exit 1; }
+  [ -n "${s3_secret}" ] || { err "S3_SECRET_KEY manquant dans Vault (${VAULT_KV_MOUNT}/${env_path})"; exit 1; }
+
+  app_token="$(first_non_empty "${VAULT_APP_TOKEN:-}" "$(vault_read_field "${VAULT_KV_MOUNT}/${VAULT_DEPLOY_PATH}" VAULT_APP_TOKEN)")"
+  [ -n "${app_token}" ] || { err "VAULT_APP_TOKEN manquant dans Vault (${VAULT_KV_MOUNT}/${VAULT_DEPLOY_PATH})"; exit 1; }
+
+  kubectl -n "${env_name}" create secret generic vault-app-auth \
+    --from-literal=token="${app_token}" \
+    --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+
+  kubectl -n "${env_name}" create secret generic postgres-secret \
+    --from-literal=POSTGRES_PASSWORD="${db_pass}" \
+    --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+
+  kubectl -n "${env_name}" create secret generic s3-secret \
+    --from-literal=S3_ACCESS_KEY="${s3_access}" \
+    --from-literal=S3_SECRET_KEY="${s3_secret}" \
+    --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+
+  cat <<EOF | kubectl apply -f - >/dev/null
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: seaweed-s3-config
+  namespace: ${env_name}
+data:
+  s3.conf: |
+    {
+      "identities": [
+        {
+          "name": "let-note",
+          "credentials": [
+            {
+              "accessKey": "${s3_access}",
+              "secretKey": "${s3_secret}"
+            }
+          ],
+          "actions": [
+            "Admin",
+            "Read",
+            "Write",
+            "List",
+            "Tagging"
+          ]
+        }
+      ]
+    }
+EOF
+
+  kubectl -n "${env_name}" create configmap postgres-config \
+    --from-literal=POSTGRES_DB="${db_name}" \
+    --from-literal=POSTGRES_USER="${db_user}" \
+    --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+
+  if [ -n "${s3_endpoint}" ] || [ -n "${s3_region}" ] || [ -n "${s3_bucket}" ]; then
+    kubectl -n "${env_name}" create configmap backend-config \
+      --from-literal=PS_BDD_SERVER=postgres \
+      --from-literal=PS_BDD_PORT=5432 \
+      --from-literal=S3_ENDPOINT="${s3_endpoint:-http://seaweed-s3:8333}" \
+      --from-literal=S3_REGION="${s3_region:-us-east-1}" \
+      --from-literal=S3_BUCKET="${s3_bucket:-let-note-files}" \
+      --dry-run=client -o yaml | kubectl apply -f - >/dev/null
   fi
 
-  title "Vault sync ${env}"
-  vault_put_env "${env}"
+  kubectl -n "${env_name}" rollout restart deploy/seaweed-s3 >/dev/null 2>&1 || true
 }
 
 deploy_env() {
@@ -477,10 +457,12 @@ deploy_env() {
   local overlay="${SCRIPT_DIR}/environments/${env}"
   local escaped_token escaped_vault_secret_path escaped_vault_addr escaped_ingress_host upper_env env_path_var vault_secret_path ingress_host
   local backend_expected front_expected backend_images front_images
+  local pg_target_image pg_current_image pg_target_major pg_current_major
+  local rendered_manifest skip_pg_image_update
 
   [ -d "${overlay}" ] || { err "Overlay introuvable: ${overlay}"; exit 1; }
 
-  escaped_token="$(escape_sed_replacement "${VAULT_APP_TOKEN}")"
+  escaped_token="$(escape_sed_replacement "${VAULT_APP_TOKEN:-}")"
   escaped_vault_addr="$(escape_sed_replacement "${VAULT_ADDR}")"
   upper_env="$(printf '%s' "${env}" | tr '[:lower:]' '[:upper:]')"
   env_path_var="VAULT_SECRET_PATH_${upper_env}"
@@ -488,14 +470,11 @@ deploy_env() {
   env_path_var="INGRESS_HOST_${upper_env}"
   ingress_host="${!env_path_var:-}"
   if [ -z "${ingress_host}" ]; then
-    ingress_host="${env}.app.local"
+    ingress_host="$(vault_read_field "${VAULT_KV_MOUNT}/${vault_secret_path:-${env}/${VAULT_APP_NAME}}" INGRESS_HOST)"
+    ingress_host="${ingress_host:-${env}.app.local}"
   fi
   if [ -z "${vault_secret_path}" ]; then
-    if [ "${env}" = "staging" ] && [ -n "${VAULT_SECRET_PATH_STAGGING:-}" ]; then
-      vault_secret_path="${VAULT_SECRET_PATH_STAGGING}"
-    else
-      vault_secret_path="let-note/${env}"
-    fi
+    vault_secret_path="${env}/${VAULT_APP_NAME}"
   fi
   escaped_vault_secret_path="$(escape_sed_replacement "${vault_secret_path}")"
   escaped_ingress_host="$(escape_sed_replacement "${ingress_host}")"
@@ -509,16 +488,52 @@ deploy_env() {
   sub "Vault addr: ${VAULT_ADDR}"
   sub "Ingress host: ${ingress_host}"
 
-  ensure_https_tls_secret "${env}" "${ingress_host}"
+  if [ "${env}" = "prod" ]; then
+    info "TLS local secret skippe pour prod (cert-manager gere app-tls)"
+  else
+    ensure_https_tls_secret "${env}" "${ingress_host}"
+  fi
 
+  pg_target_image="$(get_target_postgres_image)"
+  pg_current_image="$(get_current_postgres_image "${env}")"
+  pg_target_major=""
+  pg_current_major=""
+  skip_pg_image_update="false"
+
+  if [ -n "${pg_target_image}" ] && [ -n "${pg_current_image}" ]; then
+    pg_target_major="$(extract_pg_major_from_image "${pg_target_image}" || true)"
+    pg_current_major="$(extract_pg_major_from_image "${pg_current_image}" || true)"
+    if [ -n "${pg_target_major}" ] && [ -n "${pg_current_major}" ] && [ "${pg_target_major}" != "${pg_current_major}" ]; then
+      if [ "${ALLOW_PG_MAJOR_UPGRADE}" != "true" ]; then
+        skip_pg_image_update="true"
+        warn "Postgres major upgrade detecte (${pg_current_major} -> ${pg_target_major}) sans migration."
+        warn "Le script conserve automatiquement l'image Postgres actuelle pour eviter un CrashLoop et une indisponibilite."
+        warn "Pour autoriser l'upgrade majeur: lancez avec --allow-pg-major-upgrade apres migration de donnees."
+      else
+        warn "Postgres major upgrade force (${pg_current_major} -> ${pg_target_major}). Assurez-vous qu'une migration de donnees est faite."
+      fi
+    fi
+  fi
+
+  rendered_manifest="$(mktemp)"
   kubectl kustomize "${overlay}" \
     | sed "s|${BACKEND_IMAGE_REPO}:latest|${BACKEND_IMAGE_REPO}:${IMAGE_TAG}|g" \
     | sed "s|${FRONTEND_IMAGE_REPO}:latest|${FRONTEND_IMAGE_REPO}:${IMAGE_TAG}|g" \
-    | sed "s|value: http://vault.default.svc.cluster.local:8200|value: ${escaped_vault_addr}|g" \
+    | sed "s|value: http://vault.vault.svc.cluster.local:8200|value: ${escaped_vault_addr}|g" \
     | sed "s|host: ${env}.app.local|host: ${escaped_ingress_host}|g" \
-    | sed "s|value: let-note/${env}|value: ${escaped_vault_secret_path}|g" \
+    | sed "s|value: ${env}/${VAULT_APP_NAME}|value: ${escaped_vault_secret_path}|g" \
     | sed "s|\${VAULT_APP_TOKEN}|${escaped_token}|g" \
-    | kubectl apply -f -
+    > "${rendered_manifest}"
+
+  if [ "${skip_pg_image_update}" = "true" ]; then
+    sub "Postgres image conservee: ${pg_current_image}"
+    sed -i "s|image: ${pg_target_image}|image: ${pg_current_image}|g" "${rendered_manifest}"
+  fi
+
+  kubectl apply -f "${rendered_manifest}"
+  rm -f "${rendered_manifest}"
+
+  ensure_runtime_secrets_from_vault "${env}"
 
   info "Rollout postgres (${env})"
   kubectl -n "${env}" rollout status deploy/postgres --timeout="${WAIT_TIMEOUT}"
@@ -583,15 +598,11 @@ info "Image tag: ${IMAGE_TAG}"
 
 case "${TARGET}" in
   all)
-    sync_vault dev
     deploy_env dev
-    sync_vault staging
     deploy_env staging
-    sync_vault prod
     deploy_env prod
     ;;
   dev|staging|prod)
-    sync_vault "${TARGET}"
     deploy_env "${TARGET}"
     ;;
   *)

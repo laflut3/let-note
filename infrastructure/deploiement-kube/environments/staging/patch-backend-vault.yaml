@@ -9,4 +9,4 @@ spec:
       - name: backend
         env:
         - name: VAULT_SECRET_PATH
-          value: let-note/staging
+          value: staging/let-note

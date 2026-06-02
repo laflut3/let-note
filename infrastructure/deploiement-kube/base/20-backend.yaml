@@ -10,7 +10,10 @@ metadata:
 spec:
   replicas: 1
   strategy:
-    type: Recreate
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
   selector:
     matchLabels:
       app: backend
@@ -29,7 +32,9 @@ spec:
       - name: backend
         image: ghcr.io/laflut3/let-note-backend:latest
         securityContext:
+          runAsNonRoot: true
           allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
           capabilities:
             drop:
             - ALL
@@ -46,11 +51,11 @@ spec:
         - name: APP_HOST
           value: 0.0.0.0
         - name: VAULT_ADDR
-          value: http://vault.default.svc.cluster.local:8200
+          value: http://vault.vault.svc.cluster.local:8200
         - name: VAULT_KV_MOUNT
           value: secret
         - name: VAULT_SECRET_PATH
-          value: let-note/dev
+          value: dev/let-note
         - name: VAULT_TOKEN
           valueFrom:
             secretKeyRef:
