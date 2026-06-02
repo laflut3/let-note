@@ -5,3 +5,4 @@ resources:
 - ../../base
 patches:
 - path: patch-backend-vault.yaml
+- path: patch-rollout-strategy.yaml

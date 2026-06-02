@@ -196,6 +196,7 @@ rollout_status_or_describe() {
 apply_argocd_application() {
   local env_name="$1"
   local app_manifest="${SCRIPT_DIR}/argocd/application-${env_name}.yaml"
+  local rendered_app
 
   [ -f "${app_manifest}" ] || { warn "Manifest ArgoCD introuvable: ${app_manifest}"; return; }
 
@@ -205,7 +206,13 @@ apply_argocd_application() {
   fi
 
   title "ArgoCD application ${env_name}"
-  kubectl apply -f "${app_manifest}"
+  rendered_app="$(mktemp)"
+  sed "s|__IMAGE_TAG__|${IMAGE_TAG}|g" "${app_manifest}" \
+    | sed "s|${BACKEND_IMAGE_REPO}:latest|${BACKEND_IMAGE_REPO}:${IMAGE_TAG}|g" \
+    | sed "s|${FRONTEND_IMAGE_REPO}:latest|${FRONTEND_IMAGE_REPO}:${IMAGE_TAG}|g" \
+    > "${rendered_app}"
+  kubectl apply -f "${rendered_app}"
+  rm -f "${rendered_app}"
 }
 
 vault_exec() {
