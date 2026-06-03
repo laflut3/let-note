@@ -155,10 +155,9 @@ vault write auth/kubernetes/role/let-note-prod \
 
 ## 6. Migrations BDD
 
-Les migrations sont embarquees dans le chart:
+Les migrations du projet sont centralisees dans le chart:
 
-- Source historique: `infrastructure/BDD/migration/*.up.sql`
-- Source Helm deployee: `infrastructure/deploiement-kube/charts/let-note/migrations/*.up.sql`
+- Source unique: `infrastructure/deploiement-kube/charts/let-note/migrations/*.up.sql`
 
 Le chart cree:
 
@@ -167,7 +166,7 @@ Le chart cree:
 
 Le workflow utilise `helm upgrade --install --wait --wait-for-jobs`; une migration en erreur bloque le deploy.
 
-Quand une migration est ajoutee, copier aussi le fichier dans `charts/let-note/migrations/`.
+Quand une migration est ajoutee, la creer directement dans `charts/let-note/migrations/`.
 
 ## 7. Lancer un deploy
 
