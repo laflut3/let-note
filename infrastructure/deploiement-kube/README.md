@@ -37,6 +37,21 @@ Ce dossier contient les charts Helm et la configuration GitOps de Let-Note pour 
 
 cert-manager utilise l'Ingress prod pour generer le certificat TLS. Le DNS doit pointer vers l'ingress et les ports 80/443 doivent etre ouverts.
 
+## Deploiement par tag
+
+Le deploiement prod courant passe par le workflow GitHub Actions `Deploy`.
+
+| Secret GitHub | Role |
+| --- | --- |
+| `KUBE_CONFIG_AMD64_B64` | Kubeconfig base64 du cluster prod amd64. |
+| `KUBE_CONFIG_ARM64_B64` | Kubeconfig base64 du cluster prod arm64. |
+
+Le workflow est declenchable uniquement manuellement (`workflow_dispatch`) depuis un tag SemVer `v*`. Il propose trois cases `dev`, `staging` et `prod`; chaque environnement selectionne lance un job `amd64` et un job `arm64`.
+
+Le tag `vx.y.z` deploie les images `x.y.z-amd64` et `x.y.z-arm64`.
+
+Le workflow applique directement Helm avec `helm upgrade --install`; il n'appelle pas [`deploy-app.sh`](./deploy-app.sh).
+
 ## Rendu Helm
 
 Rendu local d'un environnement:

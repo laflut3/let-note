@@ -18,6 +18,9 @@ config:
 postgres:
   database: let_note_prod
 
+secrets:
+  create: false
+
 backend:
   replicas: 3
   vault:

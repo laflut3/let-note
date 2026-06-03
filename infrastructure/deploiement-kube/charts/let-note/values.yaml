@@ -50,6 +50,7 @@ config:
         - http://dev.app.local
 
 secrets:
+  create: true
   postgres:
     password: CHANGE_ME_STRONG_DB_PASSWORD_DEV
   s3:

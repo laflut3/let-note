@@ -2,6 +2,8 @@
 
 Documentation centralisee du script [`deploy-app.sh`](./deploy-app.sh).
 
+Le deploiement prod courant par tag ne passe plus par ce script. Il est gere par le workflow GitHub Actions `Deploy`, declenche manuellement depuis un tag SemVer `v*`.
+
 ## Commandes
 
 | Commande | Effet | Quand l'utiliser |
@@ -16,6 +18,18 @@ Documentation centralisee du script [`deploy-app.sh`](./deploy-app.sh).
 | `./deploy-app.sh prod --full --argocd` | Applique aussi l'ApplicationSet ArgoCD. | Uniquement si GitHub `main` contient deja le chart voulu. |
 | `./deploy-app.sh prod --force-restart` | Force un nouveau rollout meme avec le meme tag image. | Redemarrer les pods applicatifs sans changer de version. |
 | `./deploy-app.sh --help` | Affiche l'aide du script. | Verification rapide des options disponibles. |
+
+## Workflow GitHub Actions `Deploy`
+
+| Element | Detail |
+| --- | --- |
+| Declenchement | Manuel uniquement avec `workflow_dispatch`, depuis un tag SemVer `v*`. |
+| Version deployee | Le tag Git sans prefixe `v`, par exemple `v1.2.3` deploie `1.2.3-amd64` et `1.2.3-arm64`. |
+| Selection env | Cases manuelles `dev`, `staging` et `prod`. |
+| Jobs amd64 | `deploy-dev-amd64`, `deploy-staging-amd64`, `deploy-prod-amd64`, utilisent `KUBE_CONFIG_AMD64_B64`. |
+| Jobs arm64 | `deploy-dev-arm64`, `deploy-staging-arm64`, `deploy-prod-arm64`, utilisent `KUBE_CONFIG_ARM64_B64`. |
+| Mecanisme | `helm upgrade --install` direct sur `charts/cluster` puis `charts/let-note`. |
+| TLS prod | Le workflow bloque si `Certificate/prod/app-tls` existe avec un DNS different de `let-note.prod.polydo.dev`. |
 
 ## Modes
 
@@ -145,5 +159,6 @@ helm template let-note-dev ./charts/let-note --namespace dev -f ./charts/let-not
 | Premier deploiement d'un environnement | `./deploy-app.sh <env> --full` |
 | Redeploiement front/back courant | `./deploy-app.sh <env> --app-only` |
 | Changement volontaire d'Ingress/TLS | `./deploy-app.sh <env> --full --allow-cert-change` |
+| Deploiement prod par tag | Lancer le workflow GitHub Actions `Deploy` depuis un tag SemVer `v*` |
 | Utilisation GitOps ArgoCD | Commit/push sur GitHub `main`, puis `./deploy-app.sh <env> --full --argocd` pour appliquer l'ApplicationSet |
 | Diagnostic rapide apres deploy | `kubectl -n <env> get deploy,pods,svc,ingress` |
