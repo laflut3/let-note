@@ -1,0 +1,56 @@
+global:
+  environment: prod
+
+config:
+  frontend:
+    APP_ENV: prod
+  app:
+    env: prod
+    routes:
+      frontendBaseUrl: https://let-note.prod.polydo.dev
+      backendBaseUrl: https://let-note.prod.polydo.dev/api
+    ingress:
+      host: let-note.prod.polydo.dev
+    cors:
+      allowedOrigins:
+        - https://let-note.prod.polydo.dev
+
+postgres:
+  database: let_note_prod
+
+backend:
+  replicas: 3
+  vault:
+    secretPath: prod/let-note
+    k8sRole: let-note-prod
+  strategy:
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 0
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: 800m
+      memory: 1024Mi
+
+frontend:
+  replicas: 3
+  strategy:
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 0
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: 800m
+      memory: 1024Mi
+
+ingress:
+  host: let-note.prod.polydo.dev
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure

@@ -10,8 +10,8 @@ Documentation centralisee du script [`deploy-app.sh`](./deploy-app.sh).
 | `./deploy-app.sh staging` | Deploie l'environnement `staging` en mode `auto`. | Usage courant staging. |
 | `./deploy-app.sh prod` | Deploie l'environnement `prod` en mode `auto`. | Usage courant prod. |
 | `./deploy-app.sh all` | Deploie `dev`, `staging`, puis `prod`. | Mise a jour globale. |
-| `./deploy-app.sh prod --app-only` | Applique uniquement les deployments `backend` et `front`. | Redeploiement applicatif sans toucher infra, ingress, TLS, Postgres ou secrets. |
-| `./deploy-app.sh prod --full` | Applique tout l'overlay et execute les taches infra. | Bootstrap ou changement d'infra volontaire. |
+| `./deploy-app.sh prod --app-only` | Applique uniquement les deployments `backend` et `front` rendus par Helm. | Redeploiement applicatif sans toucher infra, ingress, TLS, Postgres ou secrets. |
+| `./deploy-app.sh prod --full` | Applique tout le chart Helm et execute les taches infra. | Bootstrap ou changement d'infra volontaire. |
 | `./deploy-app.sh prod --full --allow-cert-change` | Autorise un changement du host TLS existant. | Rotation volontaire du certificat cert-manager. |
 | `./deploy-app.sh prod --full --argocd` | Applique aussi l'Application ArgoCD. | Uniquement si GitHub `main` contient deja les manifests voulus. |
 | `./deploy-app.sh prod --force-restart` | Force un nouveau rollout meme avec le meme tag image. | Redemarrer les pods applicatifs sans changer de version. |
@@ -23,14 +23,14 @@ Documentation centralisee du script [`deploy-app.sh`](./deploy-app.sh).
 | --- | --- | --- | --- | --- |
 | `auto` | Mode par defaut. | `full` si `backend`/`front` n'existent pas, sinon `app-only`. | Selon le mode resolu. | Faible apres bootstrap, car les redeploiements deviennent applicatifs. |
 | `app-only` | `--app-only` ou `DEPLOY_SCOPE=app`. | Uniquement les ressources avec `app=backend` et `app=front`. | Rollout backend/front et verification des images. | Aucun changement d'Ingress ou Certificate. |
-| `full` | `--full` ou premier deploy en `auto`. | Tout le rendu Kustomize de l'environnement. | Bootstrap cluster, secrets runtime, Postgres, migrations, TLS dev/staging, rollouts. | Bloque le changement TLS existant sans `--allow-cert-change`. |
+| `full` | `--full` ou premier deploy en `auto`. | Tout le rendu Helm de l'environnement. | Bootstrap cluster, secrets runtime, Postgres, migrations, TLS dev/staging, rollouts. | Bloque le changement TLS existant sans `--allow-cert-change`. |
 
 ## Options CLI
 
 | Option | Defaut | Effet |
 | --- | --- | --- |
 | `--app-only` | Non | Force le mode applicatif: applique seulement `backend` et `front`. |
-| `--full` | Non | Force l'application complete de l'overlay et des taches infra. |
+| `--full` | Non | Force l'application complete du chart Helm et des taches infra. |
 | `--argocd` | Non | Applique l'Application ArgoCD correspondant a l'environnement. Git doit etre a jour, sinon ArgoCD peut restaurer un ancien etat. |
 | `--allow-cert-change` | Non | Autorise un changement de DNS sur le certificat TLS existant. Sans cette option, le script stoppe pour eviter les rate limits Let's Encrypt. |
 | `--allow-pg-major-upgrade` | Non | Autorise un changement de version majeure PostgreSQL. Sans cette option, le script conserve l'image Postgres existante. |
@@ -92,6 +92,23 @@ Avec cet exemple, les images attendues sont:
 | --- | --- |
 | Backend | `ghcr.io/laflut3/let-note-backend:1.0.2-amd64` |
 | Frontend | `ghcr.io/laflut3/let-note-frontend:1.0.2-amd64` |
+
+## Chart Helm
+
+| Chemin | Role |
+| --- | --- |
+| `helm/let-note/Chart.yaml` | Metadata du chart. |
+| `helm/let-note/values.yaml` | Valeurs communes aux environnements. |
+| `helm/let-note/environments/dev.yaml` | Surcharges dev. |
+| `helm/let-note/environments/staging.yaml` | Surcharges staging. |
+| `helm/let-note/environments/prod.yaml` | Surcharges prod. |
+| `helm/let-note/templates/` | Templates Kubernetes rendus par Helm. |
+
+Rendu manuel:
+
+```bash
+helm template let-note-dev ./helm/let-note --namespace dev -f ./helm/let-note/environments/dev.yaml
+```
 
 ## Secrets Vault lus par le script
 

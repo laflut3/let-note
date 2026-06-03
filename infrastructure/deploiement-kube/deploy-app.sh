@@ -10,6 +10,7 @@ BACKEND_IMAGE_REPO="ghcr.io/laflut3/let-note-backend"
 FRONTEND_IMAGE_REPO="ghcr.io/laflut3/let-note-frontend"
 MIGRATIONS_DIR="${REPO_ROOT}/infrastructure/BDD/migration"
 DEPLOY_CONFIG_TOML="${SCRIPT_DIR}/deploy-config.toml"
+HELM_CHART_DIR="${SCRIPT_DIR}/helm/let-note"
 ALLOW_PG_MAJOR_UPGRADE="false"
 FORCE_RESTART="false"
 ALLOW_CERT_CHANGE="false"
@@ -124,7 +125,7 @@ Examples:
 
 Modes:
   --app-only  applique uniquement les deployments backend/front
-  --full      applique tout l'overlay et les taches infra
+  --full      applique tout le chart Helm et les taches infra
   --argocd    applique aussi l'Application ArgoCD (Git doit etre a jour)
   --allow-cert-change autorise une rotation du certificat TLS existant
   auto        full si l'environnement n'existe pas encore, app-only sinon
@@ -143,11 +144,17 @@ extract_pg_major_from_image() {
 }
 
 get_target_postgres_image() {
-  local postgres_manifest="${SCRIPT_DIR}/base/10-postgres.yaml"
+  local postgres_manifest
+
+  postgres_manifest="$(mktemp)"
+  helm template let-note "${HELM_CHART_DIR}" --namespace dev \
+    -f "${HELM_CHART_DIR}/environments/dev.yaml" \
+    > "${postgres_manifest}"
   awk '
     $1=="-" && $2=="name:" && $3=="postgres" { in_postgres=1; next }
     in_postgres && $1=="image:" { print $2; exit }
   ' "${postgres_manifest}"
+  rm -f "${postgres_manifest}"
 }
 
 get_current_postgres_image() {
@@ -272,7 +279,7 @@ deploy_scope_for_env() {
 }
 
 render_env_manifest() {
-  local overlay="$1"
+  local chart_dir="$1"
   local env_name="$2"
   local escaped_vault_addr="$3"
   local escaped_ingress_host="$4"
@@ -280,13 +287,16 @@ render_env_manifest() {
   local escaped_deploy_id="$6"
   local rendered_manifest="$7"
 
-  kubectl kustomize "${overlay}" \
-    | sed "s|${BACKEND_IMAGE_REPO}:latest|${BACKEND_IMAGE_REPO}:${IMAGE_TAG}|g" \
-    | sed "s|${FRONTEND_IMAGE_REPO}:latest|${FRONTEND_IMAGE_REPO}:${IMAGE_TAG}|g" \
-    | sed "s|value: http://vault.vault.svc.cluster.local:8200|value: ${escaped_vault_addr}|g" \
-    | sed "s|host: ${env_name}.app.local|host: ${escaped_ingress_host}|g" \
-    | sed "s|value: ${env_name}/${VAULT_APP_NAME}|value: ${escaped_vault_secret_path}|g" \
-    | sed "s|let-note.io/deploy-id: latest|let-note.io/deploy-id: ${escaped_deploy_id}|g" \
+  helm template "let-note-${env_name}" "${chart_dir}" \
+    --namespace "${env_name}" \
+    -f "${chart_dir}/environments/${env_name}.yaml" \
+    --set-string "images.backend.tag=${IMAGE_TAG}" \
+    --set-string "images.frontend.tag=${IMAGE_TAG}" \
+    --set-string "backend.vault.addr=${escaped_vault_addr}" \
+    --set-string "backend.vault.secretPath=${escaped_vault_secret_path}" \
+    --set-string "ingress.host=${escaped_ingress_host}" \
+    --set-string "config.app.ingress.host=${escaped_ingress_host}" \
+    --set-string "global.deployId=${escaped_deploy_id}" \
     > "${rendered_manifest}"
 }
 
@@ -527,6 +537,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 require_cmd kubectl
+require_cmd helm
 
 if [ -z "${VAULT_ADMIN_TOKEN:-}" ] && [ -n "${VAULT_TOKEN:-}" ]; then
   VAULT_ADMIN_TOKEN="${VAULT_TOKEN}"
@@ -715,13 +726,14 @@ validate_runtime_vault_access() {
 
 deploy_env() {
   local env="$1"
-  local overlay="${SCRIPT_DIR}/environments/${env}"
+  local chart_dir="${HELM_CHART_DIR}"
   local escaped_vault_secret_path escaped_vault_addr escaped_ingress_host upper_env env_path_var vault_secret_path ingress_host
   local backend_expected front_expected backend_images front_images
   local pg_target_image pg_current_image pg_target_major pg_current_major
   local rendered_manifest skip_pg_image_update deploy_id escaped_deploy_id deploy_scope
 
-  [ -d "${overlay}" ] || { err "Overlay introuvable: ${overlay}"; exit 1; }
+  [ -d "${chart_dir}" ] || { err "Chart Helm introuvable: ${chart_dir}"; exit 1; }
+  [ -f "${chart_dir}/environments/${env}.yaml" ] || { err "Values Helm introuvables: ${chart_dir}/environments/${env}.yaml"; exit 1; }
 
   deploy_scope="$(deploy_scope_for_env "${env}")"
   if [ "${deploy_scope}" = "full" ]; then
@@ -811,7 +823,7 @@ deploy_env() {
   fi
 
   rendered_manifest="$(mktemp)"
-  render_env_manifest "${overlay}" "${env}" "${escaped_vault_addr}" "${escaped_ingress_host}" "${escaped_vault_secret_path}" "${escaped_deploy_id}" "${rendered_manifest}"
+  render_env_manifest "${chart_dir}" "${env}" "${escaped_vault_addr}" "${escaped_ingress_host}" "${escaped_vault_secret_path}" "${escaped_deploy_id}" "${rendered_manifest}"
 
   if [ "${skip_pg_image_update}" = "true" ]; then
     sub "Postgres image conservee: ${pg_current_image}"

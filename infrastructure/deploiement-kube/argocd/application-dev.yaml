@@ -8,11 +8,16 @@ spec:
   source:
     repoURL: https://github.com/laflut3/let-note.git
     targetRevision: main
-    path: infrastructure/deploiement-kube/environments/dev
-    kustomize:
-      images:
-      - ghcr.io/laflut3/let-note-backend:__IMAGE_TAG__
-      - ghcr.io/laflut3/let-note-frontend:__IMAGE_TAG__
+    path: infrastructure/deploiement-kube/helm/let-note
+    helm:
+      releaseName: let-note-dev
+      valueFiles:
+      - environments/dev.yaml
+      parameters:
+      - name: images.backend.tag
+        value: __IMAGE_TAG__
+      - name: images.frontend.tag
+        value: __IMAGE_TAG__
   destination:
     server: https://kubernetes.default.svc
     namespace: dev

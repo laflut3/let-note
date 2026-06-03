@@ -1,0 +1,75 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backend-config
+  namespace: {{ include "let-note.namespace" . }}
+  labels:
+    {{- include "let-note.commonLabels" . | nindent 4 }}
+data:
+{{- range $key, $value := .Values.config.backend }}
+  {{ $key }}: {{ $value | quote }}
+{{- end }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: front-config
+  namespace: {{ include "let-note.namespace" . }}
+  labels:
+    {{- include "let-note.commonLabels" . | nindent 4 }}
+data:
+{{- range $key, $value := .Values.config.frontend }}
+  {{ $key }}: {{ $value | quote }}
+{{- end }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: {{ include "let-note.namespace" . }}
+  labels:
+    {{- include "let-note.commonLabels" . | nindent 4 }}
+data:
+  app-config.yaml: |
+{{ include "let-note.appConfig" . | indent 4 }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-config
+  namespace: {{ include "let-note.namespace" . }}
+  labels:
+    {{- include "let-note.commonLabels" . | nindent 4 }}
+data:
+  POSTGRES_DB: {{ .Values.postgres.database | quote }}
+  POSTGRES_USER: {{ .Values.postgres.user | quote }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: seaweed-s3-config
+  namespace: {{ include "let-note.namespace" . }}
+  labels:
+    {{- include "let-note.commonLabels" . | nindent 4 }}
+data:
+  s3.conf: |
+    {
+      "identities": [
+        {
+          "name": "{{ .Values.seaweedfs.s3.identityName }}",
+          "credentials": [
+            {
+              "accessKey": "{{ .Values.seaweedfs.s3.accessKey }}",
+              "secretKey": "{{ .Values.seaweedfs.s3.secretKey }}"
+            }
+          ],
+          "actions": [
+            "Admin",
+            "Read",
+            "Write",
+            "List",
+            "Tagging"
+          ]
+        }
+      ]
+    }

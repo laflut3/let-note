@@ -2,6 +2,10 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: postgres
+  namespace: {{ include "let-note.namespace" . }}
+  labels:
+    app: postgres
+    {{- include "let-note.commonLabels" . | nindent 4 }}
 spec:
   replicas: 1
   strategy:
@@ -13,12 +17,13 @@ spec:
     metadata:
       labels:
         app: postgres
+        {{- include "let-note.commonLabels" . | nindent 8 }}
     spec:
       securityContext:
         fsGroup: 999
       initContainers:
       - name: init-postgres-permissions
-        image: busybox:1.36
+        image: {{ include "let-note.image" .Values.images.busybox | quote }}
         command:
         - sh
         - -c
@@ -32,7 +37,7 @@ spec:
           mountPath: /var/lib/postgresql
       containers:
       - name: postgres
-        image: postgres:18@sha256:78481659c47e862334611ccdaf7c369c986b3046da9857112f3b309114a65fb4
+        image: {{ include "let-note.image" .Values.images.postgres | quote }}
         securityContext:
           runAsUser: 999
           runAsGroup: 999
@@ -57,12 +62,7 @@ spec:
           initialDelaySeconds: 20
           periodSeconds: 15
         resources:
-          requests:
-            cpu: 100m
-            memory: 128Mi
-          limits:
-            cpu: 250m
-            memory: 256Mi
+          {{- toYaml .Values.postgres.resources | nindent 10 }}
       volumes:
       - name: data
         persistentVolumeClaim:
@@ -72,6 +72,10 @@ apiVersion: v1
 kind: Service
 metadata:
   name: postgres
+  namespace: {{ include "let-note.namespace" . }}
+  labels:
+    app: postgres
+    {{- include "let-note.commonLabels" . | nindent 4 }}
 spec:
   selector:
     app: postgres

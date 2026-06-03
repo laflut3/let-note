@@ -1,0 +1,39 @@
+global:
+  environment: dev
+
+config:
+  frontend:
+    APP_ENV: dev
+  app:
+    env: dev
+    routes:
+      frontendBaseUrl: http://dev.app.local
+      backendBaseUrl: http://dev.app.local/api
+    ingress:
+      host: dev.app.local
+    cors:
+      allowedOrigins:
+        - http://localhost:5173
+        - http://127.0.0.1:5173
+        - http://dev.app.local
+
+postgres:
+  database: let_note_dev
+
+backend:
+  vault:
+    secretPath: dev/let-note
+    k8sRole: let-note-dev
+  strategy:
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 0
+
+frontend:
+  strategy:
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 0
+
+ingress:
+  host: dev.app.local
