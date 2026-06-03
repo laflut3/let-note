@@ -43,14 +43,14 @@ Le deploiement prod courant passe par le workflow GitHub Actions `Deploy`.
 
 | Secret GitHub | Role |
 | --- | --- |
-| `KUBE_CONFIG_AMD64_B64` | Kubeconfig base64 du cluster prod amd64. |
-| `KUBE_CONFIG_ARM64_B64` | Kubeconfig base64 du cluster prod arm64. |
+| `KUBE_CONFIG_AMD64` | Kubeconfig brut du cluster amd64. |
+| `KUBE_CONFIG_ARM64` | Kubeconfig brut du cluster arm64. |
 
 Le workflow est declenchable uniquement manuellement (`workflow_dispatch`) depuis un tag SemVer `v*`. Il propose trois cases `dev`, `staging` et `prod`; chaque environnement selectionne lance un job `amd64` et un job `arm64`.
 
 Le tag `vx.y.z` deploie les images `x.y.z-amd64` et `x.y.z-arm64`.
 
-Le workflow applique directement Helm avec `helm upgrade --install`; il n'appelle pas [`deploy-app.sh`](./deploy-app.sh).
+Le workflow utilise l'action locale `.github/actions/helm-deploy`, configure Kubernetes avec `azure/k8s-set-context`, installe Helm avec `azure/setup-helm`, puis applique les charts avec `helm upgrade --install`. Il n'appelle pas [`deploy-app.sh`](./deploy-app.sh).
 
 ## Rendu Helm
 

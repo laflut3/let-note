@@ -1,0 +1,88 @@
+name: Helm deploy
+description: Deploy one Let-Note environment and architecture with Helm.
+
+inputs:
+  arch:
+    description: Image architecture suffix.
+    required: true
+  environment:
+    description: Deployment environment.
+    required: true
+  kubeconfig:
+    description: Raw kubeconfig content.
+    required: true
+  version:
+    description: SemVer image version without leading v.
+    required: true
+  prod-ingress-host:
+    description: Expected production ingress host.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Set up kubeconfig
+      uses: azure/k8s-set-context@v4
+      with:
+        method: kubeconfig
+        kubeconfig: ${{ inputs.kubeconfig }}
+
+    - name: Set up Helm
+      uses: azure/setup-helm@v4
+
+    - name: Set up kubectl
+      uses: azure/setup-kubectl@v4
+
+    - name: Verify release images
+      shell: bash
+      env:
+        ARCH: ${{ inputs.arch }}
+        VERSION: ${{ inputs.version }}
+      run: |
+        image_tag="${VERSION}-${ARCH}"
+        docker buildx imagetools inspect "ghcr.io/laflut3/let-note-backend:${image_tag}"
+        docker buildx imagetools inspect "ghcr.io/laflut3/let-note-frontend:${image_tag}"
+
+    - name: Guard prod TLS certificate
+      if: inputs.environment == 'prod'
+      shell: bash
+      env:
+        PROD_INGRESS_HOST: ${{ inputs.prod-ingress-host }}
+      run: |
+        current_hosts="$(kubectl -n prod get certificate app-tls -o jsonpath='{.spec.dnsNames[*]}' 2>/dev/null || true)"
+        if [ -z "${current_hosts}" ]; then
+          exit 0
+        fi
+
+        printf '%s\n' "${current_hosts}" | tr ' ' '\n' | grep -Fx "${PROD_INGRESS_HOST}" >/dev/null || {
+          echo "::error title=TLS host change blocked::Certificate prod/app-tls currently targets '${current_hosts}', expected '${PROD_INGRESS_HOST}'. Update intentionally outside this deploy workflow."
+          exit 1
+        }
+
+    - name: Deploy cluster chart
+      shell: bash
+      run: |
+        helm upgrade --install let-note-cluster ./infrastructure/deploiement-kube/charts/cluster \
+          --atomic \
+          --wait \
+          --timeout 5m
+
+    - name: Deploy app chart
+      shell: bash
+      env:
+        ARCH: ${{ inputs.arch }}
+        DEPLOY_ENV: ${{ inputs.environment }}
+        VERSION: ${{ inputs.version }}
+      run: |
+        image_tag="${VERSION}-${ARCH}"
+        helm upgrade --install "let-note-${DEPLOY_ENV}" ./infrastructure/deploiement-kube/charts/let-note \
+          --namespace "${DEPLOY_ENV}" \
+          --create-namespace \
+          --values "./infrastructure/deploiement-kube/charts/let-note/environments/${DEPLOY_ENV}.yaml" \
+          --set "secrets.create=false" \
+          --set-string "images.backend.tag=${image_tag}" \
+          --set-string "images.frontend.tag=${image_tag}" \
+          --set-string "global.deployId=${DEPLOY_ENV}-${image_tag}-${GITHUB_RUN_ID}" \
+          --atomic \
+          --wait \
+          --timeout 10m

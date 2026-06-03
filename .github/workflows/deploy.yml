@@ -24,9 +24,6 @@ permissions:
   packages: read
 
 env:
-  CONTAINER_REGISTRY: ghcr.io
-  BACKEND_IMAGE_NAME: laflut3/let-note-backend
-  FRONTEND_IMAGE_NAME: laflut3/let-note-frontend
   PROD_INGRESS_HOST: let-note.prod.polydo.dev
 
 jobs:
@@ -41,38 +38,35 @@ jobs:
     steps:
       - name: Validate tag and selected environments
         id: meta
-        shell: bash
-        env:
-          REF_NAME: ${{ github.ref_name }}
-          REF_TYPE: ${{ github.ref_type }}
-          DEPLOY_DEV: ${{ inputs.deploy_dev }}
-          DEPLOY_STAGING: ${{ inputs.deploy_staging }}
-          DEPLOY_PROD: ${{ inputs.deploy_prod }}
-        run: |
-          set -euo pipefail
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const refType = context.ref.startsWith("refs/tags/") ? "tag" : "branch";
+            const refName = context.ref.replace(/^refs\/tags\//, "").replace(/^refs\/heads\//, "");
+            const semver = /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-((0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(\.(0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(\+([0-9a-zA-Z-]+(\.[0-9a-zA-Z-]+)*))?$/;
+            const deployDev = String(${{ inputs.deploy_dev }});
+            const deployStaging = String(${{ inputs.deploy_staging }});
+            const deployProd = String(${{ inputs.deploy_prod }});
 
-          if [ "${REF_TYPE}" != "tag" ]; then
-            echo "::error title=Invalid ref::Deploy workflow must be manually run from a Git tag."
-            exit 1
-          fi
+            if (refType !== "tag") {
+              core.setFailed("Deploy workflow must be manually run from a Git tag.");
+              return;
+            }
 
-          semver_re='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-((0|[1-9][0-9]*|[0-9]*[a-zA-Z-][0-9a-zA-Z-]*)(\.(0|[1-9][0-9]*|[0-9]*[a-zA-Z-][0-9a-zA-Z-]*))*))?(\+([0-9a-zA-Z-]+(\.[0-9a-zA-Z-]+)*))?$'
-          if [[ ! "${REF_NAME}" =~ ${semver_re} ]]; then
-            echo "::error title=Invalid SemVer Tag::Deploy tag '${REF_NAME}' must match vMAJOR.MINOR.PATCH[-PRERELEASE][+BUILD]."
-            exit 1
-          fi
+            if (!semver.test(refName)) {
+              core.setFailed(`Deploy tag '${refName}' must match vMAJOR.MINOR.PATCH[-PRERELEASE][+BUILD].`);
+              return;
+            }
 
-          if [ "${DEPLOY_DEV}" != "true" ] && [ "${DEPLOY_STAGING}" != "true" ] && [ "${DEPLOY_PROD}" != "true" ]; then
-            echo "::error title=No environment selected::Select at least one environment to deploy."
-            exit 1
-          fi
+            if (deployDev !== "true" && deployStaging !== "true" && deployProd !== "true") {
+              core.setFailed("Select at least one environment to deploy.");
+              return;
+            }
 
-          {
-            echo "deploy_version=${REF_NAME#v}"
-            echo "deploy_dev=${DEPLOY_DEV}"
-            echo "deploy_staging=${DEPLOY_STAGING}"
-            echo "deploy_prod=${DEPLOY_PROD}"
-          } >> "${GITHUB_OUTPUT}"
+            core.setOutput("deploy_version", refName.slice(1));
+            core.setOutput("deploy_dev", deployDev);
+            core.setOutput("deploy_staging", deployStaging);
+            core.setOutput("deploy_prod", deployProd);
 
   deploy-dev-amd64:
     name: Deploy dev amd64
@@ -83,78 +77,25 @@ jobs:
     concurrency:
       group: deploy-amd64
       cancel-in-progress: false
-    env:
-      DEPLOY_ARCH: amd64
-      DEPLOY_ENV: dev
-      DEPLOY_VERSION: ${{ needs.validate-selection.outputs.deploy_version }}
-      KUBE_CONFIG_B64: ${{ secrets.KUBE_CONFIG_AMD64_B64 }}
     steps:
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - name: Configure kubeconfig
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          if [ -z "${KUBE_CONFIG_B64}" ]; then
-            echo "::error title=Missing secret::KUBE_CONFIG_AMD64_B64 is required."
-            exit 1
-          fi
-
-          mkdir -p "${HOME}/.kube"
-          printf '%s' "${KUBE_CONFIG_B64}" | base64 -d > "${HOME}/.kube/config"
-          chmod 600 "${HOME}/.kube/config"
-
-      - name: Set up Helm
-        uses: azure/setup-helm@v4
-
-      - name: Set up kubectl
-        uses: azure/setup-kubectl@v4
-
       - name: Login to GitHub Container Registry
         uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4
         with:
-          registry: ${{ env.CONTAINER_REGISTRY }}
+          registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Verify release images
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          image_tag="${DEPLOY_VERSION}-${DEPLOY_ARCH}"
-          docker buildx imagetools inspect "${CONTAINER_REGISTRY}/${BACKEND_IMAGE_NAME}:${image_tag}"
-          docker buildx imagetools inspect "${CONTAINER_REGISTRY}/${FRONTEND_IMAGE_NAME}:${image_tag}"
-
-      - name: Deploy cluster chart
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          helm upgrade --install let-note-cluster ./infrastructure/deploiement-kube/charts/cluster \
-            --atomic \
-            --wait \
-            --timeout 5m
-
-      - name: Deploy app chart
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          image_tag="${DEPLOY_VERSION}-${DEPLOY_ARCH}"
-          helm upgrade --install "let-note-${DEPLOY_ENV}" ./infrastructure/deploiement-kube/charts/let-note \
-            --namespace "${DEPLOY_ENV}" \
-            --create-namespace \
-            --values "./infrastructure/deploiement-kube/charts/let-note/environments/${DEPLOY_ENV}.yaml" \
-            --set "secrets.create=false" \
-            --set-string "images.backend.tag=${image_tag}" \
-            --set-string "images.frontend.tag=${image_tag}" \
-            --set-string "global.deployId=${DEPLOY_ENV}-${image_tag}-${GITHUB_RUN_ID}" \
-            --atomic \
-            --wait \
-            --timeout 10m
+      - name: Deploy dev amd64
+        uses: ./.github/actions/helm-deploy
+        with:
+          arch: amd64
+          environment: dev
+          kubeconfig: ${{ secrets.KUBE_CONFIG_AMD64 }}
+          version: ${{ needs.validate-selection.outputs.deploy_version }}
+          prod-ingress-host: ${{ env.PROD_INGRESS_HOST }}
 
   deploy-staging-amd64:
     name: Deploy staging amd64
@@ -165,78 +106,25 @@ jobs:
     concurrency:
       group: deploy-amd64
       cancel-in-progress: false
-    env:
-      DEPLOY_ARCH: amd64
-      DEPLOY_ENV: staging
-      DEPLOY_VERSION: ${{ needs.validate-selection.outputs.deploy_version }}
-      KUBE_CONFIG_B64: ${{ secrets.KUBE_CONFIG_AMD64_B64 }}
     steps:
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - name: Configure kubeconfig
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          if [ -z "${KUBE_CONFIG_B64}" ]; then
-            echo "::error title=Missing secret::KUBE_CONFIG_AMD64_B64 is required."
-            exit 1
-          fi
-
-          mkdir -p "${HOME}/.kube"
-          printf '%s' "${KUBE_CONFIG_B64}" | base64 -d > "${HOME}/.kube/config"
-          chmod 600 "${HOME}/.kube/config"
-
-      - name: Set up Helm
-        uses: azure/setup-helm@v4
-
-      - name: Set up kubectl
-        uses: azure/setup-kubectl@v4
-
       - name: Login to GitHub Container Registry
         uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4
         with:
-          registry: ${{ env.CONTAINER_REGISTRY }}
+          registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Verify release images
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          image_tag="${DEPLOY_VERSION}-${DEPLOY_ARCH}"
-          docker buildx imagetools inspect "${CONTAINER_REGISTRY}/${BACKEND_IMAGE_NAME}:${image_tag}"
-          docker buildx imagetools inspect "${CONTAINER_REGISTRY}/${FRONTEND_IMAGE_NAME}:${image_tag}"
-
-      - name: Deploy cluster chart
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          helm upgrade --install let-note-cluster ./infrastructure/deploiement-kube/charts/cluster \
-            --atomic \
-            --wait \
-            --timeout 5m
-
-      - name: Deploy app chart
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          image_tag="${DEPLOY_VERSION}-${DEPLOY_ARCH}"
-          helm upgrade --install "let-note-${DEPLOY_ENV}" ./infrastructure/deploiement-kube/charts/let-note \
-            --namespace "${DEPLOY_ENV}" \
-            --create-namespace \
-            --values "./infrastructure/deploiement-kube/charts/let-note/environments/${DEPLOY_ENV}.yaml" \
-            --set "secrets.create=false" \
-            --set-string "images.backend.tag=${image_tag}" \
-            --set-string "images.frontend.tag=${image_tag}" \
-            --set-string "global.deployId=${DEPLOY_ENV}-${image_tag}-${GITHUB_RUN_ID}" \
-            --atomic \
-            --wait \
-            --timeout 10m
+      - name: Deploy staging amd64
+        uses: ./.github/actions/helm-deploy
+        with:
+          arch: amd64
+          environment: staging
+          kubeconfig: ${{ secrets.KUBE_CONFIG_AMD64 }}
+          version: ${{ needs.validate-selection.outputs.deploy_version }}
+          prod-ingress-host: ${{ env.PROD_INGRESS_HOST }}
 
   deploy-prod-amd64:
     name: Deploy prod amd64
@@ -247,93 +135,25 @@ jobs:
     concurrency:
       group: deploy-amd64
       cancel-in-progress: false
-    env:
-      DEPLOY_ARCH: amd64
-      DEPLOY_ENV: prod
-      DEPLOY_VERSION: ${{ needs.validate-selection.outputs.deploy_version }}
-      KUBE_CONFIG_B64: ${{ secrets.KUBE_CONFIG_AMD64_B64 }}
     steps:
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - name: Configure kubeconfig
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          if [ -z "${KUBE_CONFIG_B64}" ]; then
-            echo "::error title=Missing secret::KUBE_CONFIG_AMD64_B64 is required."
-            exit 1
-          fi
-
-          mkdir -p "${HOME}/.kube"
-          printf '%s' "${KUBE_CONFIG_B64}" | base64 -d > "${HOME}/.kube/config"
-          chmod 600 "${HOME}/.kube/config"
-
-      - name: Set up Helm
-        uses: azure/setup-helm@v4
-
-      - name: Set up kubectl
-        uses: azure/setup-kubectl@v4
-
       - name: Login to GitHub Container Registry
         uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4
         with:
-          registry: ${{ env.CONTAINER_REGISTRY }}
+          registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Verify release images
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          image_tag="${DEPLOY_VERSION}-${DEPLOY_ARCH}"
-          docker buildx imagetools inspect "${CONTAINER_REGISTRY}/${BACKEND_IMAGE_NAME}:${image_tag}"
-          docker buildx imagetools inspect "${CONTAINER_REGISTRY}/${FRONTEND_IMAGE_NAME}:${image_tag}"
-
-      - name: Guard TLS certificate
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          current_hosts="$(kubectl -n prod get certificate app-tls -o jsonpath='{.spec.dnsNames[*]}' 2>/dev/null || true)"
-          if [ -z "${current_hosts}" ]; then
-            exit 0
-          fi
-
-          printf '%s\n' "${current_hosts}" | tr ' ' '\n' | grep -Fx "${PROD_INGRESS_HOST}" >/dev/null || {
-            echo "::error title=TLS host change blocked::Certificate prod/app-tls currently targets '${current_hosts}', expected '${PROD_INGRESS_HOST}'. Update intentionally outside this deploy workflow."
-            exit 1
-          }
-
-      - name: Deploy cluster chart
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          helm upgrade --install let-note-cluster ./infrastructure/deploiement-kube/charts/cluster \
-            --atomic \
-            --wait \
-            --timeout 5m
-
-      - name: Deploy app chart
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          image_tag="${DEPLOY_VERSION}-${DEPLOY_ARCH}"
-          helm upgrade --install "let-note-${DEPLOY_ENV}" ./infrastructure/deploiement-kube/charts/let-note \
-            --namespace "${DEPLOY_ENV}" \
-            --create-namespace \
-            --values "./infrastructure/deploiement-kube/charts/let-note/environments/${DEPLOY_ENV}.yaml" \
-            --set "secrets.create=false" \
-            --set-string "images.backend.tag=${image_tag}" \
-            --set-string "images.frontend.tag=${image_tag}" \
-            --set-string "global.deployId=${DEPLOY_ENV}-${image_tag}-${GITHUB_RUN_ID}" \
-            --atomic \
-            --wait \
-            --timeout 10m
+      - name: Deploy prod amd64
+        uses: ./.github/actions/helm-deploy
+        with:
+          arch: amd64
+          environment: prod
+          kubeconfig: ${{ secrets.KUBE_CONFIG_AMD64 }}
+          version: ${{ needs.validate-selection.outputs.deploy_version }}
+          prod-ingress-host: ${{ env.PROD_INGRESS_HOST }}
 
   deploy-dev-arm64:
     name: Deploy dev arm64
@@ -344,78 +164,25 @@ jobs:
     concurrency:
       group: deploy-arm64
       cancel-in-progress: false
-    env:
-      DEPLOY_ARCH: arm64
-      DEPLOY_ENV: dev
-      DEPLOY_VERSION: ${{ needs.validate-selection.outputs.deploy_version }}
-      KUBE_CONFIG_B64: ${{ secrets.KUBE_CONFIG_ARM64_B64 }}
     steps:
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - name: Configure kubeconfig
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          if [ -z "${KUBE_CONFIG_B64}" ]; then
-            echo "::error title=Missing secret::KUBE_CONFIG_ARM64_B64 is required."
-            exit 1
-          fi
-
-          mkdir -p "${HOME}/.kube"
-          printf '%s' "${KUBE_CONFIG_B64}" | base64 -d > "${HOME}/.kube/config"
-          chmod 600 "${HOME}/.kube/config"
-
-      - name: Set up Helm
-        uses: azure/setup-helm@v4
-
-      - name: Set up kubectl
-        uses: azure/setup-kubectl@v4
-
       - name: Login to GitHub Container Registry
         uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4
         with:
-          registry: ${{ env.CONTAINER_REGISTRY }}
+          registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Verify release images
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          image_tag="${DEPLOY_VERSION}-${DEPLOY_ARCH}"
-          docker buildx imagetools inspect "${CONTAINER_REGISTRY}/${BACKEND_IMAGE_NAME}:${image_tag}"
-          docker buildx imagetools inspect "${CONTAINER_REGISTRY}/${FRONTEND_IMAGE_NAME}:${image_tag}"
-
-      - name: Deploy cluster chart
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          helm upgrade --install let-note-cluster ./infrastructure/deploiement-kube/charts/cluster \
-            --atomic \
-            --wait \
-            --timeout 5m
-
-      - name: Deploy app chart
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          image_tag="${DEPLOY_VERSION}-${DEPLOY_ARCH}"
-          helm upgrade --install "let-note-${DEPLOY_ENV}" ./infrastructure/deploiement-kube/charts/let-note \
-            --namespace "${DEPLOY_ENV}" \
-            --create-namespace \
-            --values "./infrastructure/deploiement-kube/charts/let-note/environments/${DEPLOY_ENV}.yaml" \
-            --set "secrets.create=false" \
-            --set-string "images.backend.tag=${image_tag}" \
-            --set-string "images.frontend.tag=${image_tag}" \
-            --set-string "global.deployId=${DEPLOY_ENV}-${image_tag}-${GITHUB_RUN_ID}" \
-            --atomic \
-            --wait \
-            --timeout 10m
+      - name: Deploy dev arm64
+        uses: ./.github/actions/helm-deploy
+        with:
+          arch: arm64
+          environment: dev
+          kubeconfig: ${{ secrets.KUBE_CONFIG_ARM64 }}
+          version: ${{ needs.validate-selection.outputs.deploy_version }}
+          prod-ingress-host: ${{ env.PROD_INGRESS_HOST }}
 
   deploy-staging-arm64:
     name: Deploy staging arm64
@@ -426,78 +193,25 @@ jobs:
     concurrency:
       group: deploy-arm64
       cancel-in-progress: false
-    env:
-      DEPLOY_ARCH: arm64
-      DEPLOY_ENV: staging
-      DEPLOY_VERSION: ${{ needs.validate-selection.outputs.deploy_version }}
-      KUBE_CONFIG_B64: ${{ secrets.KUBE_CONFIG_ARM64_B64 }}
     steps:
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - name: Configure kubeconfig
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          if [ -z "${KUBE_CONFIG_B64}" ]; then
-            echo "::error title=Missing secret::KUBE_CONFIG_ARM64_B64 is required."
-            exit 1
-          fi
-
-          mkdir -p "${HOME}/.kube"
-          printf '%s' "${KUBE_CONFIG_B64}" | base64 -d > "${HOME}/.kube/config"
-          chmod 600 "${HOME}/.kube/config"
-
-      - name: Set up Helm
-        uses: azure/setup-helm@v4
-
-      - name: Set up kubectl
-        uses: azure/setup-kubectl@v4
-
       - name: Login to GitHub Container Registry
         uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4
         with:
-          registry: ${{ env.CONTAINER_REGISTRY }}
+          registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Verify release images
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          image_tag="${DEPLOY_VERSION}-${DEPLOY_ARCH}"
-          docker buildx imagetools inspect "${CONTAINER_REGISTRY}/${BACKEND_IMAGE_NAME}:${image_tag}"
-          docker buildx imagetools inspect "${CONTAINER_REGISTRY}/${FRONTEND_IMAGE_NAME}:${image_tag}"
-
-      - name: Deploy cluster chart
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          helm upgrade --install let-note-cluster ./infrastructure/deploiement-kube/charts/cluster \
-            --atomic \
-            --wait \
-            --timeout 5m
-
-      - name: Deploy app chart
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          image_tag="${DEPLOY_VERSION}-${DEPLOY_ARCH}"
-          helm upgrade --install "let-note-${DEPLOY_ENV}" ./infrastructure/deploiement-kube/charts/let-note \
-            --namespace "${DEPLOY_ENV}" \
-            --create-namespace \
-            --values "./infrastructure/deploiement-kube/charts/let-note/environments/${DEPLOY_ENV}.yaml" \
-            --set "secrets.create=false" \
-            --set-string "images.backend.tag=${image_tag}" \
-            --set-string "images.frontend.tag=${image_tag}" \
-            --set-string "global.deployId=${DEPLOY_ENV}-${image_tag}-${GITHUB_RUN_ID}" \
-            --atomic \
-            --wait \
-            --timeout 10m
+      - name: Deploy staging arm64
+        uses: ./.github/actions/helm-deploy
+        with:
+          arch: arm64
+          environment: staging
+          kubeconfig: ${{ secrets.KUBE_CONFIG_ARM64 }}
+          version: ${{ needs.validate-selection.outputs.deploy_version }}
+          prod-ingress-host: ${{ env.PROD_INGRESS_HOST }}
 
   deploy-prod-arm64:
     name: Deploy prod arm64
@@ -508,90 +222,22 @@ jobs:
     concurrency:
       group: deploy-arm64
       cancel-in-progress: false
-    env:
-      DEPLOY_ARCH: arm64
-      DEPLOY_ENV: prod
-      DEPLOY_VERSION: ${{ needs.validate-selection.outputs.deploy_version }}
-      KUBE_CONFIG_B64: ${{ secrets.KUBE_CONFIG_ARM64_B64 }}
     steps:
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - name: Configure kubeconfig
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          if [ -z "${KUBE_CONFIG_B64}" ]; then
-            echo "::error title=Missing secret::KUBE_CONFIG_ARM64_B64 is required."
-            exit 1
-          fi
-
-          mkdir -p "${HOME}/.kube"
-          printf '%s' "${KUBE_CONFIG_B64}" | base64 -d > "${HOME}/.kube/config"
-          chmod 600 "${HOME}/.kube/config"
-
-      - name: Set up Helm
-        uses: azure/setup-helm@v4
-
-      - name: Set up kubectl
-        uses: azure/setup-kubectl@v4
-
       - name: Login to GitHub Container Registry
         uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4
         with:
-          registry: ${{ env.CONTAINER_REGISTRY }}
+          registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Verify release images
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          image_tag="${DEPLOY_VERSION}-${DEPLOY_ARCH}"
-          docker buildx imagetools inspect "${CONTAINER_REGISTRY}/${BACKEND_IMAGE_NAME}:${image_tag}"
-          docker buildx imagetools inspect "${CONTAINER_REGISTRY}/${FRONTEND_IMAGE_NAME}:${image_tag}"
-
-      - name: Guard TLS certificate
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          current_hosts="$(kubectl -n prod get certificate app-tls -o jsonpath='{.spec.dnsNames[*]}' 2>/dev/null || true)"
-          if [ -z "${current_hosts}" ]; then
-            exit 0
-          fi
-
-          printf '%s\n' "${current_hosts}" | tr ' ' '\n' | grep -Fx "${PROD_INGRESS_HOST}" >/dev/null || {
-            echo "::error title=TLS host change blocked::Certificate prod/app-tls currently targets '${current_hosts}', expected '${PROD_INGRESS_HOST}'. Update intentionally outside this deploy workflow."
-            exit 1
-          }
-
-      - name: Deploy cluster chart
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          helm upgrade --install let-note-cluster ./infrastructure/deploiement-kube/charts/cluster \
-            --atomic \
-            --wait \
-            --timeout 5m
-
-      - name: Deploy app chart
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          image_tag="${DEPLOY_VERSION}-${DEPLOY_ARCH}"
-          helm upgrade --install "let-note-${DEPLOY_ENV}" ./infrastructure/deploiement-kube/charts/let-note \
-            --namespace "${DEPLOY_ENV}" \
-            --create-namespace \
-            --values "./infrastructure/deploiement-kube/charts/let-note/environments/${DEPLOY_ENV}.yaml" \
-            --set "secrets.create=false" \
-            --set-string "images.backend.tag=${image_tag}" \
-            --set-string "images.frontend.tag=${image_tag}" \
-            --set-string "global.deployId=${DEPLOY_ENV}-${image_tag}-${GITHUB_RUN_ID}" \
-            --atomic \
-            --wait \
-            --timeout 10m
+      - name: Deploy prod arm64
+        uses: ./.github/actions/helm-deploy
+        with:
+          arch: arm64
+          environment: prod
+          kubeconfig: ${{ secrets.KUBE_CONFIG_ARM64 }}
+          version: ${{ needs.validate-selection.outputs.deploy_version }}
+          prod-ingress-host: ${{ env.PROD_INGRESS_HOST }}

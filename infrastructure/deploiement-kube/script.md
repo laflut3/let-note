@@ -26,9 +26,9 @@ Le deploiement prod courant par tag ne passe plus par ce script. Il est gere par
 | Declenchement | Manuel uniquement avec `workflow_dispatch`, depuis un tag SemVer `v*`. |
 | Version deployee | Le tag Git sans prefixe `v`, par exemple `v1.2.3` deploie `1.2.3-amd64` et `1.2.3-arm64`. |
 | Selection env | Cases manuelles `dev`, `staging` et `prod`. |
-| Jobs amd64 | `deploy-dev-amd64`, `deploy-staging-amd64`, `deploy-prod-amd64`, utilisent `KUBE_CONFIG_AMD64_B64`. |
-| Jobs arm64 | `deploy-dev-arm64`, `deploy-staging-arm64`, `deploy-prod-arm64`, utilisent `KUBE_CONFIG_ARM64_B64`. |
-| Mecanisme | `helm upgrade --install` direct sur `charts/cluster` puis `charts/let-note`. |
+| Jobs amd64 | `deploy-dev-amd64`, `deploy-staging-amd64`, `deploy-prod-amd64`, utilisent `KUBE_CONFIG_AMD64`. |
+| Jobs arm64 | `deploy-dev-arm64`, `deploy-staging-arm64`, `deploy-prod-arm64`, utilisent `KUBE_CONFIG_ARM64`. |
+| Mecanisme | Action locale `.github/actions/helm-deploy`, avec `azure/k8s-set-context`, `azure/setup-helm`, `azure/setup-kubectl`, puis `helm upgrade --install` sur `charts/cluster` et `charts/let-note`. |
 | TLS prod | Le workflow bloque si `Certificate/prod/app-tls` existe avec un DNS different de `let-note.prod.polydo.dev`. |
 
 ## Modes
