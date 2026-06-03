@@ -10,7 +10,7 @@ repos:
       - id: check-json
       - id: check-yaml
         args: [--allow-multiple-documents]
-        exclude: ^infrastructure/deploiement-kube/helm/let-note/templates/.*\.yaml$
+        exclude: ^infrastructure/deploiement-kube/charts/.*/templates/.*\.yaml$
       - id: mixed-line-ending # Normalizes/flags inconsistent line endings (LF/CRLF)
       - id: detect-private-key # Prevents committing private keys/secrets
       - id: end-of-file-fixer # Ensures files end with a single trailing newline

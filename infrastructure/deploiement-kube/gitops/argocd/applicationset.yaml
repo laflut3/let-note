@@ -18,7 +18,7 @@ spec:
       source:
         repoURL: https://github.com/laflut3/let-note.git
         targetRevision: main
-        path: infrastructure/deploiement-kube/helm/let-note
+        path: infrastructure/deploiement-kube/charts/let-note
         helm:
           releaseName: "let-note-{{ env }}"
           valueFiles:

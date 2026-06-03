@@ -1,0 +1,9 @@
+{{- range $environment := .Values.environments }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ $environment.name }}
+  labels:
+    {{- toYaml $environment.labels | nindent 4 }}
+{{- end }}

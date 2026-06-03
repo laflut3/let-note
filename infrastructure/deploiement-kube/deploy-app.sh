@@ -10,7 +10,8 @@ BACKEND_IMAGE_REPO="ghcr.io/laflut3/let-note-backend"
 FRONTEND_IMAGE_REPO="ghcr.io/laflut3/let-note-frontend"
 MIGRATIONS_DIR="${REPO_ROOT}/infrastructure/BDD/migration"
 DEPLOY_CONFIG_TOML="${SCRIPT_DIR}/deploy-config.toml"
-HELM_CHART_DIR="${SCRIPT_DIR}/helm/let-note"
+APP_CHART_DIR="${SCRIPT_DIR}/charts/let-note"
+CLUSTER_CHART_DIR="${SCRIPT_DIR}/charts/cluster"
 ALLOW_PG_MAJOR_UPGRADE="false"
 FORCE_RESTART="false"
 ALLOW_CERT_CHANGE="false"
@@ -148,8 +149,8 @@ get_target_postgres_image() {
   local postgres_manifest
 
   postgres_manifest="$(mktemp)"
-  helm template let-note "${HELM_CHART_DIR}" --namespace dev \
-    -f "${HELM_CHART_DIR}/environments/dev.yaml" \
+  helm template let-note "${APP_CHART_DIR}" --namespace dev \
+    -f "${APP_CHART_DIR}/environments/dev.yaml" \
     > "${postgres_manifest}"
   awk '
     $1=="-" && $2=="name:" && $3=="postgres" { in_postgres=1; next }
@@ -217,7 +218,7 @@ rollout_status_or_describe() {
 }
 
 apply_argocd_applicationset() {
-  local app_manifest="${SCRIPT_DIR}/argocd/applicationset.yaml"
+  local app_manifest="${SCRIPT_DIR}/gitops/argocd/applicationset.yaml"
   local rendered_app
 
   if [ "${ARGOCD_APPSET_APPLIED}" = "true" ]; then
@@ -243,13 +244,18 @@ apply_argocd_applicationset() {
 }
 
 ensure_cluster_bootstrap() {
+  local rendered_cluster
+
   if [ "${CLUSTER_BOOTSTRAPPED}" = "true" ]; then
     return
   fi
 
   title "Bootstrap cluster"
-  kubectl apply -f "${SCRIPT_DIR}/cluster/namespaces.yaml"
-  kubectl apply -f "${SCRIPT_DIR}/cluster/quotas-limits.yaml"
+  [ -d "${CLUSTER_CHART_DIR}" ] || { err "Chart Helm cluster introuvable: ${CLUSTER_CHART_DIR}"; exit 1; }
+  rendered_cluster="$(mktemp)"
+  helm template let-note-cluster "${CLUSTER_CHART_DIR}" > "${rendered_cluster}"
+  kubectl apply -f "${rendered_cluster}"
+  rm -f "${rendered_cluster}"
   CLUSTER_BOOTSTRAPPED="true"
 }
 
@@ -731,7 +737,7 @@ validate_runtime_vault_access() {
 
 deploy_env() {
   local env="$1"
-  local chart_dir="${HELM_CHART_DIR}"
+  local chart_dir="${APP_CHART_DIR}"
   local escaped_vault_secret_path escaped_vault_addr escaped_ingress_host upper_env env_path_var vault_secret_path ingress_host
   local backend_expected front_expected backend_images front_images
   local pg_target_image pg_current_image pg_target_major pg_current_major

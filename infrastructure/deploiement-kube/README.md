@@ -1,13 +1,13 @@
 # Deploiement Kubernetes Let-Note
 
-Ce dossier contient le chart Helm et les manifests cluster de Let-Note pour les environnements `dev`, `staging` et `prod`.
+Ce dossier contient les charts Helm et la configuration GitOps de Let-Note pour les environnements `dev`, `staging` et `prod`.
 
 ## Prerequis
 
 | Prerequis | Detail |
 | --- | --- |
 | Kubernetes | Cluster accessible avec `kubectl`. |
-| Helm | Helm 3 installe pour rendre le chart applicatif. |
+| Helm | Helm 3 installe pour rendre les charts. |
 | DNS prod | Le host public prod doit pointer vers l'ingress. |
 | Vault | Les secrets applicatifs doivent etre renseignes dans Vault. |
 | Images | Les images backend/frontend doivent exister dans `ghcr.io/laflut3`. |
@@ -16,11 +16,12 @@ Ce dossier contient le chart Helm et les manifests cluster de Let-Note pour les 
 
 | Source | Role |
 | --- | --- |
-| `helm/let-note/` | Chart Helm applicatif, source active du deploiement. |
-| `helm/let-note/environments/dev.yaml` | Values Helm dev. |
-| `helm/let-note/environments/staging.yaml` | Values Helm staging. |
-| `helm/let-note/environments/prod.yaml` | Values Helm prod. |
-| `argocd/applicationset.yaml` | ApplicationSet ArgoCD qui genere les Applications `dev`, `staging` et `prod`. |
+| `charts/cluster/` | Chart Helm des ressources cluster: namespaces, quotas et limites. |
+| `charts/let-note/` | Chart Helm applicatif, source active du deploiement. |
+| `charts/let-note/environments/dev.yaml` | Values Helm dev. |
+| `charts/let-note/environments/staging.yaml` | Values Helm staging. |
+| `charts/let-note/environments/prod.yaml` | Values Helm prod. |
+| `gitops/argocd/applicationset.yaml` | ApplicationSet ArgoCD qui genere les Applications `dev`, `staging` et `prod`. |
 | `deploy-config.toml` | Version et architecture des images applicatives. |
 | `vault-secret.md` | Donnees Vault attendues. |
 | `script.md` | Commandes, options et variables du script de deploiement. |
@@ -41,11 +42,13 @@ cert-manager utilise l'Ingress prod pour generer le certificat TLS. Le DNS doit 
 Rendu local d'un environnement:
 
 ```bash
-helm template let-note-dev ./helm/let-note --namespace dev -f ./helm/let-note/environments/dev.yaml
+helm template let-note-dev ./charts/let-note --namespace dev -f ./charts/let-note/environments/dev.yaml
 ```
 
 Le script [`deploy-app.sh`](./deploy-app.sh) ajoute automatiquement le tag image lu depuis [`deploy-config.toml`](./deploy-config.toml), le path Vault, le host ingress et le `deploy-id`.
 
-## Cluster
+Rendu local des ressources cluster:
 
-Provisioning K3s: [`cluster/provision-k3s-prod.sh`](./cluster/provision-k3s-prod.sh)
+```bash
+helm template let-note-cluster ./charts/cluster
+```

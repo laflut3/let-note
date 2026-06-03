@@ -1,0 +1,58 @@
+environments:
+  - name: dev
+    labels:
+      environment: dev
+      app.kubernetes.io/part-of: let-note
+    quota:
+      pods: "20"
+      requests.cpu: "1500m"
+      requests.memory: 2Gi
+      limits.cpu: "3"
+      limits.memory: 4Gi
+      persistentvolumeclaims: "20"
+      requests.storage: 30Gi
+    limits:
+      defaultRequest:
+        cpu: 100m
+        memory: 128Mi
+      default:
+        cpu: 250m
+        memory: 256Mi
+  - name: staging
+    labels:
+      environment: staging
+      app.kubernetes.io/part-of: let-note
+    quota:
+      pods: "30"
+      requests.cpu: "2500m"
+      requests.memory: 4Gi
+      limits.cpu: "5"
+      limits.memory: 8Gi
+      persistentvolumeclaims: "25"
+      requests.storage: 50Gi
+    limits:
+      defaultRequest:
+        cpu: 150m
+        memory: 192Mi
+      default:
+        cpu: 400m
+        memory: 512Mi
+  - name: prod
+    labels:
+      environment: prod
+      app.kubernetes.io/part-of: let-note
+    quota:
+      pods: "40"
+      requests.cpu: "4000m"
+      requests.memory: 6Gi
+      limits.cpu: "8"
+      limits.memory: 12Gi
+      persistentvolumeclaims: "30"
+      requests.storage: 100Gi
+    limits:
+      defaultRequest:
+        cpu: 200m
+        memory: 256Mi
+      default:
+        cpu: 600m
+        memory: 768Mi
