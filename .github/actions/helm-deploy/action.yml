@@ -85,4 +85,5 @@ runs:
           --set-string "global.deployId=${DEPLOY_ENV}-${image_tag}-${GITHUB_RUN_ID}" \
           --atomic \
           --wait \
+          --wait-for-jobs \
           --timeout 10m
