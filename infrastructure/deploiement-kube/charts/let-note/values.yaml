@@ -90,11 +90,12 @@ migrations:
 
 backend:
   replicas: 1
+  revisionHistoryLimit: 1
   strategy:
     type: RollingUpdate
     rollingUpdate:
-      maxUnavailable: 0
-      maxSurge: 1
+      maxUnavailable: 1
+      maxSurge: 0
   vault:
     addr: http://vault.vault.svc.cluster.local:8200
     kvMount: secret
@@ -112,11 +113,12 @@ backend:
 
 frontend:
   replicas: 1
+  revisionHistoryLimit: 1
   strategy:
     type: RollingUpdate
     rollingUpdate:
-      maxUnavailable: 0
-      maxSurge: 1
+      maxUnavailable: 1
+      maxSurge: 0
   resources:
     requests:
       cpu: 100m
@@ -126,11 +128,19 @@ frontend:
       memory: 256Mi
 
 seaweedfs:
+  revisionHistoryLimit: 1
   strategy:
     type: RollingUpdate
     rollingUpdate:
       maxUnavailable: 1
       maxSurge: 0
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 150m
+      memory: 256Mi
   s3:
     identityName: let-note
     accessKey: seaweedfs

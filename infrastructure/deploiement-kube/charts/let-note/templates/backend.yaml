@@ -10,6 +10,7 @@ metadata:
     {{- include "let-note.commonLabels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.backend.replicas }}
+  revisionHistoryLimit: {{ .Values.backend.revisionHistoryLimit }}
   strategy:
     {{- toYaml .Values.backend.strategy | nindent 4 }}
   selector:

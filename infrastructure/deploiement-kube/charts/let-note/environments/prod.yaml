@@ -22,7 +22,7 @@ secrets:
   create: false
 
 backend:
-  replicas: 3
+  replicas: 1
   vault:
     secretPath: prod/let-note
     k8sRole: let-note-prod
@@ -32,25 +32,25 @@ backend:
       maxSurge: 0
   resources:
     requests:
-      cpu: 250m
-      memory: 256Mi
+      cpu: 150m
+      memory: 192Mi
     limits:
-      cpu: 800m
-      memory: 1024Mi
+      cpu: 400m
+      memory: 512Mi
 
 frontend:
-  replicas: 3
+  replicas: 1
   strategy:
     rollingUpdate:
       maxUnavailable: 1
       maxSurge: 0
   resources:
     requests:
-      cpu: 250m
-      memory: 256Mi
+      cpu: 150m
+      memory: 192Mi
     limits:
-      cpu: 800m
-      memory: 1024Mi
+      cpu: 400m
+      memory: 512Mi
 
 ingress:
   host: let-note.prod.polydo.dev

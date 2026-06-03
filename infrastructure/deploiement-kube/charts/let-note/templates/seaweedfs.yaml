@@ -8,6 +8,7 @@ metadata:
     {{- include "let-note.commonLabels" . | nindent 4 }}
 spec:
   replicas: 1
+  revisionHistoryLimit: {{ .Values.seaweedfs.revisionHistoryLimit }}
   strategy:
     {{- toYaml .Values.seaweedfs.strategy | nindent 4 }}
   selector:
@@ -37,6 +38,8 @@ spec:
         volumeMounts:
         - name: master-data
           mountPath: /data/master
+        resources:
+          {{- toYaml .Values.seaweedfs.resources | nindent 10 }}
       volumes:
       - name: master-data
         persistentVolumeClaim:
@@ -67,6 +70,7 @@ metadata:
     {{- include "let-note.commonLabels" . | nindent 4 }}
 spec:
   replicas: 1
+  revisionHistoryLimit: {{ .Values.seaweedfs.revisionHistoryLimit }}
   strategy:
     {{- toYaml .Values.seaweedfs.strategy | nindent 4 }}
   selector:
@@ -92,6 +96,8 @@ spec:
         volumeMounts:
         - name: volume-data
           mountPath: /data/volume
+        resources:
+          {{- toYaml .Values.seaweedfs.resources | nindent 10 }}
       volumes:
       - name: volume-data
         persistentVolumeClaim:
@@ -122,6 +128,7 @@ metadata:
     {{- include "let-note.commonLabels" . | nindent 4 }}
 spec:
   replicas: 1
+  revisionHistoryLimit: {{ .Values.seaweedfs.revisionHistoryLimit }}
   strategy:
     {{- toYaml .Values.seaweedfs.strategy | nindent 4 }}
   selector:
@@ -139,6 +146,8 @@ spec:
         args: ["filer", "-master=seaweed-master:9333", "-ip=seaweed-filer", "-port=8888"]
         ports:
         - containerPort: 8888
+        resources:
+          {{- toYaml .Values.seaweedfs.resources | nindent 10 }}
 ---
 apiVersion: v1
 kind: Service
@@ -165,6 +174,7 @@ metadata:
     {{- include "let-note.commonLabels" . | nindent 4 }}
 spec:
   replicas: 1
+  revisionHistoryLimit: {{ .Values.seaweedfs.revisionHistoryLimit }}
   strategy:
     {{- toYaml .Values.seaweedfs.strategy | nindent 4 }}
   selector:
@@ -193,6 +203,8 @@ spec:
         volumeMounts:
         - name: s3-config
           mountPath: /etc/seaweedfs
+        resources:
+          {{- toYaml .Values.seaweedfs.resources | nindent 10 }}
 ---
 apiVersion: v1
 kind: Service

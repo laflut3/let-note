@@ -188,3 +188,16 @@ Logs de migration:
 kubectl -n prod get jobs -l app=db-migration --sort-by=.metadata.creationTimestamp
 kubectl -n prod logs job/<job-name>
 ```
+
+## 8. Nettoyer les anciens ReplicaSets
+
+Le chart limite `revisionHistoryLimit` a `1` pour eviter l'accumulation de ReplicaSets dans ArgoCD. Apres la premiere synchro avec cette version, Kubernetes supprime automatiquement les anciens ReplicaSets inutiles.
+
+Si un namespace est deja sature par de vieux rollouts, verifier d'abord que les ReplicaSets ont `DESIRED=0`, puis supprimer uniquement ceux-la:
+
+```bash
+kubectl -n prod get rs
+kubectl -n prod delete rs <old-replicaset-with-desired-0>
+```
+
+Ne pas supprimer le ReplicaSet actif qui porte les pods courants.

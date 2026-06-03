@@ -21,7 +21,7 @@ postgres:
   database: let_note_staging
 
 backend:
-  replicas: 2
+  replicas: 1
   vault:
     secretPath: staging/let-note
     k8sRole: let-note-staging
@@ -31,25 +31,25 @@ backend:
       maxSurge: 0
   resources:
     requests:
-      cpu: 150m
-      memory: 192Mi
+      cpu: 100m
+      memory: 128Mi
     limits:
-      cpu: 400m
-      memory: 512Mi
+      cpu: 250m
+      memory: 256Mi
 
 frontend:
-  replicas: 2
+  replicas: 1
   strategy:
     rollingUpdate:
       maxUnavailable: 1
       maxSurge: 0
   resources:
     requests:
-      cpu: 150m
-      memory: 192Mi
+      cpu: 100m
+      memory: 128Mi
     limits:
-      cpu: 400m
-      memory: 512Mi
+      cpu: 250m
+      memory: 256Mi
 
 ingress:
   host: staging.app.local

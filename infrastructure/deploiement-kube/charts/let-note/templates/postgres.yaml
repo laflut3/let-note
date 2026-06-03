@@ -8,6 +8,7 @@ metadata:
     {{- include "let-note.commonLabels" . | nindent 4 }}
 spec:
   replicas: 1
+  revisionHistoryLimit: 1
   strategy:
     type: Recreate
   selector:
