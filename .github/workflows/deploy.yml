@@ -36,14 +36,13 @@ jobs:
       deploy_staging: ${{ steps.meta.outputs.deploy_staging }}
       deploy_prod: ${{ steps.meta.outputs.deploy_prod }}
     steps:
-      - name: Validate tag and selected environments
+      - name: Validate deploy context
         id: meta
         uses: actions/github-script@v8
         with:
           script: |
             const refType = context.ref.startsWith("refs/tags/") ? "tag" : "branch";
             const refName = context.ref.replace(/^refs\/tags\//, "").replace(/^refs\/heads\//, "");
-            const semver = /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-((0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(\.(0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(\+([0-9a-zA-Z-]+(\.[0-9a-zA-Z-]+)*))?$/;
             const deployDev = String(${{ inputs.deploy_dev }});
             const deployStaging = String(${{ inputs.deploy_staging }});
             const deployProd = String(${{ inputs.deploy_prod }});
@@ -53,17 +52,12 @@ jobs:
               return;
             }
 
-            if (!semver.test(refName)) {
-              core.setFailed(`Deploy tag '${refName}' must match vMAJOR.MINOR.PATCH[-PRERELEASE][+BUILD].`);
-              return;
-            }
-
             if (deployDev !== "true" && deployStaging !== "true" && deployProd !== "true") {
               core.setFailed("Select at least one environment to deploy.");
               return;
             }
 
-            core.setOutput("deploy_version", refName.slice(1));
+            core.setOutput("deploy_version", refName.replace(/^v/, ""));
             core.setOutput("deploy_dev", deployDev);
             core.setOutput("deploy_staging", deployStaging);
             core.setOutput("deploy_prod", deployProd);
