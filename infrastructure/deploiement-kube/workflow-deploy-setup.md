@@ -173,7 +173,7 @@ Quand une migration est ajoutee, la creer directement dans `charts/let-note/migr
 1. Creer et pousser un tag valide par le workflow `release`.
 2. Ouvrir GitHub Actions.
 3. Lancer manuellement le workflow `Deploy` depuis ce tag.
-4. Cocher `dev`, `staging` et/ou `prod`.
+4. Choisir un seul environnement: `dev`, `staging` ou `prod`.
 5. Verifier les Jobs:
 
 ```bash

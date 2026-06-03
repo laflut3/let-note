@@ -25,7 +25,7 @@ Le deploiement prod courant par tag ne passe plus par ce script. Il est gere par
 | --- | --- |
 | Declenchement | Manuel uniquement avec `workflow_dispatch`, depuis un tag Git. Le workflow `release` valide le SemVer. |
 | Version deployee | Le tag Git sans prefixe `v`, par exemple `v1.2.3` deploie `1.2.3-amd64` et `1.2.3-arm64`. |
-| Selection env | Cases manuelles `dev`, `staging` et `prod`. |
+| Selection env | Choix manuel unique `dev`, `staging` ou `prod`. |
 | Jobs amd64 | `deploy-dev-amd64`, `deploy-staging-amd64`, `deploy-prod-amd64`, utilisent `KUBE_CONFIG_AMD64`. |
 | Jobs arm64 | `deploy-dev-arm64`, `deploy-staging-arm64`, `deploy-prod-arm64`, utilisent `KUBE_CONFIG_ARM64`. |
 | Mecanisme | Action locale `.github/actions/helm-deploy`, avec `azure/k8s-set-context`, `azure/setup-helm`, `azure/setup-kubectl`, puis `helm upgrade --install` sur `charts/cluster` et `charts/let-note`. |
@@ -45,7 +45,7 @@ Le deploiement prod courant par tag ne passe plus par ce script. Il est gere par
 | --- | --- | --- |
 | `--app-only` | Non | Force le mode applicatif: applique seulement `backend` et `front`. |
 | `--full` | Non | Force l'application complete des charts Helm et des taches infra. |
-| `--argocd` | Non | Applique l'ApplicationSet ArgoCD `let-note`, qui genere les Applications `dev`, `staging` et `prod`. Git doit etre a jour, sinon ArgoCD peut restaurer un ancien etat. |
+| `--argocd` | Non | Applique l'ApplicationSet ArgoCD `let-note`, qui genere les Applications `dev`, `staging` et `prod` sans auto-sync. Git doit etre a jour avant une synchro ArgoCD manuelle. |
 | `--allow-cert-change` | Non | Autorise un changement de DNS sur le certificat TLS existant. Sans cette option, le script stoppe pour eviter les rate limits Let's Encrypt. |
 | `--allow-pg-major-upgrade` | Non | Autorise un changement de version majeure PostgreSQL. Sans cette option, le script conserve l'image Postgres existante. |
 | `--force-restart` | Non | Ajoute un timestamp au `deploy-id` pour forcer un rollout avec le meme tag. |
@@ -148,7 +148,7 @@ helm template let-note-dev ./charts/let-note --namespace dev -f ./charts/let-not
 | Sujet | Comportement |
 | --- | --- |
 | Certificat TLS prod | En mode `full`, si `Certificate/app-tls` existe deja avec un DNS different du host demande, le script stoppe. Utiliser `--allow-cert-change` uniquement pour une rotation volontaire. |
-| ArgoCD | Le script n'applique plus ArgoCD par defaut. Utiliser `--argocd` seulement quand GitHub `main` contient le chart voulu. L'ApplicationSet cree ou met a jour les trois Applications. |
+| ArgoCD | Le script n'applique plus ArgoCD par defaut. Utiliser `--argocd` seulement quand GitHub `main` contient le chart voulu. L'ApplicationSet cree ou met a jour les trois Applications sans auto-sync. |
 | PostgreSQL | Si une version majeure differente est detectee, le script conserve l'image Postgres actuelle sauf avec `--allow-pg-major-upgrade`. |
 | Redeploiement applicatif | En mode `app-only`, le script ne touche pas l'Ingress, le Certificate, les secrets, Postgres, SeaweedFS ou les migrations. |
 

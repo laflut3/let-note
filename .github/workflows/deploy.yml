@@ -3,21 +3,14 @@ name: Deploy
 on:
   workflow_dispatch:
     inputs:
-      deploy_dev:
-        description: Deploy dev
+      target_environment:
+        description: Environment to deploy
         required: true
-        type: boolean
-        default: false
-      deploy_staging:
-        description: Deploy staging
-        required: true
-        type: boolean
-        default: false
-      deploy_prod:
-        description: Deploy prod
-        required: true
-        type: boolean
-        default: false
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
 
 permissions:
   contents: read
@@ -32,9 +25,7 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       deploy_version: ${{ steps.meta.outputs.deploy_version }}
-      deploy_dev: ${{ steps.meta.outputs.deploy_dev }}
-      deploy_staging: ${{ steps.meta.outputs.deploy_staging }}
-      deploy_prod: ${{ steps.meta.outputs.deploy_prod }}
+      target_environment: ${{ steps.meta.outputs.target_environment }}
     steps:
       - name: Validate deploy context
         id: meta
@@ -43,29 +34,26 @@ jobs:
           script: |
             const refType = context.ref.startsWith("refs/tags/") ? "tag" : "branch";
             const refName = context.ref.replace(/^refs\/tags\//, "").replace(/^refs\/heads\//, "");
-            const deployDev = String(${{ inputs.deploy_dev }});
-            const deployStaging = String(${{ inputs.deploy_staging }});
-            const deployProd = String(${{ inputs.deploy_prod }});
+            const targetEnvironment = "${{ inputs.target_environment }}";
+            const allowedEnvironments = new Set(["dev", "staging", "prod"]);
 
             if (refType !== "tag") {
               core.setFailed("Deploy workflow must be manually run from a Git tag.");
               return;
             }
 
-            if (deployDev !== "true" && deployStaging !== "true" && deployProd !== "true") {
-              core.setFailed("Select at least one environment to deploy.");
+            if (!allowedEnvironments.has(targetEnvironment)) {
+              core.setFailed(`Invalid target environment '${targetEnvironment}'.`);
               return;
             }
 
             core.setOutput("deploy_version", refName.replace(/^v/, ""));
-            core.setOutput("deploy_dev", deployDev);
-            core.setOutput("deploy_staging", deployStaging);
-            core.setOutput("deploy_prod", deployProd);
+            core.setOutput("target_environment", targetEnvironment);
 
   deploy-dev-amd64:
     name: Deploy dev amd64
     needs: validate-selection
-    if: needs.validate-selection.outputs.deploy_dev == 'true'
+    if: needs.validate-selection.outputs.target_environment == 'dev'
     runs-on: ubuntu-24.04
     environment: dev-amd64
     concurrency:
@@ -94,7 +82,7 @@ jobs:
   deploy-staging-amd64:
     name: Deploy staging amd64
     needs: validate-selection
-    if: needs.validate-selection.outputs.deploy_staging == 'true'
+    if: needs.validate-selection.outputs.target_environment == 'staging'
     runs-on: ubuntu-24.04
     environment: staging-amd64
     concurrency:
@@ -123,7 +111,7 @@ jobs:
   deploy-prod-amd64:
     name: Deploy prod amd64
     needs: validate-selection
-    if: needs.validate-selection.outputs.deploy_prod == 'true'
+    if: needs.validate-selection.outputs.target_environment == 'prod'
     runs-on: ubuntu-24.04
     environment: prod-amd64
     concurrency:
@@ -152,7 +140,7 @@ jobs:
   deploy-dev-arm64:
     name: Deploy dev arm64
     needs: validate-selection
-    if: needs.validate-selection.outputs.deploy_dev == 'true'
+    if: needs.validate-selection.outputs.target_environment == 'dev'
     runs-on: ubuntu-24.04
     environment: dev-arm64
     concurrency:
@@ -181,7 +169,7 @@ jobs:
   deploy-staging-arm64:
     name: Deploy staging arm64
     needs: validate-selection
-    if: needs.validate-selection.outputs.deploy_staging == 'true'
+    if: needs.validate-selection.outputs.target_environment == 'staging'
     runs-on: ubuntu-24.04
     environment: staging-arm64
     concurrency:
@@ -210,7 +198,7 @@ jobs:
   deploy-prod-arm64:
     name: Deploy prod arm64
     needs: validate-selection
-    if: needs.validate-selection.outputs.deploy_prod == 'true'
+    if: needs.validate-selection.outputs.target_environment == 'prod'
     runs-on: ubuntu-24.04
     environment: prod-arm64
     concurrency:
