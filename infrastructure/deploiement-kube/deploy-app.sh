@@ -17,6 +17,7 @@ ALLOW_CERT_CHANGE="false"
 DEPLOY_SCOPE="${DEPLOY_SCOPE:-auto}"
 APPLY_ARGOCD="${APPLY_ARGOCD:-false}"
 CLUSTER_BOOTSTRAPPED="false"
+ARGOCD_APPSET_APPLIED="false"
 
 if [ -t 1 ]; then
   C_RESET="$(printf '\033[0m')"
@@ -126,7 +127,7 @@ Examples:
 Modes:
   --app-only  applique uniquement les deployments backend/front
   --full      applique tout le chart Helm et les taches infra
-  --argocd    applique aussi l'Application ArgoCD (Git doit etre a jour)
+  --argocd    applique aussi l'ApplicationSet ArgoCD (Git doit etre a jour)
   --allow-cert-change autorise une rotation du certificat TLS existant
   auto        full si l'environnement n'existe pas encore, app-only sinon
 USAGE
@@ -215,19 +216,22 @@ rollout_status_or_describe() {
   fi
 }
 
-apply_argocd_application() {
-  local env_name="$1"
-  local app_manifest="${SCRIPT_DIR}/argocd/application-${env_name}.yaml"
+apply_argocd_applicationset() {
+  local app_manifest="${SCRIPT_DIR}/argocd/applicationset.yaml"
   local rendered_app
 
-  [ -f "${app_manifest}" ] || { warn "Manifest ArgoCD introuvable: ${app_manifest}"; return; }
-
-  if ! kubectl get crd applications.argoproj.io >/dev/null 2>&1; then
-    warn "ArgoCD CRD applications.argoproj.io introuvable, Application ${env_name} non appliquee."
+  if [ "${ARGOCD_APPSET_APPLIED}" = "true" ]; then
     return
   fi
 
-  title "ArgoCD application ${env_name}"
+  [ -f "${app_manifest}" ] || { warn "Manifest ArgoCD introuvable: ${app_manifest}"; return; }
+
+  if ! kubectl get crd applicationsets.argoproj.io >/dev/null 2>&1; then
+    warn "ArgoCD ApplicationSet CRD applicationsets.argoproj.io introuvable, ApplicationSet non applique."
+    return
+  fi
+
+  title "ArgoCD ApplicationSet"
   rendered_app="$(mktemp)"
   sed "s|__IMAGE_TAG__|${IMAGE_TAG}|g" "${app_manifest}" \
     | sed "s|${BACKEND_IMAGE_REPO}:latest|${BACKEND_IMAGE_REPO}:${IMAGE_TAG}|g" \
@@ -235,6 +239,7 @@ apply_argocd_application() {
     > "${rendered_app}"
   kubectl apply -f "${rendered_app}"
   rm -f "${rendered_app}"
+  ARGOCD_APPSET_APPLIED="true"
 }
 
 ensure_cluster_bootstrap() {
@@ -739,13 +744,13 @@ deploy_env() {
   if [ "${deploy_scope}" = "full" ]; then
     ensure_cluster_bootstrap
     if [ "${APPLY_ARGOCD}" = "true" ]; then
-      apply_argocd_application "${env}"
-    elif kubectl -n argocd get application "let-note-${env}" >/dev/null 2>&1; then
-      warn "Application ArgoCD let-note-${env} existante non modifiee."
+      apply_argocd_applicationset
+    elif kubectl -n argocd get applicationset let-note >/dev/null 2>&1; then
+      warn "ApplicationSet ArgoCD let-note existant non modifie."
       warn "Si Git n'est pas a jour, ArgoCD peut retablir l'ancien etat."
     fi
-  elif kubectl -n argocd get application "let-note-${env}" >/dev/null 2>&1; then
-    warn "Mode app-only: Application ArgoCD let-note-${env} existante non modifiee."
+  elif kubectl -n argocd get applicationset let-note >/dev/null 2>&1; then
+    warn "Mode app-only: ApplicationSet ArgoCD let-note existant non modifie."
     warn "Si selfHeal est actif, ArgoCD peut retablir l'etat declare dans Git."
   fi
 

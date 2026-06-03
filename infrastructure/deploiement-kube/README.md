@@ -20,6 +20,7 @@ Ce dossier contient le chart Helm et les manifests cluster de Let-Note pour les 
 | `helm/let-note/environments/dev.yaml` | Values Helm dev. |
 | `helm/let-note/environments/staging.yaml` | Values Helm staging. |
 | `helm/let-note/environments/prod.yaml` | Values Helm prod. |
+| `argocd/applicationset.yaml` | ApplicationSet ArgoCD qui genere les Applications `dev`, `staging` et `prod`. |
 | `deploy-config.toml` | Version et architecture des images applicatives. |
 | `vault-secret.md` | Donnees Vault attendues. |
 | `script.md` | Commandes, options et variables du script de deploiement. |

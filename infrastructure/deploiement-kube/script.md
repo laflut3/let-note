@@ -13,7 +13,7 @@ Documentation centralisee du script [`deploy-app.sh`](./deploy-app.sh).
 | `./deploy-app.sh prod --app-only` | Applique uniquement les deployments `backend` et `front` rendus par Helm. | Redeploiement applicatif sans toucher infra, ingress, TLS, Postgres ou secrets. |
 | `./deploy-app.sh prod --full` | Applique tout le chart Helm et execute les taches infra. | Bootstrap ou changement d'infra volontaire. |
 | `./deploy-app.sh prod --full --allow-cert-change` | Autorise un changement du host TLS existant. | Rotation volontaire du certificat cert-manager. |
-| `./deploy-app.sh prod --full --argocd` | Applique aussi l'Application ArgoCD. | Uniquement si GitHub `main` contient deja les manifests voulus. |
+| `./deploy-app.sh prod --full --argocd` | Applique aussi l'ApplicationSet ArgoCD. | Uniquement si GitHub `main` contient deja le chart voulu. |
 | `./deploy-app.sh prod --force-restart` | Force un nouveau rollout meme avec le meme tag image. | Redemarrer les pods applicatifs sans changer de version. |
 | `./deploy-app.sh --help` | Affiche l'aide du script. | Verification rapide des options disponibles. |
 
@@ -31,7 +31,7 @@ Documentation centralisee du script [`deploy-app.sh`](./deploy-app.sh).
 | --- | --- | --- |
 | `--app-only` | Non | Force le mode applicatif: applique seulement `backend` et `front`. |
 | `--full` | Non | Force l'application complete du chart Helm et des taches infra. |
-| `--argocd` | Non | Applique l'Application ArgoCD correspondant a l'environnement. Git doit etre a jour, sinon ArgoCD peut restaurer un ancien etat. |
+| `--argocd` | Non | Applique l'ApplicationSet ArgoCD `let-note`, qui genere les Applications `dev`, `staging` et `prod`. Git doit etre a jour, sinon ArgoCD peut restaurer un ancien etat. |
 | `--allow-cert-change` | Non | Autorise un changement de DNS sur le certificat TLS existant. Sans cette option, le script stoppe pour eviter les rate limits Let's Encrypt. |
 | `--allow-pg-major-upgrade` | Non | Autorise un changement de version majeure PostgreSQL. Sans cette option, le script conserve l'image Postgres existante. |
 | `--force-restart` | Non | Ajoute un timestamp au `deploy-id` pour forcer un rollout avec le meme tag. |
@@ -103,6 +103,7 @@ Avec cet exemple, les images attendues sont:
 | `helm/let-note/environments/staging.yaml` | Surcharges staging. |
 | `helm/let-note/environments/prod.yaml` | Surcharges prod. |
 | `helm/let-note/templates/` | Templates Kubernetes rendus par Helm. |
+| `argocd/applicationset.yaml` | Declaration GitOps unique qui genere les Applications ArgoCD `dev`, `staging` et `prod`. |
 
 Rendu manuel:
 
@@ -129,7 +130,7 @@ helm template let-note-dev ./helm/let-note --namespace dev -f ./helm/let-note/en
 | Sujet | Comportement |
 | --- | --- |
 | Certificat TLS prod | En mode `full`, si `Certificate/app-tls` existe deja avec un DNS different du host demande, le script stoppe. Utiliser `--allow-cert-change` uniquement pour une rotation volontaire. |
-| ArgoCD | Le script n'applique plus ArgoCD par defaut. Utiliser `--argocd` seulement quand GitHub `main` contient les manifests voulus. |
+| ArgoCD | Le script n'applique plus ArgoCD par defaut. Utiliser `--argocd` seulement quand GitHub `main` contient le chart voulu. L'ApplicationSet cree ou met a jour les trois Applications. |
 | PostgreSQL | Si une version majeure differente est detectee, le script conserve l'image Postgres actuelle sauf avec `--allow-pg-major-upgrade`. |
 | Redeploiement applicatif | En mode `app-only`, le script ne touche pas l'Ingress, le Certificate, les secrets, Postgres, SeaweedFS ou les migrations. |
 
@@ -140,5 +141,5 @@ helm template let-note-dev ./helm/let-note --namespace dev -f ./helm/let-note/en
 | Premier deploiement d'un environnement | `./deploy-app.sh <env> --full` |
 | Redeploiement front/back courant | `./deploy-app.sh <env> --app-only` |
 | Changement volontaire d'Ingress/TLS | `./deploy-app.sh <env> --full --allow-cert-change` |
-| Utilisation GitOps ArgoCD | Commit/push sur GitHub `main`, puis `./deploy-app.sh <env> --full --argocd` |
+| Utilisation GitOps ArgoCD | Commit/push sur GitHub `main`, puis `./deploy-app.sh <env> --full --argocd` pour appliquer l'ApplicationSet |
 | Diagnostic rapide apres deploy | `kubectl -n <env> get deploy,pods,svc,ingress` |

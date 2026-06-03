@@ -1,0 +1,39 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: let-note
+  namespace: argocd
+spec:
+  generators:
+  - list:
+      elements:
+      - env: dev
+      - env: staging
+      - env: prod
+  template:
+    metadata:
+      name: "let-note-{{ env }}"
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/laflut3/let-note.git
+        targetRevision: main
+        path: infrastructure/deploiement-kube/helm/let-note
+        helm:
+          releaseName: "let-note-{{ env }}"
+          valueFiles:
+          - "environments/{{ env }}.yaml"
+          parameters:
+          - name: images.backend.tag
+            value: __IMAGE_TAG__
+          - name: images.frontend.tag
+            value: __IMAGE_TAG__
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: "{{ env }}"
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+        - CreateNamespace=true
