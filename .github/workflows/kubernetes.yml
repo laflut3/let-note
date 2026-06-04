@@ -5,7 +5,6 @@ on:
     branches:
       - main
     paths:
-      - .github/actions/helm-deploy/**
       - .github/workflows/deploy.yml
       - .github/workflows/kubernetes.yml
       - infrastructure/deploiement-kube/**
@@ -39,8 +38,6 @@ jobs:
           helm lint infrastructure/deploiement-kube/charts/let-note
           --values infrastructure/deploiement-kube/charts/let-note/environments/${{ matrix.environment }}.yaml
           --set secrets.create=false
-          --set-string images.backend.tag=validation-amd64
-          --set-string images.frontend.tag=validation-amd64
 
       - name: Render charts
         run: |
@@ -49,6 +46,4 @@ jobs:
             --namespace "${{ matrix.environment }}" \
             --values "infrastructure/deploiement-kube/charts/let-note/environments/${{ matrix.environment }}.yaml" \
             --set secrets.create=false \
-            --set-string images.backend.tag=validation-amd64 \
-            --set-string images.frontend.tag=validation-amd64 \
             >/dev/null

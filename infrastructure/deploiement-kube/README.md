@@ -21,40 +21,27 @@ Ce dossier contient les charts Helm et la configuration GitOps de Let-Note pour 
 | `charts/let-note/environments/dev.yaml` | Values Helm dev. |
 | `charts/let-note/environments/staging.yaml` | Values Helm staging. |
 | `charts/let-note/environments/prod.yaml` | Values Helm prod. |
-| `gitops/argocd/applicationset.yaml` | ApplicationSet ArgoCD qui genere les Applications `dev`, `staging` et `prod`. |
-| `deploy-config.toml` | Version et architecture des images applicatives. |
-| `vault-secret.md` | Donnees Vault attendues. |
-| `script.md` | Commandes, options et variables du script de deploiement. |
+| `gitops/argocd/applicationset.yaml` | ApplicationSet ArgoCD; `prod` est active par defaut, `dev` et `staging` sont activables apres preparation de leurs secrets. |
+| `doc/vault-secret.md` | Donnees Vault attendues. |
 
 ## Documentation
 
 | Document | Contenu |
 | --- | --- |
-| [`script.md`](./script.md) | Utilisation du script de deploiement, commandes, options, variables et garde-fous. |
-| [`vault-secret.md`](./vault-secret.md) | Secrets Vault applicatifs et configuration des roles Vault. |
+| [`doc/vault-secret.md`](./doc/vault-secret.md) | Secrets Vault applicatifs et configuration des roles Vault. |
+| [`doc/cluster-setup.md`](./doc/cluster-setup.md) | Activation du deploiement GitOps Argo CD et configuration GitHub minimale. |
 
 ## TLS prod
 
 cert-manager utilise l'Ingress prod pour generer le certificat TLS. Le DNS doit pointer vers l'ingress et les ports 80/443 doivent etre ouverts.
 
-## Deploiement par tag
+## Promotion GitOps par tag
 
-Le deploiement prod courant passe par le workflow GitHub Actions `Deploy`.
+Le workflow GitHub Actions `Promote release` est lance manuellement depuis un tag Git. Il verifie les images multi-architecture, ouvre une pull request modifiant le fichier Helm de l'environnement selectionne, puis Argo CD synchronise automatiquement apres merge.
 
-| Secret GitHub | Role |
-| --- | --- |
-| `KUBE_CONFIG_AMD64` | Kubeconfig brut du cluster amd64. |
-| `KUBE_CONFIG_ARM64` | Kubeconfig brut du cluster arm64. |
+GitHub Actions n'a aucun kubeconfig et n'accede jamais directement a Kubernetes.
 
-Le workflow est declenchable uniquement manuellement (`workflow_dispatch`) depuis un tag Git. Le workflow `release` reste responsable de valider le format SemVer du tag. Le deploy propose un environnement `dev`, `staging` ou `prod`, puis une architecture `amd64`, `arm64` ou `both`.
-
-Le tag `vx.y.z` deploie l'image suffixee correspondant a chaque architecture selectionnee: `x.y.z-amd64` et/ou `x.y.z-arm64`.
-
-Le workflow utilise l'action locale `.github/actions/helm-deploy`, configure Kubernetes avec `azure/k8s-set-context`, installe Helm avec `azure/setup-helm`, puis applique les charts avec `helm upgrade --install`. Il n'appelle pas [`deploy-app.sh`](./deploy-app.sh).
-
-Le workflow ne deploie pas Argo CD. L'ApplicationSet est optionnel et ne doit pas gerer les memes ressources en parallele des releases Helm directes.
-
-Guide de mise en place complet: [`workflow-deploy-setup.md`](./workflow-deploy-setup.md).
+Guide de mise en place minimal: [`doc/cluster-setup.md`](./doc/cluster-setup.md).
 
 ## Rendu Helm
 
@@ -63,8 +50,6 @@ Rendu local d'un environnement:
 ```bash
 helm template let-note-dev ./charts/let-note --namespace dev -f ./charts/let-note/environments/dev.yaml
 ```
-
-Le script [`deploy-app.sh`](./deploy-app.sh) ajoute automatiquement le tag image lu depuis [`deploy-config.toml`](./deploy-config.toml), le path Vault, le host ingress et le `deploy-id`.
 
 Rendu local des ressources cluster:
 

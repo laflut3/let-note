@@ -1,101 +1,105 @@
-name: Deploy
+name: Promote release
 
 on:
   workflow_dispatch:
     inputs:
       target_environment:
-        description: Environment to deploy
+        description: Environment to promote
         required: true
         type: choice
         options:
           - dev
           - staging
           - prod
-      target_architecture:
-        description: Cluster architecture to deploy
-        required: true
-        default: amd64
-        type: choice
-        options:
-          - amd64
-          - arm64
-          - both
-
 permissions:
   contents: read
   packages: read
 
+concurrency:
+  group: promote-${{ inputs.target_environment }}
+  cancel-in-progress: false
+
 env:
-  PROD_INGRESS_HOST: let-note.prod.polydo.dev
+  CONTAINER_REGISTRY: ghcr.io
+  BACKEND_IMAGE_NAME: laflut3/let-note-backend
+  FRONTEND_IMAGE_NAME: laflut3/let-note-frontend
 
 jobs:
-  validate-selection:
-    name: Validate deploy selection
+  promote:
+    name: Promote ${{ github.ref_name }} to ${{ inputs.target_environment }}
     runs-on: ubuntu-24.04
-    outputs:
-      deploy_version: ${{ steps.meta.outputs.deploy_version }}
-      deploy_matrix: ${{ steps.meta.outputs.deploy_matrix }}
+    environment: ${{ inputs.target_environment }}
     steps:
-      - name: Validate deploy context
+      - name: Validate tag selection
         id: meta
         uses: actions/github-script@v8
         with:
           script: |
-            const refType = context.ref.startsWith("refs/tags/") ? "tag" : "branch";
-            const refName = context.ref.replace(/^refs\/tags\//, "").replace(/^refs\/heads\//, "");
-            const environment = "${{ inputs.target_environment }}";
-            const architecture = "${{ inputs.target_architecture }}";
-
-            if (refType !== "tag") {
-              core.setFailed("Deploy workflow must be manually run from a Git tag.");
+            if (context.ref.startsWith("refs/tags/") === false) {
+              core.setFailed("Run this workflow from a release Git tag.");
               return;
             }
 
-            if (!new Set(["dev", "staging", "prod"]).has(environment)) {
-              core.setFailed(`Invalid target environment '${environment}'.`);
+            const version = context.ref.replace(/^refs\/tags\/v?/, "");
+            const semver = /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)([-+][0-9A-Za-z.-]+)?$/;
+            if (!semver.test(version)) {
+              core.setFailed(`Invalid release version '${version}'.`);
               return;
             }
 
-            if (!new Set(["amd64", "arm64", "both"]).has(architecture)) {
-              core.setFailed(`Invalid target architecture '${architecture}'.`);
-              return;
-            }
+            core.setOutput("version", version);
+            core.setOutput("image_tag", version);
 
-            const targets = architecture === "both" ? ["amd64", "arm64"] : [architecture];
-            const include = targets.map(arch => ({
-              arch,
-              kubeconfig_secret: `KUBE_CONFIG_${arch.toUpperCase()}`,
-            }));
-            core.setOutput("deploy_version", refName.replace(/^v/, ""));
-            core.setOutput("deploy_matrix", JSON.stringify({ include }));
-
-  deploy:
-    name: Deploy ${{ inputs.target_environment }} ${{ matrix.arch }}
-    needs: validate-selection
-    runs-on: ubuntu-24.04
-    environment: ${{ inputs.target_environment }}-${{ matrix.arch }}
-    concurrency:
-      group: deploy-${{ matrix.arch }}
-      cancel-in-progress: false
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJSON(needs.validate-selection.outputs.deploy_matrix) }}
-    steps:
-      - name: Checkout code
+      - name: Checkout main
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          ref: main
+          token: ${{ secrets.GITOPS_TOKEN }}
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4
         with:
-          registry: ghcr.io
+          registry: ${{ env.CONTAINER_REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Deploy
-        uses: ./.github/actions/helm-deploy
-        with:
-          arch: ${{ matrix.arch }}
-          environment: ${{ inputs.target_environment }}
-          kubeconfig: ${{ secrets[matrix.kubeconfig_secret] }}
-          version: ${{ needs.validate-selection.outputs.deploy_version }}
-          prod-ingress-host: ${{ env.PROD_INGRESS_HOST }}
+      - name: Verify release images
+        env:
+          IMAGE_TAG: ${{ steps.meta.outputs.image_tag }}
+        run: |
+          docker buildx imagetools inspect "${CONTAINER_REGISTRY}/${BACKEND_IMAGE_NAME}:${IMAGE_TAG}"
+          docker buildx imagetools inspect "${CONTAINER_REGISTRY}/${FRONTEND_IMAGE_NAME}:${IMAGE_TAG}"
+
+      - name: Update desired GitOps state
+        env:
+          DEPLOY_ENV: ${{ inputs.target_environment }}
+          IMAGE_TAG: ${{ steps.meta.outputs.image_tag }}
+        run: |
+          values_file="infrastructure/deploiement-kube/charts/let-note/environments/${DEPLOY_ENV}.yaml"
+          yq -i '.images.backend.tag = strenv(IMAGE_TAG)' "${values_file}"
+          yq -i '.images.frontend.tag = strenv(IMAGE_TAG)' "${values_file}"
+
+      - name: Open promotion pull request
+        env:
+          GH_TOKEN: ${{ secrets.GITOPS_TOKEN }}
+          DEPLOY_ENV: ${{ inputs.target_environment }}
+          IMAGE_TAG: ${{ steps.meta.outputs.image_tag }}
+        run: |
+          branch="gitops/promote-${DEPLOY_ENV}-${IMAGE_TAG}-${GITHUB_RUN_ID}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "${branch}"
+          git add "infrastructure/deploiement-kube/charts/let-note/environments/${DEPLOY_ENV}.yaml"
+
+          if git diff --cached --quiet; then
+            echo "The selected release is already the desired state for ${DEPLOY_ENV}."
+            exit 0
+          fi
+
+          git commit -m "deploy(${DEPLOY_ENV}): promote ${IMAGE_TAG}"
+          git push origin "${branch}"
+          gh pr create \
+            --base main \
+            --head "${branch}" \
+            --title "deploy(${DEPLOY_ENV}): promote ${IMAGE_TAG}" \
+            --body "Promotes Let-Note ${IMAGE_TAG} to ${DEPLOY_ENV}. Argo CD will synchronize after merge."

@@ -3,8 +3,8 @@
 Ce fichier liste toutes les donnees Vault necessaires pour deployer Let-Note sans `.env`.
 
 Note:
-- `version` et `arch` ne sont plus stockees dans Vault.
-- Elles sont definies uniquement dans `infrastructure/deploiement-kube/deploy-config.toml`.
+- `version` et `arch` ne sont pas stockees dans Vault.
+- Elles sont declarees dans les values Helm par environnement et promues par pull request.
 - Le workflow Helm direct ne synchronise pas les credentials SeaweedFS depuis Vault. Les exemples utilisent donc les credentials definis dans les values Helm actuelles.
 
 ## 1) Secrets applicatifs par environnement

@@ -6,7 +6,7 @@ Application composee d'un frontend React (Vite) et d'un backend Rust.
 
 - Infrastructure overview: `infrastructure/README.md`
 - Deploiement local complet: `infrastructure/deploiement-local/README.md`
-- Deploiement Let-Note Kubernetes (dev/staging/prod): `infrastructure/deployment/README.md`
+- Deploiement Let-Note Kubernetes (dev/staging/prod): `infrastructure/deploiement-kube/README.md`
 
 ## Developpement rapide
 

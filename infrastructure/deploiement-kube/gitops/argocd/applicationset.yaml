@@ -7,12 +7,10 @@ spec:
   generators:
   - list:
       elements:
-      - env: dev
-      - env: staging
       - env: prod
   template:
     metadata:
-      name: "let-note-{{ env }}"
+      name: "let-note-{{env}}"
     spec:
       project: default
       source:
@@ -20,21 +18,25 @@ spec:
         targetRevision: main
         path: infrastructure/deploiement-kube/charts/let-note
         helm:
-          releaseName: "let-note-{{ env }}"
+          releaseName: "let-note-{{env}}"
           valueFiles:
-          - "environments/{{ env }}.yaml"
+          - "environments/{{env}}.yaml"
           parameters:
           - name: secrets.create
             value: "false"
-          - name: global.architecture
-            value: "__ARCHITECTURE__"
-          - name: images.backend.tag
-            value: "__IMAGE_TAG__"
-          - name: images.frontend.tag
-            value: "__IMAGE_TAG__"
       destination:
         server: https://kubernetes.default.svc
-        namespace: "{{ env }}"
+        namespace: "{{env}}"
       syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
         syncOptions:
         - CreateNamespace=true
+        - PruneLast=true
+        retry:
+          limit: 3
+          backoff:
+            duration: 10s
+            factor: 2
+            maxDuration: 3m

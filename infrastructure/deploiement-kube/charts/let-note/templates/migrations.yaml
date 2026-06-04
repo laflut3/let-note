@@ -1,4 +1,5 @@
 {{- $migrationFiles := .Files.Glob "migrations/*.up.sql" }}
+{{- $migrationsChecksum := $migrationFiles.AsConfig | sha256sum | trunc 12 }}
 {{- if and .Values.migrations.enabled $migrationFiles }}
 apiVersion: v1
 kind: ConfigMap
@@ -17,7 +18,7 @@ data:
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: {{ printf "db-migration-%s-%d" .Values.global.environment .Release.Revision | trunc 63 | trimSuffix "-" }}
+  name: {{ printf "db-migration-%s-%s" .Values.global.environment $migrationsChecksum | trunc 63 | trimSuffix "-" }}
   namespace: {{ include "let-note.namespace" . }}
   labels:
     app: db-migration

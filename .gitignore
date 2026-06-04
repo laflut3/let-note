@@ -16,6 +16,7 @@ frontend/coverage
 !.env.*
 infrastructure/deploiement-kube/*.pem
 infrastructure/deploiement-kube/*-key.pem
+**/kubeconfig-let-note.yaml
 
 # AI tools artifacts
 .codex
