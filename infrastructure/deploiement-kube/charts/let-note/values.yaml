@@ -1,6 +1,8 @@
 global:
   environment: dev
   deployId: latest
+  architecture: ""
+  imagePullSecrets: []
 
 images:
   backend:
@@ -91,6 +93,14 @@ migrations:
 backend:
   replicas: 1
   revisionHistoryLimit: 1
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 4
+    targetCPUUtilizationPercentage: 70
+  podDisruptionBudget:
+    enabled: false
+    minAvailable: 1
   strategy:
     type: RollingUpdate
     rollingUpdate:
@@ -114,6 +124,14 @@ backend:
 frontend:
   replicas: 1
   revisionHistoryLimit: 1
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 4
+    targetCPUUtilizationPercentage: 70
+  podDisruptionBudget:
+    enabled: false
+    minAvailable: 1
   strategy:
     type: RollingUpdate
     rollingUpdate:

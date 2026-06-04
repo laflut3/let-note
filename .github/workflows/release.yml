@@ -36,6 +36,13 @@ jobs:
 
           echo "✅ Tag '${RELEASE_TAG}' is valid SemVer"
 
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4
+        with:
+          registry: ${{ env.CONTAINER_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Check backend source image exists
         run: |
           docker buildx imagetools inspect \
@@ -45,13 +52,6 @@ jobs:
         run: |
           docker buildx imagetools inspect \
             ${{ env.CONTAINER_REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}:${{ github.sha }}
-
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4
-        with:
-          registry: ${{ env.CONTAINER_REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Tag and push backend release image
         run: |

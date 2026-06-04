@@ -1,0 +1,31 @@
+{{- if .Values.backend.podDisruptionBudget.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: backend
+  namespace: {{ include "let-note.namespace" . }}
+  labels:
+    {{- include "let-note.commonLabels" . | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.backend.podDisruptionBudget.minAvailable }}
+  selector:
+    matchLabels:
+      app: backend
+{{- end }}
+{{- if and .Values.backend.podDisruptionBudget.enabled .Values.frontend.podDisruptionBudget.enabled }}
+---
+{{- end }}
+{{- if .Values.frontend.podDisruptionBudget.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: front
+  namespace: {{ include "let-note.namespace" . }}
+  labels:
+    {{- include "let-note.commonLabels" . | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.frontend.podDisruptionBudget.minAvailable }}
+  selector:
+    matchLabels:
+      app: front
+{{- end }}

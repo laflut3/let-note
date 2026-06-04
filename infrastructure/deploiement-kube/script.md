@@ -26,8 +26,9 @@ Le deploiement prod courant par tag ne passe plus par ce script. Il est gere par
 | Declenchement | Manuel uniquement avec `workflow_dispatch`, depuis un tag Git. Le workflow `release` valide le SemVer. |
 | Version deployee | Le tag Git sans prefixe `v`, par exemple `v1.2.3` deploie `1.2.3-amd64` et `1.2.3-arm64`. |
 | Selection env | Choix manuel unique `dev`, `staging` ou `prod`. |
-| Jobs amd64 | `deploy-dev-amd64`, `deploy-staging-amd64`, `deploy-prod-amd64`, utilisent `KUBE_CONFIG_AMD64`. |
-| Jobs arm64 | `deploy-dev-arm64`, `deploy-staging-arm64`, `deploy-prod-arm64`, utilisent `KUBE_CONFIG_ARM64`. |
+| Selection arch | `amd64`, `arm64` ou `both`; le workflow ne lance que les clusters selectionnes. |
+| Secret amd64 | `KUBE_CONFIG_AMD64`. |
+| Secret arm64 | `KUBE_CONFIG_ARM64`. |
 | Mecanisme | Action locale `.github/actions/helm-deploy`, avec `azure/k8s-set-context`, `azure/setup-helm`, `azure/setup-kubectl`, puis `helm upgrade --install` sur `charts/cluster` et `charts/let-note`. |
 | TLS prod | Le workflow bloque si `Certificate/prod/app-tls` existe avec un DNS different de `let-note.prod.polydo.dev`. |
 
@@ -149,6 +150,7 @@ helm template let-note-dev ./charts/let-note --namespace dev -f ./charts/let-not
 | --- | --- |
 | Certificat TLS prod | En mode `full`, si `Certificate/app-tls` existe deja avec un DNS different du host demande, le script stoppe. Utiliser `--allow-cert-change` uniquement pour une rotation volontaire. |
 | ArgoCD | Le script n'applique plus ArgoCD par defaut. Utiliser `--argocd` seulement quand GitHub `main` contient le chart voulu. L'ApplicationSet cree ou met a jour les trois Applications sans auto-sync. |
+| Proprietaire des ressources | Ne pas utiliser simultanement ArgoCD et les deploiements Helm directs sur les memes ressources. |
 | PostgreSQL | Si une version majeure differente est detectee, le script conserve l'image Postgres actuelle sauf avec `--allow-pg-major-upgrade`. |
 | Redeploiement applicatif | En mode `app-only`, le script ne touche pas l'Ingress, le Certificate, les secrets, Postgres, SeaweedFS ou les migrations. |
 

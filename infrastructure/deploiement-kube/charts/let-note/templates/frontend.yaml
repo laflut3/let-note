@@ -9,7 +9,9 @@ metadata:
     app.kubernetes.io/component: frontend
     {{- include "let-note.commonLabels" . | nindent 4 }}
 spec:
+  {{- if not .Values.frontend.autoscaling.enabled }}
   replicas: {{ .Values.frontend.replicas }}
+  {{- end }}
   revisionHistoryLimit: {{ .Values.frontend.revisionHistoryLimit }}
   strategy:
     {{- toYaml .Values.frontend.strategy | nindent 4 }}
@@ -26,6 +28,14 @@ spec:
       annotations:
         let-note.io/deploy-id: {{ .Values.global.deployId | quote }}
     spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.global.architecture }}
+      nodeSelector:
+        kubernetes.io/arch: {{ .Values.global.architecture | quote }}
+      {{- end }}
       securityContext:
         seccompProfile:
           type: RuntimeDefault

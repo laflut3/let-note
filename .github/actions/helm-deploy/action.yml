@@ -62,7 +62,10 @@ runs:
     - name: Deploy cluster chart
       shell: bash
       run: |
+        helm lint ./infrastructure/deploiement-kube/charts/cluster
         helm upgrade --install let-note-cluster ./infrastructure/deploiement-kube/charts/cluster \
+          --namespace kube-system \
+          --history-max 3 \
           --atomic \
           --wait \
           --timeout 5m
@@ -75,14 +78,22 @@ runs:
         VERSION: ${{ inputs.version }}
       run: |
         image_tag="${VERSION}-${ARCH}"
+        helm lint ./infrastructure/deploiement-kube/charts/let-note \
+          --values "./infrastructure/deploiement-kube/charts/let-note/environments/${DEPLOY_ENV}.yaml" \
+          --set "secrets.create=false" \
+          --set-string "global.architecture=${ARCH}" \
+          --set-string "images.backend.tag=${image_tag}" \
+          --set-string "images.frontend.tag=${image_tag}"
         helm upgrade --install "let-note-${DEPLOY_ENV}" ./infrastructure/deploiement-kube/charts/let-note \
           --namespace "${DEPLOY_ENV}" \
           --create-namespace \
           --values "./infrastructure/deploiement-kube/charts/let-note/environments/${DEPLOY_ENV}.yaml" \
           --set "secrets.create=false" \
+          --set-string "global.architecture=${ARCH}" \
           --set-string "images.backend.tag=${image_tag}" \
           --set-string "images.frontend.tag=${image_tag}" \
           --set-string "global.deployId=${DEPLOY_ENV}-${image_tag}-${GITHUB_RUN_ID}" \
+          --history-max 3 \
           --atomic \
           --wait \
           --wait-for-jobs \

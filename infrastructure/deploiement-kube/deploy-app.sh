@@ -235,6 +235,7 @@ apply_argocd_applicationset() {
   title "ArgoCD ApplicationSet"
   rendered_app="$(mktemp)"
   sed "s|__IMAGE_TAG__|${IMAGE_TAG}|g" "${app_manifest}" \
+    | sed "s|__ARCHITECTURE__|${IMAGE_ARCH/multi/}|g" \
     | sed "s|${BACKEND_IMAGE_REPO}:latest|${BACKEND_IMAGE_REPO}:${IMAGE_TAG}|g" \
     | sed "s|${FRONTEND_IMAGE_REPO}:latest|${FRONTEND_IMAGE_REPO}:${IMAGE_TAG}|g" \
     > "${rendered_app}"
@@ -301,6 +302,7 @@ render_env_manifest() {
   helm template "let-note-${env_name}" "${chart_dir}" \
     --namespace "${env_name}" \
     -f "${chart_dir}/environments/${env_name}.yaml" \
+    --set-string "global.architecture=${IMAGE_ARCH/multi/}" \
     --set-string "images.backend.tag=${IMAGE_TAG}" \
     --set-string "images.frontend.tag=${IMAGE_TAG}" \
     --set-string "backend.vault.addr=${escaped_vault_addr}" \

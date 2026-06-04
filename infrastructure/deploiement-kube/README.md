@@ -46,11 +46,13 @@ Le deploiement prod courant passe par le workflow GitHub Actions `Deploy`.
 | `KUBE_CONFIG_AMD64` | Kubeconfig brut du cluster amd64. |
 | `KUBE_CONFIG_ARM64` | Kubeconfig brut du cluster arm64. |
 
-Le workflow est declenchable uniquement manuellement (`workflow_dispatch`) depuis un tag Git. Le workflow `release` reste responsable de valider le format SemVer du tag. Le deploy propose un choix unique `dev`, `staging` ou `prod`; l'environnement selectionne lance un job `amd64` et un job `arm64`.
+Le workflow est declenchable uniquement manuellement (`workflow_dispatch`) depuis un tag Git. Le workflow `release` reste responsable de valider le format SemVer du tag. Le deploy propose un environnement `dev`, `staging` ou `prod`, puis une architecture `amd64`, `arm64` ou `both`.
 
-Le tag `vx.y.z` deploie les images `x.y.z-amd64` et `x.y.z-arm64`.
+Le tag `vx.y.z` deploie l'image suffixee correspondant a chaque architecture selectionnee: `x.y.z-amd64` et/ou `x.y.z-arm64`.
 
 Le workflow utilise l'action locale `.github/actions/helm-deploy`, configure Kubernetes avec `azure/k8s-set-context`, installe Helm avec `azure/setup-helm`, puis applique les charts avec `helm upgrade --install`. Il n'appelle pas [`deploy-app.sh`](./deploy-app.sh).
+
+Le workflow ne deploie pas Argo CD. L'ApplicationSet est optionnel et ne doit pas gerer les memes ressources en parallele des releases Helm directes.
 
 Guide de mise en place complet: [`workflow-deploy-setup.md`](./workflow-deploy-setup.md).
 

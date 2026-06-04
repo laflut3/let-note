@@ -22,14 +22,18 @@ secrets:
   create: false
 
 backend:
-  replicas: 1
+  replicas: 2
+  autoscaling:
+    enabled: true
+  podDisruptionBudget:
+    enabled: true
   vault:
     secretPath: prod/let-note
     k8sRole: let-note-prod
   strategy:
     rollingUpdate:
-      maxUnavailable: 1
-      maxSurge: 0
+      maxUnavailable: 0
+      maxSurge: 1
   resources:
     requests:
       cpu: 150m
@@ -39,11 +43,15 @@ backend:
       memory: 512Mi
 
 frontend:
-  replicas: 1
+  replicas: 2
+  autoscaling:
+    enabled: true
+  podDisruptionBudget:
+    enabled: true
   strategy:
     rollingUpdate:
-      maxUnavailable: 1
-      maxSurge: 0
+      maxUnavailable: 0
+      maxSurge: 1
   resources:
     requests:
       cpu: 150m

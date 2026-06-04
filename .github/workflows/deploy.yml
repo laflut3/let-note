@@ -11,6 +11,15 @@ on:
           - dev
           - staging
           - prod
+      target_architecture:
+        description: Cluster architecture to deploy
+        required: true
+        default: amd64
+        type: choice
+        options:
+          - amd64
+          - arm64
+          - both
 
 permissions:
   contents: read
@@ -25,7 +34,7 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       deploy_version: ${{ steps.meta.outputs.deploy_version }}
-      target_environment: ${{ steps.meta.outputs.target_environment }}
+      deploy_matrix: ${{ steps.meta.outputs.deploy_matrix }}
     steps:
       - name: Validate deploy context
         id: meta
@@ -34,31 +43,43 @@ jobs:
           script: |
             const refType = context.ref.startsWith("refs/tags/") ? "tag" : "branch";
             const refName = context.ref.replace(/^refs\/tags\//, "").replace(/^refs\/heads\//, "");
-            const targetEnvironment = "${{ inputs.target_environment }}";
-            const allowedEnvironments = new Set(["dev", "staging", "prod"]);
+            const environment = "${{ inputs.target_environment }}";
+            const architecture = "${{ inputs.target_architecture }}";
 
             if (refType !== "tag") {
               core.setFailed("Deploy workflow must be manually run from a Git tag.");
               return;
             }
 
-            if (!allowedEnvironments.has(targetEnvironment)) {
-              core.setFailed(`Invalid target environment '${targetEnvironment}'.`);
+            if (!new Set(["dev", "staging", "prod"]).has(environment)) {
+              core.setFailed(`Invalid target environment '${environment}'.`);
               return;
             }
 
+            if (!new Set(["amd64", "arm64", "both"]).has(architecture)) {
+              core.setFailed(`Invalid target architecture '${architecture}'.`);
+              return;
+            }
+
+            const targets = architecture === "both" ? ["amd64", "arm64"] : [architecture];
+            const include = targets.map(arch => ({
+              arch,
+              kubeconfig_secret: `KUBE_CONFIG_${arch.toUpperCase()}`,
+            }));
             core.setOutput("deploy_version", refName.replace(/^v/, ""));
-            core.setOutput("target_environment", targetEnvironment);
+            core.setOutput("deploy_matrix", JSON.stringify({ include }));
 
-  deploy-dev-amd64:
-    name: Deploy dev amd64
+  deploy:
+    name: Deploy ${{ inputs.target_environment }} ${{ matrix.arch }}
     needs: validate-selection
-    if: needs.validate-selection.outputs.target_environment == 'dev'
     runs-on: ubuntu-24.04
-    environment: dev-amd64
+    environment: ${{ inputs.target_environment }}-${{ matrix.arch }}
     concurrency:
-      group: deploy-amd64
+      group: deploy-${{ matrix.arch }}
       cancel-in-progress: false
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.validate-selection.outputs.deploy_matrix) }}
     steps:
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -70,156 +91,11 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Deploy dev amd64
+      - name: Deploy
         uses: ./.github/actions/helm-deploy
         with:
-          arch: amd64
-          environment: dev
-          kubeconfig: ${{ secrets.KUBE_CONFIG_AMD64 }}
-          version: ${{ needs.validate-selection.outputs.deploy_version }}
-          prod-ingress-host: ${{ env.PROD_INGRESS_HOST }}
-
-  deploy-staging-amd64:
-    name: Deploy staging amd64
-    needs: validate-selection
-    if: needs.validate-selection.outputs.target_environment == 'staging'
-    runs-on: ubuntu-24.04
-    environment: staging-amd64
-    concurrency:
-      group: deploy-amd64
-      cancel-in-progress: false
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Deploy staging amd64
-        uses: ./.github/actions/helm-deploy
-        with:
-          arch: amd64
-          environment: staging
-          kubeconfig: ${{ secrets.KUBE_CONFIG_AMD64 }}
-          version: ${{ needs.validate-selection.outputs.deploy_version }}
-          prod-ingress-host: ${{ env.PROD_INGRESS_HOST }}
-
-  deploy-prod-amd64:
-    name: Deploy prod amd64
-    needs: validate-selection
-    if: needs.validate-selection.outputs.target_environment == 'prod'
-    runs-on: ubuntu-24.04
-    environment: prod-amd64
-    concurrency:
-      group: deploy-amd64
-      cancel-in-progress: false
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Deploy prod amd64
-        uses: ./.github/actions/helm-deploy
-        with:
-          arch: amd64
-          environment: prod
-          kubeconfig: ${{ secrets.KUBE_CONFIG_AMD64 }}
-          version: ${{ needs.validate-selection.outputs.deploy_version }}
-          prod-ingress-host: ${{ env.PROD_INGRESS_HOST }}
-
-  deploy-dev-arm64:
-    name: Deploy dev arm64
-    needs: validate-selection
-    if: needs.validate-selection.outputs.target_environment == 'dev'
-    runs-on: ubuntu-24.04
-    environment: dev-arm64
-    concurrency:
-      group: deploy-arm64
-      cancel-in-progress: false
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Deploy dev arm64
-        uses: ./.github/actions/helm-deploy
-        with:
-          arch: arm64
-          environment: dev
-          kubeconfig: ${{ secrets.KUBE_CONFIG_ARM64 }}
-          version: ${{ needs.validate-selection.outputs.deploy_version }}
-          prod-ingress-host: ${{ env.PROD_INGRESS_HOST }}
-
-  deploy-staging-arm64:
-    name: Deploy staging arm64
-    needs: validate-selection
-    if: needs.validate-selection.outputs.target_environment == 'staging'
-    runs-on: ubuntu-24.04
-    environment: staging-arm64
-    concurrency:
-      group: deploy-arm64
-      cancel-in-progress: false
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Deploy staging arm64
-        uses: ./.github/actions/helm-deploy
-        with:
-          arch: arm64
-          environment: staging
-          kubeconfig: ${{ secrets.KUBE_CONFIG_ARM64 }}
-          version: ${{ needs.validate-selection.outputs.deploy_version }}
-          prod-ingress-host: ${{ env.PROD_INGRESS_HOST }}
-
-  deploy-prod-arm64:
-    name: Deploy prod arm64
-    needs: validate-selection
-    if: needs.validate-selection.outputs.target_environment == 'prod'
-    runs-on: ubuntu-24.04
-    environment: prod-arm64
-    concurrency:
-      group: deploy-arm64
-      cancel-in-progress: false
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Deploy prod arm64
-        uses: ./.github/actions/helm-deploy
-        with:
-          arch: arm64
-          environment: prod
-          kubeconfig: ${{ secrets.KUBE_CONFIG_ARM64 }}
+          arch: ${{ matrix.arch }}
+          environment: ${{ inputs.target_environment }}
+          kubeconfig: ${{ secrets[matrix.kubeconfig_secret] }}
           version: ${{ needs.validate-selection.outputs.deploy_version }}
           prod-ingress-host: ${{ env.PROD_INGRESS_HOST }}
