@@ -5,6 +5,7 @@ Ce fichier liste toutes les donnees Vault necessaires pour deployer Let-Note san
 Note:
 - `version` et `arch` ne sont plus stockees dans Vault.
 - Elles sont definies uniquement dans `infrastructure/deploiement-kube/deploy-config.toml`.
+- Le workflow Helm direct ne synchronise pas les credentials SeaweedFS depuis Vault. Les exemples utilisent donc les credentials definis dans les values Helm actuelles.
 
 ## 1) Secrets applicatifs par environnement
 
@@ -52,8 +53,8 @@ vault kv put secret/dev/let-note \
   S3_ENDPOINT="http://seaweed-s3:8333" \
   S3_REGION="us-east-1" \
   S3_BUCKET="let-note-dev-files" \
-  S3_ACCESS_KEY="letnote-dev-ak" \
-  S3_SECRET_KEY="letnote-dev-sk" \
+  S3_ACCESS_KEY="seaweedfs" \
+  S3_SECRET_KEY="seaweedfs" \
   INGRESS_HOST="dev.app.local"
 ```
 
@@ -75,8 +76,8 @@ vault kv put secret/staging/let-note \
   S3_ENDPOINT="http://seaweed-s3:8333" \
   S3_REGION="us-east-1" \
   S3_BUCKET="let-note-staging-files" \
-  S3_ACCESS_KEY="letnote-staging-ak" \
-  S3_SECRET_KEY="letnote-staging-sk" \
+  S3_ACCESS_KEY="seaweedfs" \
+  S3_SECRET_KEY="seaweedfs" \
   INGRESS_HOST="staging.app.local"
 ```
 
@@ -98,8 +99,8 @@ vault kv put secret/prod/let-note \
   S3_ENDPOINT="http://seaweed-s3:8333" \
   S3_REGION="us-east-1" \
   S3_BUCKET="let-note-prod-files" \
-  S3_ACCESS_KEY="letnote-prod-ak" \
-  S3_SECRET_KEY="letnote-prod-sk" \
+  S3_ACCESS_KEY="seaweedfs" \
+  S3_SECRET_KEY="seaweedfs" \
   INGRESS_HOST="let-note.prod.polydo.dev"
 ```
 
