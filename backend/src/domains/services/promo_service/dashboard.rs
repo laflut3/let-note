@@ -89,18 +89,12 @@ pub async fn get_promotion_dashboard(
     SELECT
       m.code_matiere,
       m.nom_matiere,
-      mu.id_ue AS ue_id,
-      u.nom_ue AS ue_nom,
-      u.semestre AS ue_semestre,
-      mu.coef_ue,
       rmp.id_prof AS referent_prof_id,
       p.nom AS referent_prof_nom,
       p.prenom AS referent_prof_prenom,
       p.email AS referent_prof_email
     FROM mat_promo mp
     JOIN matiere m ON m.code_matiere = mp.id_mat
-    LEFT JOIN matiere_ue mu ON mu.id_matiere = m.code_matiere AND mu.id_promo = mp.id_promo
-    LEFT JOIN ue u ON u.id = mu.id_ue
     LEFT JOIN referent_matiere_promo rmp ON rmp.id_mat = mp.id_mat AND rmp.id_promo = mp.id_promo
     LEFT JOIN professeur p ON p.id = rmp.id_prof
     WHERE mp.id_promo = $1
@@ -117,10 +111,6 @@ pub async fn get_promotion_dashboard(
     .map(|row| MatiereDashboardItem {
       code_matiere: row.code_matiere,
       nom_matiere: row.nom_matiere,
-      ue_id: row.ue_id,
-      ue_nom: row.ue_nom,
-      ue_semestre: row.ue_semestre,
-      coef_ue: row.coef_ue,
       referent_prof_id: row.referent_prof_id,
       referent_prof_nom: row.referent_prof_nom,
       referent_prof_prenom: row.referent_prof_prenom,
@@ -173,70 +163,12 @@ pub async fn get_promotion_dashboard(
 
   let devoirs = list_devoirs_for_promo(db, auth, promo_id).await?;
 
-  let resultats = if promotion.can_manage {
-    sqlx::query_as::<_, ResultatDashboardItem>(
-      r#"
-      SELECT
-        nr.id,
-        nr.id_mat,
-        m.nom_matiere,
-        nr.id_etu,
-        e.numero_etudiant AS etu_numero,
-        e.nom AS etu_nom,
-        e.prenom AS etu_prenom,
-        nr.libelle,
-        nr.session,
-        nr.note,
-        nr.coef,
-        nr.updated_at
-      FROM note_resultat nr
-      JOIN matiere m ON m.code_matiere = nr.id_mat
-      JOIN etudiant e ON e.id = nr.id_etu
-      WHERE nr.id_promo = $1
-      ORDER BY m.nom_matiere, e.nom, e.prenom, nr.updated_at DESC
-      "#,
-    )
-    .bind(promo_id)
-    .fetch_all(db)
-    .await
-    .map_err(map_schema_error("unable to load results"))?
-  } else {
-    sqlx::query_as::<_, ResultatDashboardItem>(
-      r#"
-      SELECT
-        nr.id,
-        nr.id_mat,
-        m.nom_matiere,
-        nr.id_etu,
-        e.numero_etudiant AS etu_numero,
-        e.nom AS etu_nom,
-        e.prenom AS etu_prenom,
-        nr.libelle,
-        nr.session,
-        nr.note,
-        nr.coef,
-        nr.updated_at
-      FROM note_resultat nr
-      JOIN matiere m ON m.code_matiere = nr.id_mat
-      JOIN etudiant e ON e.id = nr.id_etu
-      WHERE nr.id_promo = $1 AND nr.id_etu = $2
-      ORDER BY m.nom_matiere, nr.updated_at DESC
-      "#,
-    )
-    .bind(promo_id)
-    .bind(auth.user_id)
-    .fetch_all(db)
-    .await
-    .map_err(map_schema_error("unable to load results"))?
-  };
-
   Ok(DashboardPayload {
     promotion,
     etudiants,
     matieres,
     professeurs,
     devoirs,
-    resultats,
   })
 }
 

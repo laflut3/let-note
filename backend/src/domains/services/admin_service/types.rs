@@ -172,8 +172,6 @@ pub struct CreateMatiereResourceUploadInput {
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct LinkMatiereAllPromotionsInput {
   pub nom_matiere: Option<String>,
-  pub ue_id: Uuid,
-  pub coef_ue: Option<f32>,
   pub referent_prof_id: Uuid,
 }
 
@@ -181,8 +179,6 @@ pub struct LinkMatiereAllPromotionsInput {
 pub struct LinkMatierePromotionInput {
   pub promo_id: Uuid,
   pub nom_matiere: Option<String>,
-  pub ue_id: Uuid,
-  pub coef_ue: Option<f32>,
   pub referent_prof_id: Uuid,
 }
 

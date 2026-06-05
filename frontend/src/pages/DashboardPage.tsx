@@ -6,11 +6,9 @@ import { PromotionPills } from '@/components/dashboard/PromotionPills';
 import { PromotionListSidebar } from '@/components/dashboard/PromotionListSidebar';
 import { TodayScheduleModule } from '@/components/dashboard/TodayScheduleModule';
 import { HomeworkModule } from '@/components/dashboard/HomeworkModule';
-import { RecentNotesModule } from '@/components/dashboard/RecentNotesModule';
 import { SubjectsModule } from '@/components/dashboard/SubjectsModule';
 import { StudentProfileModule } from '@/components/dashboard/StudentProfileModule';
 import { WeeklyScheduleModule } from '@/components/dashboard/WeeklyScheduleModule';
-import { ResultsModule } from '@/components/dashboard/ResultsModule';
 import { SubjectsLibraryTab } from '@/components/dashboard/SubjectsLibraryTab';
 import { ArchivedHomeworkTab } from '@/components/dashboard/ArchivedHomeworkTab';
 import { useDashboardController } from '@/hooks/useDashboardController';
@@ -67,7 +65,6 @@ export function DashboardPage() {
                       events={safeTodayEvents}
                     />
                     <HomeworkModule dashboard={controller.dashboard} />
-                    <RecentNotesModule dashboard={controller.dashboard} />
                   </div>
 
                   <div className="space-y-4">
@@ -104,16 +101,6 @@ export function DashboardPage() {
                   allEvents={safeAllEvents}
                   weekOffset={weekOffset}
                   setWeekOffset={setWeekOffset}
-                />
-              )}
-
-              {controller.activeTab === 'notes' && (
-                <ResultsModule
-                  dashboard={controller.dashboard}
-                  promoId={controller.selectedPromoId}
-                  onSaved={controller.refreshDashboard}
-                  canManagePromotion={false}
-                  currentUserId={controller.profile?.id ?? ''}
                 />
               )}
             </section>

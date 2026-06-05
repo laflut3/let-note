@@ -1,15 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BookOpen, Home, Layers, LogOut, Shield, User, Users } from 'lucide-react';
+import { BookOpen, Home, LogOut, Shield, User, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ThemeToggle } from '@/components/auth/ThemeToggle';
 import { useThemeContext } from '@/context/theme-context';
 import { adminUi } from '@/lib/admin-ui';
 import { DevoirsSection } from '@/components/devoirs/DevoirsSection';
-import { ResultsModule } from '@/components/dashboard/ResultsModule';
 import { SubjectsTab } from '@/components/admin/SubjectsSection';
-import { UesSection } from '@/components/admin/UesSection';
 import { AdminOverlays } from '@/components/admin/AdminOverlays';
 import { useAdminController } from '@/hooks/useAdminController';
 import {
@@ -23,14 +21,7 @@ import {
   type PromotionScope,
 } from '@/services/api';
 
-type DelegateTab =
-  | 'general'
-  | 'ues'
-  | 'matieres'
-  | 'professeurs'
-  | 'etudiants'
-  | 'devoirs'
-  | 'resultats';
+type DelegateTab = 'general' | 'matieres' | 'professeurs' | 'etudiants' | 'devoirs';
 
 type Feedback = {
   type: '' | 'success' | 'error';
@@ -179,9 +170,7 @@ export function DelegatePage() {
                 ['etudiants', 'Etudiants'],
                 ['professeurs', 'Professeurs'],
                 ['matieres', 'Matieres'],
-                ['ues', 'UE'],
                 ['devoirs', 'Devoirs'],
-                ['resultats', 'Resultats'],
               ] as const
             ).map(([value, label]) => (
               <button
@@ -194,12 +183,10 @@ export function DelegatePage() {
                 ].join(' ')}
               >
                 {value === 'general' && <Home className="h-4 w-4" />}
-                {value === 'ues' && <Layers className="h-4 w-4" />}
                 {value === 'matieres' && <BookOpen className="h-4 w-4" />}
                 {value === 'professeurs' && <User className="h-4 w-4" />}
                 {value === 'etudiants' && <Users className="h-4 w-4" />}
                 {value === 'devoirs' && <BookOpen className="h-4 w-4" />}
-                {value === 'resultats' && <Shield className="h-4 w-4" />}
                 <span className="hidden md:inline">{label}</span>
               </button>
             ))}
@@ -303,8 +290,6 @@ export function DelegatePage() {
               </div>
             </div>
           )}
-
-          {activeTab === 'ues' && <UesSection controller={adminController} />}
 
           {activeTab === 'matieres' && <SubjectsTab controller={adminController} />}
 
@@ -434,22 +419,6 @@ export function DelegatePage() {
             />
           )}
 
-          {activeTab === 'resultats' && selectedPromoId && (
-            <div className="mt-4">
-              <ResultsModule
-                dashboard={dashboard}
-                promoId={selectedPromoId}
-                canManagePromotion
-                currentUserId=""
-                onSaved={async () => {
-                  if (selectedPromoId) {
-                    await loadPromotionData(selectedPromoId);
-                  }
-                }}
-              />
-            </div>
-          )}
-
           {feedback.message && (
             <p
               className={[
@@ -463,23 +432,20 @@ export function DelegatePage() {
             </p>
           )}
 
-          {(activeTab === 'ues' || activeTab === 'matieres') &&
-            adminController.feedback.message && (
-              <p
-                className={[
-                  'mt-4 rounded-lg px-3 py-2 text-sm',
-                  adminController.feedback.type === 'success'
-                    ? 'bg-emerald-100 text-emerald-800'
-                    : 'border border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-400/40 dark:bg-rose-950/30 dark:text-rose-200',
-                ].join(' ')}
-              >
-                {adminController.feedback.message}
-              </p>
-            )}
+          {adminController.feedback.message && (
+            <p
+              className={[
+                'mt-4 rounded-lg px-3 py-2 text-sm',
+                adminController.feedback.type === 'success'
+                  ? 'bg-emerald-100 text-emerald-800'
+                  : 'border border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-400/40 dark:bg-rose-950/30 dark:text-rose-200',
+              ].join(' ')}
+            >
+              {adminController.feedback.message}
+            </p>
+          )}
         </section>
-        {(activeTab === 'ues' || activeTab === 'matieres') && (
-          <AdminOverlays controller={adminController} />
-        )}
+        {activeTab === 'matieres' && <AdminOverlays controller={adminController} />}
       </section>
     </main>
   );

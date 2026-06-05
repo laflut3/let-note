@@ -220,11 +220,29 @@ pub async fn upload_profile_photo(
     return Err(ApiError::bad_request("photo is too large (max 8MB)"));
   }
 
+  let detected_content_type = detect_profile_photo_content_type(&bytes)
+    .ok_or_else(|| ApiError::bad_request("photo must be a jpeg, png, webp or gif image"))?;
+
+  if let Some(provided) = content_type.map(|value| {
+    value
+      .split(';')
+      .next()
+      .unwrap_or("")
+      .trim()
+      .to_ascii_lowercase()
+  }) && !provided.is_empty()
+    && provided != detected_content_type
+  {
+    return Err(ApiError::bad_request(
+      "photo content type does not match the uploaded file",
+    ));
+  }
+
   let cfg = s3::read_s3_config().map_err(|_| ApiError::internal("unable to read S3 config"))?;
   let safe_name = sanitize_file_name(file_name);
   let key = format!("profiles/{}/{}", etu_id, safe_name);
 
-  s3::upload_bytes(&key, bytes, content_type)
+  s3::upload_bytes(&key, bytes, Some(detected_content_type))
     .await
     .map_err(|_| ApiError::internal("unable to upload profile photo"))?;
 
@@ -238,7 +256,7 @@ pub async fn upload_profile_photo(
   .bind(etu_id)
   .bind(cfg.bucket)
   .bind(key)
-  .bind(content_type.map(str::to_string))
+  .bind(Some(detected_content_type.to_string()))
   .execute(db)
   .await
   .map_err(|_| ApiError::internal("unable to save profile photo"))?;
@@ -322,4 +340,24 @@ fn sanitize_file_name(name: &str) -> String {
       }
     })
     .collect()
+}
+
+fn detect_profile_photo_content_type(bytes: &[u8]) -> Option<&'static str> {
+  if bytes.len() >= 3 && bytes[0..3] == [0xFF, 0xD8, 0xFF] {
+    return Some("image/jpeg");
+  }
+
+  if bytes.len() >= 8 && bytes[0..8] == [0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A] {
+    return Some("image/png");
+  }
+
+  if bytes.len() >= 12 && bytes[0..4] == *b"RIFF" && bytes[8..12] == *b"WEBP" {
+    return Some("image/webp");
+  }
+
+  if bytes.len() >= 6 && (bytes[0..6] == *b"GIF87a" || bytes[0..6] == *b"GIF89a") {
+    return Some("image/gif");
+  }
+
+  None
 }

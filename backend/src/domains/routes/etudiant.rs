@@ -120,6 +120,7 @@ async fn get_my_photo(State(db): State<PgPool>, headers: HeaderMap) -> impl Into
       StatusCode::OK,
       [
         (header::CONTENT_TYPE, content_type),
+        (header::X_CONTENT_TYPE_OPTIONS, "nosniff".to_string()),
         (header::CACHE_CONTROL, "no-store".to_string()),
       ],
       Body::from(bytes),

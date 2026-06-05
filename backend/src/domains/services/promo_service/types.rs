@@ -1,45 +1,7 @@
 #[derive(Debug, Clone, serde::Deserialize)]
-pub struct CreateUeInput {
-  pub nom_ue: String,
-  pub semestre: i32,
-}
-
-#[derive(Debug, Clone, serde::Deserialize)]
-pub struct UpdateUeInput {
-  pub nom_ue: Option<String>,
-  pub semestre: i32,
-}
-
-#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
-pub struct UePayload {
-  pub id: Uuid,
-  pub nom_ue: String,
-  pub semestre: i32,
-}
-
-#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
-pub struct UeCatalogItem {
-  pub id: Uuid,
-  pub nom_ue: String,
-  pub semestre: i32,
-  pub linked_to_promo: bool,
-}
-
-#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
-pub struct UePromotionLinkPayload {
-  pub id: Uuid,
-  pub nom: String,
-  pub annee_arrivee: i32,
-  pub annee_depart: i32,
-  pub linked: bool,
-}
-
-#[derive(Debug, Clone, serde::Deserialize)]
 pub struct CreateMatiereInput {
   pub code_matiere: String,
   pub nom_matiere: String,
-  pub ue_id: Uuid,
-  pub coef_ue: Option<f32>,
   pub referent_prof_id: Uuid,
 }
 
@@ -54,23 +16,6 @@ pub struct CreateProfesseurInput {
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct UpdateIcalInput {
   pub ical_url: String,
-}
-
-#[derive(Debug, Clone, serde::Deserialize)]
-pub struct CreateResultatInput {
-  pub etudiant_id: Option<Uuid>,
-  pub libelle: String,
-  pub session: Option<i32>,
-  pub note: f32,
-  pub coef: Option<f32>,
-}
-
-#[derive(Debug, Clone, serde::Deserialize)]
-pub struct UpdateResultatInput {
-  pub libelle: Option<String>,
-  pub session: Option<i32>,
-  pub note: Option<f32>,
-  pub coef: Option<f32>,
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
@@ -111,7 +56,6 @@ pub struct DashboardPayload {
   pub matieres: Vec<MatiereDashboardItem>,
   pub professeurs: Vec<ProfesseurDashboardItem>,
   pub devoirs: Vec<DevoirPayload>,
-  pub resultats: Vec<ResultatDashboardItem>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
@@ -127,10 +71,6 @@ pub struct PromoStudent {
 pub struct MatiereDashboardItem {
   pub code_matiere: String,
   pub nom_matiere: String,
-  pub ue_id: Option<Uuid>,
-  pub ue_nom: Option<String>,
-  pub ue_semestre: Option<i32>,
-  pub coef_ue: Option<f32>,
   pub referent_prof_id: Option<Uuid>,
   pub referent_prof_nom: Option<String>,
   pub referent_prof_prenom: Option<String>,
@@ -142,10 +82,6 @@ pub struct MatiereDashboardItem {
 struct MatiereDashboardRow {
   pub code_matiere: String,
   pub nom_matiere: String,
-  pub ue_id: Option<Uuid>,
-  pub ue_nom: Option<String>,
-  pub ue_semestre: Option<i32>,
-  pub coef_ue: Option<f32>,
   pub referent_prof_id: Option<Uuid>,
   pub referent_prof_nom: Option<String>,
   pub referent_prof_prenom: Option<String>,
@@ -187,22 +123,6 @@ pub struct ProfesseurDashboardItem {
   pub nom: String,
   pub prenom: String,
   pub email: String,
-}
-
-#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
-pub struct ResultatDashboardItem {
-  pub id: Uuid,
-  pub id_mat: String,
-  pub nom_matiere: String,
-  pub id_etu: Uuid,
-  pub etu_numero: Option<String>,
-  pub etu_nom: String,
-  pub etu_prenom: String,
-  pub libelle: String,
-  pub session: Option<i32>,
-  pub note: f32,
-  pub coef: f32,
-  pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { NavigateFunction } from 'react-router-dom';
 import {
   authMeRequest,
@@ -14,7 +14,6 @@ import {
   type MyProfilePayload,
   type PromotionDashboardPayload,
   type PromotionScope,
-  toApiUrl,
 } from '@/services/api';
 import {
   getTodayBounds,
@@ -23,7 +22,7 @@ import {
   type ScheduleEvent,
 } from '@/lib/dashboard/schedule';
 
-export type DashboardTab = 'accueil' | 'matieres' | 'devoirs' | 'edt' | 'notes' | 'profil';
+export type DashboardTab = 'accueil' | 'matieres' | 'devoirs' | 'edt' | 'profil';
 
 async function extractError(response: Response, fallback: string): Promise<string> {
   const data = (await response.json().catch(() => null)) as { message?: string } | null;
@@ -55,12 +54,14 @@ export function useDashboardController(navigate: NavigateFunction) {
   });
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [profileMessage, setProfileMessage] = useState('');
-  const [photoObjectUrl, setPhotoObjectUrl] = useState('');
+  const photoObjectUrlRef = useRef('');
 
-  const resolvePhotoUrl = (photoUrl: string | null | undefined): string => {
-    if (!photoUrl) return '';
-    if (photoUrl.startsWith('http://') || photoUrl.startsWith('https://')) return photoUrl;
-    return toApiUrl(photoUrl.startsWith('/') ? photoUrl : `/${photoUrl}`);
+  const replacePhotoObjectUrl = (nextUrl: string) => {
+    if (photoObjectUrlRef.current) {
+      URL.revokeObjectURL(photoObjectUrlRef.current);
+    }
+    photoObjectUrlRef.current = nextUrl;
+    return nextUrl;
   };
 
   const loadProfilePhotoBlob = async () => {
@@ -185,17 +186,15 @@ export function useDashboardController(navigate: NavigateFunction) {
 
       const data = (await response.json()) as MyProfilePayload;
       setProfile(data);
-      const directUrl = resolvePhotoUrl(data.photo_url);
-      const objectUrl = directUrl ? await loadProfilePhotoBlob() : '';
-      if (photoObjectUrl) URL.revokeObjectURL(photoObjectUrl);
-      setPhotoObjectUrl(objectUrl);
+      const objectUrl = data.photo_url ? await loadProfilePhotoBlob() : '';
+      replacePhotoObjectUrl(objectUrl);
       setProfileForm({
         numero_etudiant: data.numero_etudiant ?? '',
         nom: data.nom,
         prenom: data.prenom,
         email: data.email,
         date_naissance: data.date_naissance,
-        photo_url: objectUrl || directUrl,
+        photo_url: objectUrl,
       });
     } catch {
       // keep dashboard usable
@@ -209,11 +208,11 @@ export function useDashboardController(navigate: NavigateFunction) {
 
   useEffect(() => {
     return () => {
-      if (photoObjectUrl) {
-        URL.revokeObjectURL(photoObjectUrl);
+      if (photoObjectUrlRef.current) {
+        URL.revokeObjectURL(photoObjectUrlRef.current);
       }
     };
-  }, [photoObjectUrl]);
+  }, []);
 
   useEffect(() => {
     if (selectedPromoId) {
@@ -228,10 +227,7 @@ export function useDashboardController(navigate: NavigateFunction) {
   useEffect(() => {
     if (
       !hasPromotionContext &&
-      (activeTab === 'matieres' ||
-        activeTab === 'devoirs' ||
-        activeTab === 'edt' ||
-        activeTab === 'notes')
+      (activeTab === 'matieres' || activeTab === 'devoirs' || activeTab === 'edt')
     ) {
       setActiveTab('accueil');
     }
@@ -267,17 +263,15 @@ export function useDashboardController(navigate: NavigateFunction) {
 
       const updated = (await response.json()) as MyProfilePayload;
       setProfile(updated);
-      const directUrl = resolvePhotoUrl(updated.photo_url);
-      const objectUrl = directUrl ? await loadProfilePhotoBlob() : '';
-      if (photoObjectUrl) URL.revokeObjectURL(photoObjectUrl);
-      setPhotoObjectUrl(objectUrl);
+      const objectUrl = updated.photo_url ? await loadProfilePhotoBlob() : '';
+      replacePhotoObjectUrl(objectUrl);
       setProfileForm({
         numero_etudiant: updated.numero_etudiant ?? '',
         nom: updated.nom,
         prenom: updated.prenom,
         email: updated.email,
         date_naissance: updated.date_naissance,
-        photo_url: objectUrl || directUrl,
+        photo_url: objectUrl,
       });
       setProfileMessage('Profil mis a jour.');
     } catch {
@@ -298,17 +292,15 @@ export function useDashboardController(navigate: NavigateFunction) {
       }
       const updated = (await response.json()) as MyProfilePayload;
       setProfile(updated);
-      const directUrl = resolvePhotoUrl(updated.photo_url);
-      const objectUrl = directUrl ? await loadProfilePhotoBlob() : '';
-      if (photoObjectUrl) URL.revokeObjectURL(photoObjectUrl);
-      setPhotoObjectUrl(objectUrl);
+      const objectUrl = updated.photo_url ? await loadProfilePhotoBlob() : '';
+      replacePhotoObjectUrl(objectUrl);
       setProfileForm({
         numero_etudiant: updated.numero_etudiant ?? '',
         nom: updated.nom,
         prenom: updated.prenom,
         email: updated.email,
         date_naissance: updated.date_naissance,
-        photo_url: objectUrl || directUrl,
+        photo_url: objectUrl,
       });
       setProfileMessage('Photo de profil mise a jour.');
     } catch {
