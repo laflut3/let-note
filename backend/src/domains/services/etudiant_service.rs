@@ -243,7 +243,10 @@ pub async fn upload_profile_photo(
 
   s3::upload_bytes(&key, bytes, Some(detected_content_type))
     .await
-    .map_err(|_| ApiError::internal("unable to upload profile photo"))?;
+    .map_err(|error| {
+      eprintln!("profile photo upload failed: {error:#}");
+      ApiError::internal("unable to upload profile photo")
+    })?;
 
   sqlx::query(
     r#"

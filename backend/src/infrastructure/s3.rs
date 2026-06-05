@@ -1,3 +1,4 @@
+use anyhow::Context;
 use aws_credential_types::Credentials;
 use aws_sdk_s3::{Client, config::Builder as S3ConfigBuilder, primitives::ByteStream};
 use aws_types::region::Region;
@@ -60,7 +61,9 @@ pub async fn upload_bytes(
   let bucket = cfg.bucket.clone();
   let client = client_from_config(&cfg);
 
-  ensure_bucket_exists(&client, &bucket).await?;
+  ensure_bucket_exists(&client, &bucket)
+    .await
+    .with_context(|| format!("unable to access S3 bucket {bucket}"))?;
 
   let request = client
     .put_object()
@@ -74,14 +77,23 @@ pub async fn upload_bytes(
     request
   };
 
-  request.send().await?;
+  request
+    .send()
+    .await
+    .with_context(|| format!("unable to upload S3 object {key}"))?;
   Ok(())
 }
 
 pub async fn download_bytes(bucket: &str, key: &str) -> anyhow::Result<(Vec<u8>, Option<String>)> {
   let cfg = read_s3_config()?;
   let client = client_from_config(&cfg);
-  let object = client.get_object().bucket(bucket).key(key).send().await?;
+  let object = client
+    .get_object()
+    .bucket(bucket)
+    .key(key)
+    .send()
+    .await
+    .with_context(|| format!("unable to download S3 object {bucket}/{key}"))?;
   let content_type = object.content_type().map(str::to_string);
   let bytes = object.body.collect().await?.into_bytes().to_vec();
   Ok((bytes, content_type))
