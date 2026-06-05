@@ -1,0 +1,85 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: {{ include "let-note.namespace" . }}
+  labels:
+    app: postgres
+    {{- include "let-note.commonLabels" . | nindent 4 }}
+spec:
+  replicas: 1
+  revisionHistoryLimit: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+        {{- include "let-note.commonLabels" . | nindent 8 }}
+    spec:
+      securityContext:
+        fsGroup: 999
+      initContainers:
+      - name: init-postgres-permissions
+        image: {{ include "let-note.image" .Values.images.busybox | quote }}
+        command:
+        - sh
+        - -c
+        - |
+          mkdir -p /var/lib/postgresql
+          chown -R 999:999 /var/lib/postgresql
+        securityContext:
+          runAsUser: 0
+        volumeMounts:
+        - name: data
+          mountPath: /var/lib/postgresql
+      containers:
+      - name: postgres
+        image: {{ include "let-note.image" .Values.images.postgres | quote }}
+        securityContext:
+          runAsUser: 999
+          runAsGroup: 999
+        ports:
+        - containerPort: 5432
+        envFrom:
+        - configMapRef:
+            name: postgres-config
+        - secretRef:
+            name: postgres-secret
+        volumeMounts:
+        - name: data
+          mountPath: /var/lib/postgresql
+        readinessProbe:
+          exec:
+            command: ["sh", "-c", "pg_isready -U $POSTGRES_USER -d $POSTGRES_DB"]
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        livenessProbe:
+          exec:
+            command: ["sh", "-c", "pg_isready -U $POSTGRES_USER -d $POSTGRES_DB"]
+          initialDelaySeconds: 20
+          periodSeconds: 15
+        resources:
+          {{- toYaml .Values.postgres.resources | nindent 10 }}
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: postgres-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: {{ include "let-note.namespace" . }}
+  labels:
+    app: postgres
+    {{- include "let-note.commonLabels" . | nindent 4 }}
+spec:
+  selector:
+    app: postgres
+  ports:
+  - port: 5432
+    targetPort: 5432

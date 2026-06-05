@@ -1,0 +1,175 @@
+global:
+  environment: dev
+  deployId: latest
+  architecture: ""
+  imagePullSecrets: []
+
+images:
+  backend:
+    repository: ghcr.io/laflut3/let-note-backend
+    tag: latest
+  frontend:
+    repository: ghcr.io/laflut3/let-note-frontend
+    tag: latest
+  postgres:
+    repository: postgres
+    tag: "18"
+    digest: sha256:78481659c47e862334611ccdaf7c369c986b3046da9857112f3b309114a65fb4
+  seaweedfs:
+    repository: chrislusf/seaweedfs
+    tag: "4.28"
+  busybox:
+    repository: busybox
+    tag: "1.36"
+
+config:
+  backend:
+    PS_BDD_SERVER: postgres
+    PS_BDD_PORT: "5432"
+    S3_ENDPOINT: http://seaweed-s3:8333
+    S3_REGION: us-east-1
+    S3_BUCKET: let-note-files
+  frontend:
+    APP_ENV: dev
+  app:
+    name: let-note
+    env: dev
+    routes:
+      frontendBaseUrl: http://dev.app.local
+      backendBaseUrl: http://dev.app.local/api
+      healthPath: /api/health
+      auth:
+        loginPath: /api/auth/login
+        logoutPath: /api/auth/logout
+    ingress:
+      host: dev.app.local
+      frontendPath: /
+      apiPath: /api
+    cors:
+      allowedOrigins:
+        - http://localhost:5173
+        - http://127.0.0.1:5173
+        - http://dev.app.local
+
+secrets:
+  create: true
+  postgres:
+    password: CHANGE_ME_STRONG_DB_PASSWORD_DEV
+  s3:
+    accessKey: CHANGE_ME_S3_ACCESS_KEY
+    secretKey: CHANGE_ME_S3_SECRET_KEY
+
+persistence:
+  storageClassName: local-path
+  postgres:
+    size: 2Gi
+  seaweedfs:
+    size: 10Gi
+
+postgres:
+  database: let_note_dev
+  user: let_note
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+
+migrations:
+  enabled: true
+  backoffLimit: 3
+  activeDeadlineSeconds: 600
+  ttlSecondsAfterFinished: 86400
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+
+backend:
+  replicas: 1
+  revisionHistoryLimit: 1
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 4
+    targetCPUUtilizationPercentage: 70
+  podDisruptionBudget:
+    enabled: false
+    minAvailable: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 0
+  vault:
+    addr: http://vault.vault.svc.cluster.local:8200
+    kvMount: secret
+    secretPath: dev/let-note
+    authMethod: kubernetes
+    k8sAuthMount: kubernetes
+    k8sRole: let-note-dev
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+
+frontend:
+  replicas: 1
+  revisionHistoryLimit: 1
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 4
+    targetCPUUtilizationPercentage: 70
+  podDisruptionBudget:
+    enabled: false
+    minAvailable: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 0
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+
+seaweedfs:
+  revisionHistoryLimit: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 0
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 150m
+      memory: 256Mi
+  s3:
+    identityName: let-note
+    accessKey: seaweedfs
+    secretKey: seaweedfs
+
+ingress:
+  enabled: true
+  name: app-ingress
+  className: traefik
+  host: dev.app.local
+  tls:
+    secretName: app-tls
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure

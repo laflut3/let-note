@@ -59,7 +59,7 @@ docker compose up -d --build
 
 ## Migrations SQL
 
-Les migrations dans `infrastructure/BDD/migration` sont executees automatiquement au demarrage par le service `db-migrate`.
+Les migrations dans `infrastructure/deploiement-kube/charts/let-note/migrations` sont executees automatiquement au demarrage par le service `db-migrate`.
 
 Commandes utiles:
 
@@ -71,7 +71,7 @@ docker compose up db-migrate
 docker compose run --rm db-migrate
 
 # voir les scripts de migration detectes
-ls -1 ../BDD/migration/*.up.sql
+ls -1 ../deploiement-kube/charts/let-note/migrations/*.up.sql
 
 # verifier les logs de migration
 docker compose logs --tail=200 db-migrate

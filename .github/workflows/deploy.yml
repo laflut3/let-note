@@ -1,0 +1,105 @@
+name: Promote release
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_environment:
+        description: Environment to promote
+        required: true
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: promote-${{ inputs.target_environment }}
+  cancel-in-progress: false
+
+env:
+  CONTAINER_REGISTRY: ghcr.io
+  BACKEND_IMAGE_NAME: laflut3/let-note-backend
+  FRONTEND_IMAGE_NAME: laflut3/let-note-frontend
+
+jobs:
+  promote:
+    name: Promote ${{ github.ref_name }} to ${{ inputs.target_environment }}
+    runs-on: ubuntu-24.04
+    environment: ${{ inputs.target_environment }}
+    steps:
+      - name: Validate tag selection
+        id: meta
+        uses: actions/github-script@v8
+        with:
+          script: |
+            if (context.ref.startsWith("refs/tags/") === false) {
+              core.setFailed("Run this workflow from a release Git tag.");
+              return;
+            }
+
+            const version = context.ref.replace(/^refs\/tags\/v?/, "");
+            const semver = /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)([-+][0-9A-Za-z.-]+)?$/;
+            if (!semver.test(version)) {
+              core.setFailed(`Invalid release version '${version}'.`);
+              return;
+            }
+
+            core.setOutput("version", version);
+            core.setOutput("image_tag", version);
+
+      - name: Checkout main
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          ref: main
+          token: ${{ secrets.GITOPS_TOKEN }}
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4
+        with:
+          registry: ${{ env.CONTAINER_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify release images
+        env:
+          IMAGE_TAG: ${{ steps.meta.outputs.image_tag }}
+        run: |
+          docker buildx imagetools inspect "${CONTAINER_REGISTRY}/${BACKEND_IMAGE_NAME}:${IMAGE_TAG}"
+          docker buildx imagetools inspect "${CONTAINER_REGISTRY}/${FRONTEND_IMAGE_NAME}:${IMAGE_TAG}"
+
+      - name: Update desired GitOps state
+        env:
+          DEPLOY_ENV: ${{ inputs.target_environment }}
+          IMAGE_TAG: ${{ steps.meta.outputs.image_tag }}
+        run: |
+          values_file="infrastructure/deploiement-kube/charts/let-note/environments/${DEPLOY_ENV}.yaml"
+          yq -i '.images.backend.tag = strenv(IMAGE_TAG)' "${values_file}"
+          yq -i '.images.frontend.tag = strenv(IMAGE_TAG)' "${values_file}"
+
+      - name: Open promotion pull request
+        env:
+          GH_TOKEN: ${{ secrets.GITOPS_TOKEN }}
+          DEPLOY_ENV: ${{ inputs.target_environment }}
+          IMAGE_TAG: ${{ steps.meta.outputs.image_tag }}
+        run: |
+          branch="gitops/promote-${DEPLOY_ENV}-${IMAGE_TAG}-${GITHUB_RUN_ID}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "${branch}"
+          git add "infrastructure/deploiement-kube/charts/let-note/environments/${DEPLOY_ENV}.yaml"
+
+          if git diff --cached --quiet; then
+            echo "The selected release is already the desired state for ${DEPLOY_ENV}."
+            exit 0
+          fi
+
+          git commit -m "deploy(${DEPLOY_ENV}): promote ${IMAGE_TAG}"
+          git push origin "${branch}"
+          gh pr create \
+            --base main \
+            --head "${branch}" \
+            --title "deploy(${DEPLOY_ENV}): promote ${IMAGE_TAG}" \
+            --body "Promotes Let-Note ${IMAGE_TAG} to ${DEPLOY_ENV}. Argo CD will synchronize after merge."

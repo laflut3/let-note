@@ -1,0 +1,61 @@
+global:
+  environment: staging
+
+images:
+  backend:
+    tag: 1.0.2
+  frontend:
+    tag: 1.0.2
+
+config:
+  frontend:
+    APP_ENV: staging
+  app:
+    env: staging
+    routes:
+      frontendBaseUrl: http://staging.app.local
+      backendBaseUrl: http://staging.app.local/api
+    ingress:
+      host: staging.app.local
+    cors:
+      allowedOrigins:
+        - http://localhost:5173
+        - http://127.0.0.1:5173
+        - http://staging.app.local
+
+postgres:
+  database: let_note_staging
+
+backend:
+  replicas: 1
+  vault:
+    secretPath: staging/let-note
+    k8sRole: let-note-staging
+  strategy:
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 0
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+
+frontend:
+  replicas: 1
+  strategy:
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 0
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+
+ingress:
+  host: staging.app.local

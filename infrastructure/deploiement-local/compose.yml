@@ -27,14 +27,25 @@ services:
       PS_BDD_DB: ${PS_BDD_DB:-let_note_dev}
       PS_BDD_USER: ${PS_BDD_USER:-let_note}
     volumes:
-      - ../BDD/migration:/migrations:ro
+      - ../deploiement-kube/charts/let-note/migrations:/migrations:ro
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
         set -eu
+        psql -h postgres -U "$${PS_BDD_USER}" -d "$${PS_BDD_DB}" -v ON_ERROR_STOP=1 \
+          -c "CREATE TABLE IF NOT EXISTS schema_migrations (version TEXT PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW());"
         for f in $(find /migrations -maxdepth 1 -type f -name "*.up.sql" | sort); do
-          echo "Applying migration: $$f"
+          migration_name="$$(basename "$${f}")"
+          applied="$$(psql -h postgres -U "$${PS_BDD_USER}" -d "$${PS_BDD_DB}" -tAc "SELECT 1 FROM schema_migrations WHERE version = '$${migration_name}'")"
+          if [ "$${applied}" = "1" ]; then
+            echo "Skipping migration: $${migration_name}"
+            continue
+          fi
+
+          echo "Applying migration: $${migration_name}"
           psql -h postgres -U "$${PS_BDD_USER}" -d "$${PS_BDD_DB}" -v ON_ERROR_STOP=1 -f "$${f}"
+          psql -h postgres -U "$${PS_BDD_USER}" -d "$${PS_BDD_DB}" -v ON_ERROR_STOP=1 \
+            -c "INSERT INTO schema_migrations(version) VALUES ('$${migration_name}');"
         done
         echo "Migrations applied"
 

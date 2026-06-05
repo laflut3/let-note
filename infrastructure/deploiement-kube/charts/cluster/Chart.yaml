@@ -1,0 +1,5 @@
+apiVersion: v2
+name: let-note-cluster
+description: Cluster-level resources for Let-Note environments
+type: application
+version: 0.1.0

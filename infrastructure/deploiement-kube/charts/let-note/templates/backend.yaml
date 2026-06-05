@@ -1,0 +1,113 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: {{ include "let-note.namespace" . }}
+  labels:
+    app: backend
+    app.kubernetes.io/name: backend
+    app.kubernetes.io/component: backend
+    {{- include "let-note.commonLabels" . | nindent 4 }}
+spec:
+  {{- if not .Values.backend.autoscaling.enabled }}
+  replicas: {{ .Values.backend.replicas }}
+  {{- end }}
+  revisionHistoryLimit: {{ .Values.backend.revisionHistoryLimit }}
+  strategy:
+    {{- toYaml .Values.backend.strategy | nindent 4 }}
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+        app.kubernetes.io/name: backend
+        app.kubernetes.io/component: backend
+        {{- include "let-note.commonLabels" . | nindent 8 }}
+      annotations:
+        let-note.io/deploy-id: {{ .Values.global.deployId | quote }}
+    spec:
+      serviceAccountName: let-note-backend
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.global.architecture }}
+      nodeSelector:
+        kubernetes.io/arch: {{ .Values.global.architecture | quote }}
+      {{- end }}
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: backend
+        image: {{ include "let-note.image" .Values.images.backend | quote }}
+        securityContext:
+          runAsUser: 65532
+          runAsGroup: 65532
+          runAsNonRoot: true
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        ports:
+        - containerPort: 8080
+        envFrom:
+        - configMapRef:
+            name: backend-config
+        env:
+        - name: APP_CONFIG_PATH
+          value: /etc/let-note/app-config.yaml
+        - name: APP_HOST
+          value: 0.0.0.0
+        - name: VAULT_ADDR
+          value: {{ .Values.backend.vault.addr | quote }}
+        - name: VAULT_KV_MOUNT
+          value: {{ .Values.backend.vault.kvMount | quote }}
+        - name: VAULT_SECRET_PATH
+          value: {{ .Values.backend.vault.secretPath | quote }}
+        - name: VAULT_AUTH_METHOD
+          value: {{ .Values.backend.vault.authMethod | quote }}
+        - name: VAULT_K8S_AUTH_MOUNT
+          value: {{ .Values.backend.vault.k8sAuthMount | quote }}
+        - name: VAULT_K8S_ROLE
+          value: {{ .Values.backend.vault.k8sRole | quote }}
+        volumeMounts:
+        - name: app-config-volume
+          mountPath: /etc/let-note
+          readOnly: true
+        readinessProbe:
+          tcpSocket:
+            port: 8080
+          initialDelaySeconds: 20
+          periodSeconds: 10
+        livenessProbe:
+          tcpSocket:
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 15
+        resources:
+          {{- toYaml .Values.backend.resources | nindent 10 }}
+      volumes:
+      - name: app-config-volume
+        configMap:
+          name: app-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  namespace: {{ include "let-note.namespace" . }}
+  labels:
+    app: backend
+    app.kubernetes.io/name: backend
+    app.kubernetes.io/component: backend
+    {{- include "let-note.commonLabels" . | nindent 4 }}
+spec:
+  selector:
+    app: backend
+  ports:
+  - port: 80
+    targetPort: 8080
