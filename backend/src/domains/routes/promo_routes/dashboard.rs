@@ -29,22 +29,6 @@ async fn get_promo_dashboard(
   }
 }
 
-async fn list_ues_for_promo(
-  State(db): State<PgPool>,
-  headers: HeaderMap,
-  Path(promo_id): Path<Uuid>,
-) -> impl IntoResponse {
-  let auth = match middleware::extract_auth_context(&headers, &db).await {
-    Ok(value) => value,
-    Err(error) => return error.into_response(),
-  };
-
-  match promo_service::list_ues_for_promo(&db, &auth, promo_id).await {
-    Ok(data) => axum::Json(data).into_response(),
-    Err(error) => error.into_response(),
-  }
-}
-
 async fn get_promo_ical(
   State(db): State<PgPool>,
   headers: HeaderMap,

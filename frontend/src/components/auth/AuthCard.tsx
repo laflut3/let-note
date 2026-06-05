@@ -14,6 +14,7 @@ type AuthCardProps = {
   onFieldChange: (field: keyof AuthFields, value: string) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => Promise<void>;
   onToggleMode: () => void;
+  onForgotPassword: () => Promise<void>;
 };
 
 export function AuthCard({
@@ -24,6 +25,7 @@ export function AuthCard({
   onFieldChange,
   onSubmit,
   onToggleMode,
+  onForgotPassword,
 }: AuthCardProps) {
   const isLogin = mode === 'login';
   const isRegister = !isLogin;
@@ -191,6 +193,16 @@ export function AuthCard({
           >
             {isLogin ? 'Se connecter' : 'Creer mon compte'}
           </Button>
+
+          {isLogin && (
+            <button
+              type="button"
+              onClick={() => void onForgotPassword()}
+              className="mx-auto block w-full max-w-[620px] text-center text-sm text-[var(--auth-muted-text)] underline underline-offset-4 transition hover:text-white"
+            >
+              Mot de passe oublie ?
+            </button>
+          )}
 
           {submitState.message && (
             <p

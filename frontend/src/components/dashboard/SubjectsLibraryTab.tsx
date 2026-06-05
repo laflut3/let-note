@@ -9,7 +9,6 @@ type SubjectsLibraryTabProps = {
 type SubjectActivity = {
   code: string;
   nom: string;
-  semestre: number | null;
   referentNom: string;
   referentEmail: string;
   resources: PromotionDashboardPayload['matieres'][number]['resources'];
@@ -23,7 +22,6 @@ function formatDate(ts: number): string {
 
 export function SubjectsLibraryTab({ dashboard }: SubjectsLibraryTabProps) {
   const [query, setQuery] = useState('');
-  const [semesterFilter, setSemesterFilter] = useState('all');
   const [resourceFilter, setResourceFilter] = useState<'all' | 'with' | 'without'>('all');
   const [sortBy, setSortBy] = useState<'recent' | 'alpha'>('recent');
 
@@ -37,7 +35,6 @@ export function SubjectsLibraryTab({ dashboard }: SubjectsLibraryTabProps) {
       return {
         code: matiere.code_matiere,
         nom: matiere.nom_matiere,
-        semestre: matiere.ue_semestre,
         referentNom: [matiere.referent_prof_prenom, matiere.referent_prof_nom]
           .filter(Boolean)
           .join(' '),
@@ -48,18 +45,10 @@ export function SubjectsLibraryTab({ dashboard }: SubjectsLibraryTabProps) {
     });
   }, [dashboard?.matieres]);
 
-  const semesters = useMemo(() => {
-    return Array.from(
-      new Set(subjects.map((item) => item.semestre).filter((item): item is number => item !== null))
-    ).sort((a, b) => a - b);
-  }, [subjects]);
-
   const filtered = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
-    const selectedSemester = semesterFilter === 'all' ? null : Number(semesterFilter);
 
     const items = subjects.filter((item) => {
-      if (selectedSemester !== null && item.semestre !== selectedSemester) return false;
       if (resourceFilter === 'with' && item.resources.length === 0) return false;
       if (resourceFilter === 'without' && item.resources.length > 0) return false;
 
@@ -78,25 +67,19 @@ export function SubjectsLibraryTab({ dashboard }: SubjectsLibraryTabProps) {
     }
 
     return items.sort((a, b) => a.nom.localeCompare(b.nom, 'fr'));
-  }, [subjects, query, semesterFilter, resourceFilter, sortBy]);
+  }, [subjects, query, resourceFilter, sortBy]);
 
   const groups = useMemo(() => {
     const map = new Map<string, SubjectActivity[]>();
 
     for (const item of filtered) {
-      const key = item.semestre === null ? 'Sans semestre' : `Semestre ${item.semestre}`;
+      const key = 'Matieres';
       const current = map.get(key) ?? [];
       current.push(item);
       map.set(key, current);
     }
 
-    return Array.from(map.entries()).sort((a, b) => {
-      if (a[0] === 'Sans semestre') return 1;
-      if (b[0] === 'Sans semestre') return -1;
-      const aSem = Number(a[0].replace('Semestre ', ''));
-      const bSem = Number(b[0].replace('Semestre ', ''));
-      return aSem - bSem;
-    });
+    return Array.from(map.entries());
   }, [filtered]);
 
   return (
@@ -118,19 +101,6 @@ export function SubjectsLibraryTab({ dashboard }: SubjectsLibraryTabProps) {
             />
           </div>
         </label>
-
-        <select
-          value={semesterFilter}
-          onChange={(event) => setSemesterFilter(event.target.value)}
-          className="h-10 rounded-xl border border-[var(--surface-border)] bg-[var(--surface-2)] px-3 text-sm text-foreground"
-        >
-          <option value="all">Tous les semestres</option>
-          {semesters.map((semester) => (
-            <option key={semester} value={String(semester)}>
-              Semestre {semester}
-            </option>
-          ))}
-        </select>
 
         <div className="grid grid-cols-2 gap-2">
           <select

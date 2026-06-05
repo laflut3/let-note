@@ -58,10 +58,6 @@ export type PromotionScope = {
 export type MatiereDashboardItem = {
   code_matiere: string;
   nom_matiere: string;
-  ue_id: string | null;
-  ue_nom: string | null;
-  ue_semestre: number | null;
-  coef_ue: number | null;
   referent_prof_id: string | null;
   referent_prof_nom: string | null;
   referent_prof_prenom: string | null;
@@ -101,20 +97,6 @@ export type PromotionDashboardPayload = {
   matieres: MatiereDashboardItem[];
   professeurs: ProfesseurDashboardItem[];
   devoirs: DevoirItem[];
-  resultats: {
-    id: string;
-    id_mat: string;
-    nom_matiere: string;
-    id_etu: string;
-    etu_numero: string | null;
-    etu_nom: string;
-    etu_prenom: string;
-    libelle: string;
-    session: number | null;
-    note: number;
-    coef: number;
-    updated_at: string;
-  }[];
 };
 
 export type DevoirItem = {
@@ -174,27 +156,6 @@ export type AdminMatiereResource = {
   created_at: string;
 };
 
-export type UeItem = {
-  id: string;
-  nom_ue: string;
-  semestre: number;
-};
-
-export type UeCatalogItem = {
-  id: string;
-  nom_ue: string;
-  semestre: number;
-  linked_to_promo: boolean;
-};
-
-export type UePromotionLink = {
-  id: string;
-  nom: string;
-  annee_arrivee: number;
-  annee_depart: number;
-  linked: boolean;
-};
-
 export type AuthMePayload = {
   email: string;
   roles: string[];
@@ -237,6 +198,47 @@ export async function logoutRequest(): Promise<Response> {
 
 export async function authMeRequest(): Promise<Response> {
   return jsonRequest('/auth/me', { method: 'GET' });
+}
+
+export async function verifyEmailRequest(token: string): Promise<Response> {
+  return jsonRequest('/auth/verify-email', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token }),
+  });
+}
+
+export async function forgotPasswordRequest(email: string): Promise<Response> {
+  return jsonRequest('/auth/forgot-password', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email }),
+  });
+}
+
+export async function resetPasswordRequest(payload: {
+  token: string;
+  password: string;
+  confirm_password: string;
+  understood: boolean;
+}): Promise<Response> {
+  return jsonRequest('/auth/reset-password', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function changePasswordRequest(payload: {
+  current_password: string;
+  new_password: string;
+  confirm_password: string;
+}): Promise<Response> {
+  return jsonRequest('/auth/change-password', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function getMyProfileRequest(): Promise<Response> {
@@ -474,8 +476,6 @@ export async function adminLinkMatierePromotionRequest(
   payload: {
     promo_id: string;
     nom_matiere?: string;
-    ue_id: string;
-    coef_ue?: number;
     referent_prof_id: string;
   }
 ): Promise<Response> {
@@ -540,22 +540,6 @@ export async function getPromotionIcalRequest(promoId: string): Promise<Response
   return jsonRequest(`/promotions/${promoId}/ical`, { method: 'GET' });
 }
 
-export async function listUesRequest(promoId: string): Promise<Response> {
-  return jsonRequest(`/promotions/${promoId}/ues`, { method: 'GET' });
-}
-
-export async function listAllUesRequest(): Promise<Response> {
-  return jsonRequest('/ues', { method: 'GET' });
-}
-
-export async function listUePromotionsRequest(ueId: string): Promise<Response> {
-  return jsonRequest(`/ues/${ueId}/promotions`, { method: 'GET' });
-}
-
-export async function listUeCatalogRequest(promoId: string): Promise<Response> {
-  return jsonRequest(`/promotions/${promoId}/ues/catalog`, { method: 'GET' });
-}
-
 export async function updatePromotionIcalRequest(
   promoId: string,
   icalUrl: string
@@ -574,8 +558,6 @@ export async function addMatiereRequest(
   payload: {
     code_matiere: string;
     nom_matiere: string;
-    ue_id: string;
-    coef_ue?: number;
     referent_prof_id: string;
   }
 ): Promise<Response> {
@@ -608,106 +590,6 @@ export async function setReferentRequest(
 ): Promise<Response> {
   return jsonRequest(`/promotions/${promoId}/matieres/${matiereId}/referent/${profId}`, {
     method: 'PUT',
-  });
-}
-
-export async function createUeRequest(
-  promoId: string,
-  payload: { nom_ue: string; semestre: number }
-): Promise<Response> {
-  return jsonRequest(`/promotions/${promoId}/ues`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload),
-  });
-}
-
-export async function createCatalogUeRequest(payload: {
-  nom_ue: string;
-  semestre: number;
-}): Promise<Response> {
-  return jsonRequest('/ues', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload),
-  });
-}
-
-export async function updateUeRequest(
-  promoId: string,
-  ueId: string,
-  payload: { nom_ue?: string; semestre: number }
-): Promise<Response> {
-  return jsonRequest(`/promotions/${promoId}/ues/${ueId}`, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload),
-  });
-}
-
-export async function updateCatalogUeRequest(
-  ueId: string,
-  payload: { nom_ue?: string; semestre: number }
-): Promise<Response> {
-  return jsonRequest(`/ues/${ueId}`, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload),
-  });
-}
-
-export async function deleteUeRequest(promoId: string, ueId: string): Promise<Response> {
-  return jsonRequest(`/promotions/${promoId}/ues/${ueId}`, {
-    method: 'DELETE',
-  });
-}
-
-export async function deleteCatalogUeRequest(ueId: string): Promise<Response> {
-  return jsonRequest(`/ues/${ueId}`, {
-    method: 'DELETE',
-  });
-}
-
-export async function attachUeToPromotionRequest(promoId: string, ueId: string): Promise<Response> {
-  return jsonRequest(`/promotions/${promoId}/ues/${ueId}/attach`, {
-    method: 'POST',
-  });
-}
-
-export async function detachUeFromPromotionRequest(
-  promoId: string,
-  ueId: string
-): Promise<Response> {
-  return jsonRequest(`/promotions/${promoId}/ues/${ueId}/attach`, {
-    method: 'DELETE',
-  });
-}
-
-export async function createResultatRequest(
-  promoId: string,
-  matiereId: string,
-  payload: {
-    etudiant_id?: string;
-    libelle: string;
-    session?: number;
-    note: number;
-    coef?: number;
-  }
-): Promise<Response> {
-  return jsonRequest(`/promotions/${promoId}/matieres/${matiereId}/resultats`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload),
   });
 }
 
@@ -754,32 +636,4 @@ export async function updateDevoirRequest(
 
 export async function deleteDevoirRequest(promoId: string, devoirId: string): Promise<Response> {
   return jsonRequest(`/promotions/${promoId}/devoirs/${devoirId}`, { method: 'DELETE' });
-}
-
-export async function updateResultatRequest(
-  promoId: string,
-  resultatId: string,
-  payload: {
-    libelle?: string;
-    session?: number;
-    note?: number;
-    coef?: number;
-  }
-): Promise<Response> {
-  return jsonRequest(`/promotions/${promoId}/resultats/${resultatId}`, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload),
-  });
-}
-
-export async function deleteResultatRequest(
-  promoId: string,
-  resultatId: string
-): Promise<Response> {
-  return jsonRequest(`/promotions/${promoId}/resultats/${resultatId}`, {
-    method: 'DELETE',
-  });
 }

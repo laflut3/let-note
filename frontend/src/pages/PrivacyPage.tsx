@@ -5,7 +5,7 @@ export function PrivacyPage() {
         <h1 className="text-2xl font-semibold">Politique de protection des donnees</h1>
         <p className="mt-4 text-sm text-muted-foreground">
           Let-Note traite des donnees personnelles necessaires au fonctionnement du service
-          (identite, roles, promotions, notes, ressources pedagogiques).
+          (identite, roles, promotions, ressources pedagogiques).
         </p>
         <ul className="mt-4 list-disc space-y-2 pl-5 text-sm text-muted-foreground">
           <li>Les donnees sont utilisees uniquement pour les fonctionnalites pedagogiques.</li>

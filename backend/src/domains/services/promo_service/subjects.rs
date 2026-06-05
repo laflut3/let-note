@@ -5,15 +5,11 @@ pub async fn add_matiere_to_promo(
 ) -> Result<MutationAck, ApiError> {
   let code = payload.code_matiere.trim().to_uppercase();
   let nom = payload.nom_matiere.trim().to_string();
-  let coef = payload.coef_ue.unwrap_or(1.0);
 
   if code.is_empty() || nom.is_empty() {
     return Err(ApiError::bad_request(
       "code_matiere and nom_matiere are required",
     ));
-  }
-  if coef <= 0.0 {
-    return Err(ApiError::bad_request("coef_ue must be positive"));
   }
 
   let annee_arrivee = sqlx::query_scalar::<_, i32>(
@@ -28,24 +24,6 @@ pub async fn add_matiere_to_promo(
   .await
   .map_err(map_schema_error("unable to create subject"))?
   .ok_or_else(|| ApiError::bad_request("promotion not found"))?;
-
-  let ue_exists_for_promo = sqlx::query_scalar::<_, i64>(
-    r#"
-    SELECT COUNT(*)
-    FROM promo_ue
-    WHERE id_ue = $1 AND id_promo = $2
-    "#,
-  )
-  .bind(payload.ue_id)
-  .bind(promo_id)
-  .fetch_one(db)
-  .await
-  .map_err(map_schema_error("unable to validate UE"))?
-    > 0;
-
-  if !ue_exists_for_promo {
-    return Err(ApiError::bad_request("UE is not linked to this promotion"));
-  }
 
   let prof_exists = sqlx::query_scalar::<_, i64>(
     r#"
@@ -102,22 +80,6 @@ pub async fn add_matiere_to_promo(
   .execute(&mut *tx)
   .await
   .map_err(map_schema_error("unable to attach subject"))?;
-
-  sqlx::query(
-    r#"
-    INSERT INTO matiere_ue (id_promo, id_ue, id_matiere, coef_ue)
-    VALUES ($1, $2, $3, $4)
-    ON CONFLICT (id_promo, id_matiere)
-    DO UPDATE SET id_ue = EXCLUDED.id_ue, coef_ue = EXCLUDED.coef_ue
-    "#,
-  )
-  .bind(promo_id)
-  .bind(payload.ue_id)
-  .bind(&code)
-  .bind(coef)
-  .execute(&mut *tx)
-  .await
-  .map_err(map_schema_error("unable to link subject to UE"))?;
 
   sqlx::query(
     r#"

@@ -13,15 +13,7 @@ pub async fn list_matieres(db: &PgPool) -> Result<Vec<AdminMatiereSummary>, ApiE
         ARRAY_AGG(
           DISTINCT CASE
             WHEN p.id IS NULL THEN NULL
-            WHEN u.id IS NULL THEN FORMAT('%s (%s-%s)', p.nom, p.annee_arrivee, p.annee_depart)
-            ELSE FORMAT(
-              '%s (%s-%s) - %s semestre %s',
-              p.nom,
-              p.annee_arrivee,
-              p.annee_depart,
-              u.nom_ue,
-              u.semestre
-            )
+            ELSE FORMAT('%s (%s-%s)', p.nom, p.annee_arrivee, p.annee_depart)
           END
         ) FILTER (WHERE p.id IS NOT NULL),
         ARRAY[]::text[]
@@ -29,8 +21,6 @@ pub async fn list_matieres(db: &PgPool) -> Result<Vec<AdminMatiereSummary>, ApiE
     FROM matiere m
     LEFT JOIN mat_promo mp ON mp.id_mat = m.code_matiere
     LEFT JOIN promotion p ON p.id = mp.id_promo
-    LEFT JOIN matiere_ue mu ON mu.id_promo = mp.id_promo AND mu.id_matiere = m.code_matiere
-    LEFT JOIN ue u ON u.id = mu.id_ue
     GROUP BY m.code_matiere, m.nom_matiere
     ORDER BY m.nom_matiere, m.code_matiere
     "#,
@@ -226,10 +216,6 @@ pub async fn link_matiere_to_all_promotions(
   if code.is_empty() {
     return Err(ApiError::bad_request("code_matiere is required"));
   }
-  if payload.coef_ue.unwrap_or(1.0) <= 0.0 {
-    return Err(ApiError::bad_request("coef_ue must be positive"));
-  }
-
   let prof_exists = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM professeur WHERE id = $1")
     .bind(payload.referent_prof_id)
     .fetch_one(db)
@@ -238,16 +224,6 @@ pub async fn link_matiere_to_all_promotions(
     > 0;
   if !prof_exists {
     return Err(ApiError::bad_request("referent professor does not exist"));
-  }
-
-  let ue_exists = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM ue WHERE id = $1")
-    .bind(payload.ue_id)
-    .fetch_one(db)
-    .await
-    .map_err(map_schema_error("unable to validate UE"))?
-    > 0;
-  if !ue_exists {
-    return Err(ApiError::bad_request("UE does not exist"));
   }
 
   let promo_ids = sqlx::query_scalar::<_, Uuid>("SELECT id FROM promotion")
@@ -290,42 +266,6 @@ pub async fn link_matiere_to_all_promotions(
   .map_err(map_schema_error("unable to upsert subject"))?;
 
   for promo_id in promo_ids {
-    let already_linked_to_other_ue = sqlx::query_scalar::<_, bool>(
-      r#"
-      SELECT EXISTS (
-        SELECT 1
-        FROM matiere_ue
-        WHERE id_promo = $1
-          AND id_matiere = $2
-          AND id_ue <> $3
-      )
-      "#,
-    )
-    .bind(promo_id)
-    .bind(&code)
-    .bind(payload.ue_id)
-    .fetch_one(&mut *tx)
-    .await
-    .map_err(map_schema_error("unable to validate existing subject links"))?;
-    if already_linked_to_other_ue {
-      return Err(ApiError::conflict(
-        "subject is already linked to another UE for this promotion",
-      ));
-    }
-
-    sqlx::query(
-      r#"
-      INSERT INTO promo_ue (id_promo, id_ue)
-      VALUES ($1, $2)
-      ON CONFLICT DO NOTHING
-      "#,
-    )
-    .bind(promo_id)
-    .bind(payload.ue_id)
-    .execute(&mut *tx)
-    .await
-    .map_err(map_schema_error("unable to link UE to promotion"))?;
-
     sqlx::query(
       r#"
       INSERT INTO mat_promo (id_mat, id_promo)
@@ -338,22 +278,6 @@ pub async fn link_matiere_to_all_promotions(
     .execute(&mut *tx)
     .await
     .map_err(map_schema_error("unable to link subject to promotion"))?;
-
-    sqlx::query(
-      r#"
-      INSERT INTO matiere_ue (id_promo, id_ue, id_matiere, coef_ue)
-      VALUES ($1, $2, $3, $4)
-      ON CONFLICT (id_promo, id_matiere)
-      DO UPDATE SET id_ue = EXCLUDED.id_ue, coef_ue = EXCLUDED.coef_ue
-      "#,
-    )
-    .bind(promo_id)
-    .bind(payload.ue_id)
-    .bind(&code)
-    .bind(payload.coef_ue.unwrap_or(1.0))
-    .execute(&mut *tx)
-    .await
-    .map_err(map_schema_error("unable to link subject to UE"))?;
 
     sqlx::query(
       r#"
@@ -402,10 +326,6 @@ pub async fn link_matiere_to_promotion(
   if code.is_empty() {
     return Err(ApiError::bad_request("code_matiere is required"));
   }
-  if payload.coef_ue.unwrap_or(1.0) <= 0.0 {
-    return Err(ApiError::bad_request("coef_ue must be positive"));
-  }
-
   let promo_exists = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM promotion WHERE id = $1")
     .bind(payload.promo_id)
     .fetch_one(db)
@@ -424,39 +344,6 @@ pub async fn link_matiere_to_promotion(
     > 0;
   if !prof_exists {
     return Err(ApiError::bad_request("referent professor does not exist"));
-  }
-
-  let ue_exists = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM ue WHERE id = $1")
-    .bind(payload.ue_id)
-    .fetch_one(db)
-    .await
-    .map_err(map_schema_error("unable to validate UE"))?
-    > 0;
-  if !ue_exists {
-    return Err(ApiError::bad_request("UE does not exist"));
-  }
-
-  let already_linked_to_other_ue = sqlx::query_scalar::<_, bool>(
-    r#"
-    SELECT EXISTS (
-      SELECT 1
-      FROM matiere_ue
-      WHERE id_promo = $1
-        AND id_matiere = $2
-        AND id_ue <> $3
-    )
-    "#,
-  )
-  .bind(payload.promo_id)
-  .bind(&code)
-  .bind(payload.ue_id)
-  .fetch_one(db)
-  .await
-  .map_err(map_schema_error("unable to validate existing subject links"))?;
-  if already_linked_to_other_ue {
-    return Err(ApiError::conflict(
-      "subject is already linked to another UE for this promotion",
-    ));
   }
 
   let provided_nom = payload
@@ -491,19 +378,6 @@ pub async fn link_matiere_to_promotion(
 
   sqlx::query(
     r#"
-    INSERT INTO promo_ue (id_promo, id_ue)
-    VALUES ($1, $2)
-    ON CONFLICT DO NOTHING
-    "#,
-  )
-  .bind(payload.promo_id)
-  .bind(payload.ue_id)
-  .execute(&mut *tx)
-  .await
-  .map_err(map_schema_error("unable to link UE to promotion"))?;
-
-  sqlx::query(
-    r#"
     INSERT INTO mat_promo (id_mat, id_promo)
     VALUES ($1, $2)
     ON CONFLICT DO NOTHING
@@ -514,22 +388,6 @@ pub async fn link_matiere_to_promotion(
   .execute(&mut *tx)
   .await
   .map_err(map_schema_error("unable to link subject to promotion"))?;
-
-  sqlx::query(
-    r#"
-    INSERT INTO matiere_ue (id_promo, id_ue, id_matiere, coef_ue)
-    VALUES ($1, $2, $3, $4)
-    ON CONFLICT (id_promo, id_matiere)
-    DO UPDATE SET id_ue = EXCLUDED.id_ue, coef_ue = EXCLUDED.coef_ue
-    "#,
-  )
-  .bind(payload.promo_id)
-  .bind(payload.ue_id)
-  .bind(&code)
-  .bind(payload.coef_ue.unwrap_or(1.0))
-  .execute(&mut *tx)
-  .await
-  .map_err(map_schema_error("unable to link subject to UE"))?;
 
   sqlx::query(
     r#"
@@ -582,24 +440,6 @@ pub async fn unlink_matiere_from_promotion(
     .begin()
     .await
     .map_err(|_| ApiError::internal("unable to unlink subject from promotion"))?;
-
-  let removed = sqlx::query(
-    r#"
-    DELETE FROM matiere_ue
-    WHERE id_promo = $1 AND id_matiere = $2
-    "#,
-  )
-  .bind(promo_id)
-  .bind(&code)
-  .execute(&mut *tx)
-  .await
-  .map_err(map_schema_error("unable to unlink subject from UE"))?;
-
-  if removed.rows_affected() == 0 {
-    return Err(ApiError::bad_request(
-      "subject is not linked to this promotion",
-    ));
-  }
 
   sqlx::query(
     r#"

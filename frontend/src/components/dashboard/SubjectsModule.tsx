@@ -10,7 +10,6 @@ type SubjectsModuleProps = {
 type SubjectPreview = {
   code: string;
   nom: string;
-  semestre: number | null;
   resourcesCount: number;
   latestResourceAt: number;
 };
@@ -27,7 +26,6 @@ export function SubjectsModule({ dashboard, onOpenAllMatieres }: SubjectsModuleP
         return {
           code: matiere.code_matiere,
           nom: matiere.nom_matiere,
-          semestre: matiere.ue_semestre,
           resourcesCount: (matiere.resources ?? []).length,
           latestResourceAt,
         };
@@ -69,9 +67,6 @@ export function SubjectsModule({ dashboard, onOpenAllMatieres }: SubjectsModuleP
                 <p className="text-sm font-semibold text-foreground">
                   {matiere.nom} <span className="text-muted-foreground">({matiere.code})</span>
                 </p>
-                <span className="rounded-md border border-[var(--surface-border)] px-2 py-0.5 text-xs text-muted-foreground">
-                  {matiere.semestre ? `S${matiere.semestre}` : 'Sans semestre'}
-                </span>
               </div>
               <p className="mt-1 text-xs text-muted-foreground">
                 {matiere.resourcesCount} fichier(s)

@@ -197,6 +197,7 @@ spec:
         - s3
         - -filer=seaweed-filer:8888
         - -port=8333
+        - -iam=false
         - -config=/etc/seaweedfs/s3.conf
         ports:
         - containerPort: 8333

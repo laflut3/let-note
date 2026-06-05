@@ -15,6 +15,14 @@ CREATE TABLE IF NOT EXISTS etudiant (
   email TEXT NOT NULL UNIQUE,
   date_naissance DATE NOT NULL,
   mot_de_passe TEXT NOT NULL,
+  email_verified BOOLEAN NOT NULL DEFAULT FALSE,
+  email_verification_token_hash TEXT,
+  email_verification_expires_at TIMESTAMPTZ,
+  failed_login_attempts INTEGER NOT NULL DEFAULT 0,
+  locked_until TIMESTAMPTZ,
+  password_reset_token_hash TEXT,
+  password_reset_expires_at TIMESTAMPTZ,
+  password_reset_requested_at TIMESTAMPTZ,
   CONSTRAINT chk_etudiant_numero_8_digits
     CHECK (numero_etudiant IS NULL OR numero_etudiant ~ '^[0-9]{8}$')
 );
@@ -22,6 +30,14 @@ CREATE TABLE IF NOT EXISTS etudiant (
 CREATE UNIQUE INDEX IF NOT EXISTS ux_etudiant_numero_etudiant
 ON etudiant (numero_etudiant)
 WHERE numero_etudiant IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS ix_etudiant_email_verification_token
+ON etudiant (email_verification_token_hash)
+WHERE email_verification_token_hash IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS ix_etudiant_password_reset_token
+ON etudiant (password_reset_token_hash)
+WHERE password_reset_token_hash IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS professeur (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

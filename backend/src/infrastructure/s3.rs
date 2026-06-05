@@ -1,3 +1,4 @@
+use anyhow::Context;
 use aws_credential_types::Credentials;
 use aws_sdk_s3::{Client, config::Builder as S3ConfigBuilder, primitives::ByteStream};
 use aws_types::region::Region;
@@ -57,24 +58,16 @@ pub async fn upload_bytes(
   content_type: Option<&str>,
 ) -> anyhow::Result<()> {
   let cfg = read_s3_config()?;
+  let bucket = cfg.bucket.clone();
+  let client = client_from_config(&cfg);
 
-  let client_config = S3ConfigBuilder::new()
-    .region(Region::new(cfg.region))
-    .endpoint_url(cfg.endpoint)
-    .force_path_style(true)
-    .credentials_provider(Credentials::new(
-      cfg.access_key,
-      cfg.secret_key,
-      None,
-      None,
-      "let-note",
-    ))
-    .build();
+  ensure_bucket_exists(&client, &bucket)
+    .await
+    .with_context(|| format!("unable to access S3 bucket {bucket}"))?;
 
-  let client = Client::from_conf(client_config);
   let request = client
     .put_object()
-    .bucket(cfg.bucket)
+    .bucket(bucket)
     .key(key)
     .body(ByteStream::from(content));
 
@@ -84,29 +77,51 @@ pub async fn upload_bytes(
     request
   };
 
-  request.send().await?;
+  request
+    .send()
+    .await
+    .with_context(|| format!("unable to upload S3 object {key}"))?;
   Ok(())
 }
 
 pub async fn download_bytes(bucket: &str, key: &str) -> anyhow::Result<(Vec<u8>, Option<String>)> {
   let cfg = read_s3_config()?;
+  let client = client_from_config(&cfg);
+  let object = client
+    .get_object()
+    .bucket(bucket)
+    .key(key)
+    .send()
+    .await
+    .with_context(|| format!("unable to download S3 object {bucket}/{key}"))?;
+  let content_type = object.content_type().map(str::to_string);
+  let bytes = object.body.collect().await?.into_bytes().to_vec();
+  Ok((bytes, content_type))
+}
 
+fn client_from_config(cfg: &S3Config) -> Client {
   let client_config = S3ConfigBuilder::new()
-    .region(Region::new(cfg.region))
-    .endpoint_url(cfg.endpoint)
+    .region(Region::new(cfg.region.clone()))
+    .endpoint_url(cfg.endpoint.clone())
     .force_path_style(true)
     .credentials_provider(Credentials::new(
-      cfg.access_key,
-      cfg.secret_key,
+      cfg.access_key.clone(),
+      cfg.secret_key.clone(),
       None,
       None,
       "let-note",
     ))
     .build();
 
-  let client = Client::from_conf(client_config);
-  let object = client.get_object().bucket(bucket).key(key).send().await?;
-  let content_type = object.content_type().map(str::to_string);
-  let bytes = object.body.collect().await?.into_bytes().to_vec();
-  Ok((bytes, content_type))
+  Client::from_conf(client_config)
+}
+
+async fn ensure_bucket_exists(client: &Client, bucket: &str) -> anyhow::Result<()> {
+  if client.head_bucket().bucket(bucket).send().await.is_ok() {
+    return Ok(());
+  }
+
+  let _ = client.create_bucket().bucket(bucket).send().await;
+  client.head_bucket().bucket(bucket).send().await?;
+  Ok(())
 }

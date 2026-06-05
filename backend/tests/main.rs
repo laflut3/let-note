@@ -11,8 +11,8 @@ use sqlx::postgres::PgPoolOptions;
 use tower::ServiceExt;
 
 fn test_router() -> axum::Router {
-  let database_url = std::env::var("DATABASE_URL_TEST")
-    .unwrap_or_else(|_| "postgres://127.0.0.1:5432/let_note_dev".to_string());
+  let database_url =
+    std::env::var("DATABASE_URL_TEST").unwrap_or_else(|_| local_test_database_url());
 
   let pool = PgPoolOptions::new()
     .connect_lazy(&database_url)
@@ -84,8 +84,10 @@ async fn test_unknown_route_returns_not_found() {
 
 #[tokio::test]
 async fn test_login_sets_cookie() {
-  let database_url = std::env::var("DATABASE_URL_TEST")
-    .unwrap_or_else(|_| "postgres://127.0.0.1:5432/let_note_dev".to_string());
+  let Ok(database_url) = std::env::var("DATABASE_URL_TEST") else {
+    eprintln!("skipping database-backed login test: DATABASE_URL_TEST is not set");
+    return;
+  };
   let pool = PgPoolOptions::new()
     .connect(&database_url)
     .await
@@ -93,9 +95,22 @@ async fn test_login_sets_cookie() {
 
   sqlx::query(
     r#"
+    CREATE EXTENSION IF NOT EXISTS pgcrypto
+    "#,
+  )
+  .execute(&pool)
+  .await
+  .expect("failed to ensure pgcrypto extension exists");
+
+  sqlx::query(
+    r#"
     CREATE TABLE IF NOT EXISTS etudiant (
-      email TEXT PRIMARY KEY,
-      mot_de_passe TEXT NOT NULL
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      email TEXT UNIQUE NOT NULL,
+      mot_de_passe TEXT NOT NULL,
+      email_verified BOOLEAN NOT NULL DEFAULT TRUE,
+      failed_login_attempts INTEGER NOT NULL DEFAULT 0,
+      locked_until TIMESTAMPTZ
     )
     "#,
   )
@@ -113,7 +128,12 @@ async fn test_login_sets_cookie() {
     r#"
     INSERT INTO etudiant (email, mot_de_passe)
     VALUES ($1, $2)
-    ON CONFLICT (email) DO UPDATE SET mot_de_passe = EXCLUDED.mot_de_passe
+    ON CONFLICT (email) DO UPDATE
+    SET
+      mot_de_passe = EXCLUDED.mot_de_passe,
+      email_verified = TRUE,
+      failed_login_attempts = 0,
+      locked_until = NULL
     "#,
   )
   .bind("john@doe.com")
@@ -156,6 +176,10 @@ async fn test_login_sets_cookie() {
   assert!(set_cookie.contains("HttpOnly"));
 }
 
+fn local_test_database_url() -> String {
+  "postgres://let_note:let_note_dev_password_change_me@127.0.0.1:5432/let_note_dev".to_string()
+}
+
 #[tokio::test]
 async fn test_login_rejects_empty_fields() {
   let app = test_router();
@@ -167,6 +191,25 @@ async fn test_login_rejects_empty_fields() {
         .uri("/api/auth/login")
         .header("content-type", "application/json")
         .body(Body::from(r#"{"email":"","password":""}"#))
+        .expect("request build failed"),
+    )
+    .await
+    .expect("request execution failed");
+
+  assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn test_login_rejects_malformed_json() {
+  let app = test_router();
+
+  let response = app
+    .oneshot(
+      Request::builder()
+        .method("POST")
+        .uri("/api/auth/login")
+        .header("content-type", "application/json")
+        .body(Body::from(r#"{"email":"broken""#))
         .expect("request build failed"),
     )
     .await
@@ -191,6 +234,193 @@ async fn test_me_requires_cookie() {
     .expect("request execution failed");
 
   assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn test_change_password_requires_cookie() {
+  let app = test_router();
+
+  let response = app
+    .oneshot(
+      Request::builder()
+        .method("POST")
+        .uri("/api/auth/change-password")
+        .header("content-type", "application/json")
+        .body(Body::from(
+          r#"{
+            "current_password":"old-secret",
+            "new_password":"new-secret-123",
+            "confirm_password":"new-secret-123"
+          }"#,
+        ))
+        .expect("request build failed"),
+    )
+    .await
+    .expect("request execution failed");
+
+  assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn test_reset_password_requires_confirmation() {
+  let app = test_router();
+
+  let response = app
+    .oneshot(
+      Request::builder()
+        .method("POST")
+        .uri("/api/auth/reset-password")
+        .header("content-type", "application/json")
+        .body(Body::from(
+          r#"{
+            "token":"reset-token",
+            "password":"new-secret-123",
+            "confirm_password":"new-secret-123",
+            "understood":false
+          }"#,
+        ))
+        .expect("request build failed"),
+    )
+    .await
+    .expect("request execution failed");
+
+  assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn test_reset_password_rejects_short_password() {
+  let app = test_router();
+
+  let response = app
+    .oneshot(
+      Request::builder()
+        .method("POST")
+        .uri("/api/auth/reset-password")
+        .header("content-type", "application/json")
+        .body(Body::from(
+          r#"{
+            "token":"reset-token",
+            "password":"short",
+            "confirm_password":"short",
+            "understood":true
+          }"#,
+        ))
+        .expect("request build failed"),
+    )
+    .await
+    .expect("request execution failed");
+
+  assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn test_profile_requires_cookie() {
+  let app = test_router();
+
+  let response = app
+    .oneshot(
+      Request::builder()
+        .method("GET")
+        .uri("/api/etudiant/me")
+        .body(Body::empty())
+        .expect("request build failed"),
+    )
+    .await
+    .expect("request execution failed");
+
+  assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn test_profile_photo_requires_cookie() {
+  let app = test_router();
+
+  let response = app
+    .oneshot(
+      Request::builder()
+        .method("GET")
+        .uri("/api/etudiant/me/photo")
+        .body(Body::empty())
+        .expect("request build failed"),
+    )
+    .await
+    .expect("request execution failed");
+
+  assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn test_admin_status_requires_cookie() {
+  let app = test_router();
+
+  let response = app
+    .oneshot(
+      Request::builder()
+        .method("GET")
+        .uri("/api/admin/status")
+        .body(Body::empty())
+        .expect("request build failed"),
+    )
+    .await
+    .expect("request execution failed");
+
+  assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn test_create_student_rejects_invalid_student_number() {
+  let app = test_router();
+
+  let response = app
+    .oneshot(
+      Request::builder()
+        .method("POST")
+        .uri("/api/etudiant")
+        .header("content-type", "application/json")
+        .body(Body::from(
+          r#"{
+            "numero_etudiant":"123",
+            "nom":"Doe",
+            "prenom":"Jane",
+            "email":"jane@example.test",
+            "date_naissance":"2000-01-01",
+            "mot_de_passe":"secret-123"
+          }"#,
+        ))
+        .expect("request build failed"),
+    )
+    .await
+    .expect("request execution failed");
+
+  assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn test_create_student_rejects_short_password() {
+  let app = test_router();
+
+  let response = app
+    .oneshot(
+      Request::builder()
+        .method("POST")
+        .uri("/api/etudiant")
+        .header("content-type", "application/json")
+        .body(Body::from(
+          r#"{
+            "numero_etudiant":"12345678",
+            "nom":"Doe",
+            "prenom":"Jane",
+            "email":"jane@example.test",
+            "date_naissance":"2000-01-01",
+            "mot_de_passe":"short"
+          }"#,
+        ))
+        .expect("request build failed"),
+    )
+    .await
+    .expect("request execution failed");
+
+  assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 }
 
 #[tokio::test]

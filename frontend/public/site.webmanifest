@@ -1,7 +1,7 @@
 {
   "name": "Let-Note",
   "short_name": "Let-Note",
-  "description": "Plateforme de suivi pedagogique: notes, devoirs, emploi du temps et ressources.",
+  "description": "Plateforme de suivi pedagogique: devoirs, emploi du temps et ressources.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f6f0e2",
