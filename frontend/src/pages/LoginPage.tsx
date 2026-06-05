@@ -11,7 +11,7 @@ export function AuthPage() {
   const [mode, setMode] = useState<AuthMode>('login');
   const navigate = useNavigate();
 
-  const { fields, setField, submitState, clearSubmitState, submit } = useAuthForm({
+  const { fields, setField, submitState, clearSubmitState, submit, forgotPassword } = useAuthForm({
     onLoginSuccess: () => {
       navigate('/dashboard');
     },
@@ -47,6 +47,7 @@ export function AuthPage() {
           onFieldChange={setField}
           onSubmit={handleSubmit}
           onToggleMode={toggleMode}
+          onForgotPassword={forgotPassword}
         />
       </section>
     </main>

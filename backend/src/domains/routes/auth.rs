@@ -8,7 +8,10 @@ use axum::{
 use sqlx::PgPool;
 
 use crate::domains::{
-  entities::auth::{AuthMessage, AuthUser, LoginInfo},
+  entities::auth::{
+    AuthMessage, AuthUser, ChangePasswordInput, EmailTokenInput, ForgotPasswordInput, LoginInfo,
+    ResetPasswordInput,
+  },
   middleware,
   services::auth_service,
 };
@@ -21,6 +24,10 @@ pub fn auth_routes() -> Router<PgPool> {
     .route("/login", post(login))
     .route("/logout", post(logout))
     .route("/me", get(me))
+    .route("/verify-email", post(verify_email))
+    .route("/forgot-password", post(forgot_password))
+    .route("/reset-password", post(reset_password))
+    .route("/change-password", post(change_password))
 }
 
 async fn login(State(db): State<PgPool>, Json(login_info): Json<LoginInfo>) -> impl IntoResponse {
@@ -70,6 +77,76 @@ async fn me(State(db): State<PgPool>, headers: HeaderMap) -> impl IntoResponse {
     }),
   )
     .into_response()
+}
+
+async fn verify_email(
+  State(db): State<PgPool>,
+  Json(input): Json<EmailTokenInput>,
+) -> impl IntoResponse {
+  match auth_service::verify_email_token(&db, &input.token).await {
+    Ok(()) => (
+      StatusCode::OK,
+      Json(AuthMessage {
+        message: "email verified".to_string(),
+      }),
+    )
+      .into_response(),
+    Err(error) => error.into_response(),
+  }
+}
+
+async fn forgot_password(
+  State(db): State<PgPool>,
+  Json(input): Json<ForgotPasswordInput>,
+) -> impl IntoResponse {
+  match auth_service::request_password_reset(&db, input).await {
+    Ok(()) => (
+      StatusCode::OK,
+      Json(AuthMessage {
+        message: "password reset email sent if the account exists".to_string(),
+      }),
+    )
+      .into_response(),
+    Err(error) => error.into_response(),
+  }
+}
+
+async fn reset_password(
+  State(db): State<PgPool>,
+  Json(input): Json<ResetPasswordInput>,
+) -> impl IntoResponse {
+  match auth_service::reset_password(&db, input).await {
+    Ok(()) => (
+      StatusCode::OK,
+      Json(AuthMessage {
+        message: "password updated".to_string(),
+      }),
+    )
+      .into_response(),
+    Err(error) => error.into_response(),
+  }
+}
+
+async fn change_password(
+  State(db): State<PgPool>,
+  headers: HeaderMap,
+  Json(input): Json<ChangePasswordInput>,
+) -> impl IntoResponse {
+  let auth = match middleware::extract_auth_context(&headers, &db).await {
+    Ok(value) => value,
+    Err(error) => return error.into_response(),
+  };
+
+  match auth_service::change_password(&db, auth.user_id, input).await {
+    Ok(()) => (
+      StatusCode::OK,
+      Json(AuthMessage {
+        message: "password changed".to_string(),
+      }),
+    )
+      .into_response(),
+    Err(error) => error.into_response(),
+  }
 }
 
 fn build_auth_cookie(token: &str, expire_immediately: bool) -> String {

@@ -5,4 +5,6 @@ export const APP_ROUTES = {
   delegue: '/delegue',
   terms: '/conditions-utilisation',
   privacy: '/politique-protection-donnees',
+  verifyEmail: '/verify-email',
+  resetPassword: '/reset-password',
 } as const;

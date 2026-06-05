@@ -200,6 +200,47 @@ export async function authMeRequest(): Promise<Response> {
   return jsonRequest('/auth/me', { method: 'GET' });
 }
 
+export async function verifyEmailRequest(token: string): Promise<Response> {
+  return jsonRequest('/auth/verify-email', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token }),
+  });
+}
+
+export async function forgotPasswordRequest(email: string): Promise<Response> {
+  return jsonRequest('/auth/forgot-password', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email }),
+  });
+}
+
+export async function resetPasswordRequest(payload: {
+  token: string;
+  password: string;
+  confirm_password: string;
+  understood: boolean;
+}): Promise<Response> {
+  return jsonRequest('/auth/reset-password', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function changePasswordRequest(payload: {
+  current_password: string;
+  new_password: string;
+  confirm_password: string;
+}): Promise<Response> {
+  return jsonRequest('/auth/change-password', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function getMyProfileRequest(): Promise<Response> {
   return jsonRequest('/etudiant/me', { method: 'GET' });
 }

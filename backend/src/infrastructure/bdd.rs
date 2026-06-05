@@ -53,9 +53,11 @@ async fn bootstrap_roles_and_admin(pool: &PgPool) -> anyhow::Result<()> {
 
   let admin_id = sqlx::query_scalar::<_, uuid::Uuid>(
     r#"
-    INSERT INTO etudiant (nom, prenom, email, date_naissance, mot_de_passe)
-    VALUES ($1, $2, $3, CURRENT_DATE, $4)
-    ON CONFLICT (email) DO UPDATE SET mot_de_passe = EXCLUDED.mot_de_passe
+    INSERT INTO etudiant (nom, prenom, email, date_naissance, mot_de_passe, email_verified)
+    VALUES ($1, $2, $3, CURRENT_DATE, $4, TRUE)
+    ON CONFLICT (email) DO UPDATE
+      SET mot_de_passe = EXCLUDED.mot_de_passe,
+          email_verified = TRUE
     RETURNING id
     "#,
   )

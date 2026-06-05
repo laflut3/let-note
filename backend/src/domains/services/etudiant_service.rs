@@ -9,6 +9,7 @@ use uuid::Uuid;
 use crate::domains::{
   entities::etudiant::{CreateEtudiant, GetEtudiant},
   error::ApiError,
+  services::auth_service,
 };
 use crate::infrastructure::s3;
 
@@ -71,6 +72,8 @@ pub async fn create_etudiant(
   tx.commit()
     .await
     .map_err(|_| ApiError::internal("unable to finalize account creation"))?;
+
+  auth_service::create_email_verification(db, created.id, &created.email).await?;
 
   Ok(created)
 }
@@ -171,11 +174,7 @@ pub async fn update_etudiant_by_id(
     .map(|value| value.trim().to_string())
     .filter(|value| !value.is_empty())
     .unwrap_or(current.prenom);
-  let email = payload
-    .email
-    .map(|value| value.trim().to_lowercase())
-    .filter(|value| !value.is_empty())
-    .unwrap_or(current.email);
+  let email = current.email;
   let date_naissance = payload.date_naissance.unwrap_or(current.date_naissance);
 
   sqlx::query_as::<_, GetEtudiant>(

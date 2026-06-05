@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { loginRequest, registerRequest } from '@/services/api';
+import { forgotPasswordRequest, loginRequest, registerRequest } from '@/services/api';
 import type { AuthFields, AuthMode, SubmitState } from '@/types/auth';
 import { emptySubmitState } from '@/types/auth';
 
@@ -13,6 +13,7 @@ type UseAuthFormReturn = {
   submitState: SubmitState;
   clearSubmitState: () => void;
   submit: (mode: AuthMode) => Promise<void>;
+  forgotPassword: () => Promise<void>;
 };
 
 const initialFields: AuthFields = {
@@ -122,7 +123,32 @@ export function useAuthForm(options: UseAuthFormOptions = {}): UseAuthFormReturn
         return;
       }
 
-      setSubmitState({ type: 'success', message: 'Compte etudiant cree avec succes.' });
+      setSubmitState({
+        type: 'success',
+        message: 'Compte cree. Verifiez votre boite mail pour activer le compte.',
+      });
+    } catch {
+      setSubmitState({ type: 'error', message: 'Erreur reseau. Reessayez dans un instant.' });
+    }
+  };
+
+  const forgotPassword = async (): Promise<void> => {
+    const email = fields.email.trim();
+    if (!email) {
+      setSubmitState({ type: 'error', message: 'Saisissez votre email avant la demande.' });
+      return;
+    }
+
+    try {
+      const response = await forgotPasswordRequest(email);
+      if (!response.ok) {
+        setSubmitState({ type: 'error', message: await extractApiErrorMessage(response) });
+        return;
+      }
+      setSubmitState({
+        type: 'success',
+        message: 'Si ce compte existe, un lien de reinitialisation vient d etre envoye.',
+      });
     } catch {
       setSubmitState({ type: 'error', message: 'Erreur reseau. Reessayez dans un instant.' });
     }
@@ -134,5 +160,6 @@ export function useAuthForm(options: UseAuthFormOptions = {}): UseAuthFormReturn
     submitState,
     clearSubmitState,
     submit,
+    forgotPassword,
   };
 }

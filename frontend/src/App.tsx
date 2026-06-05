@@ -6,7 +6,16 @@ import { ThemeToggle } from '@/components/auth/ThemeToggle';
 import { AppFooter } from '@/components/common/AppFooter';
 import { useThemeMode } from '@/hooks/useThemeMode';
 import { ThemeContextProvider } from '@/context/theme-context';
-import { AdminPage, AuthPage, DashboardPage, DelegatePage, PrivacyPage, TermsPage } from '@/pages';
+import {
+  AdminPage,
+  AuthPage,
+  DashboardPage,
+  DelegatePage,
+  PrivacyPage,
+  ResetPasswordPage,
+  TermsPage,
+  VerifyEmailPage,
+} from '@/pages';
 import { PublicOnlyRoute } from '@/routes/guards/PublicOnlyGuard';
 import { ProtectedAdminRoute } from '@/routes/guards/ProtectedAdminGuard';
 import { ProtectedDelegueRoute } from '@/routes/guards/ProtectedDelegueGuard';
@@ -35,6 +44,16 @@ function AppContent() {
       [APP_ROUTES.privacy]: {
         title: 'Protection des donnees | Let-Note',
         description: 'Consultez la politique de protection des donnees de Let-Note.',
+      },
+      [APP_ROUTES.verifyEmail]: {
+        title: 'Validation email | Let-Note',
+        description: 'Validation du compte Let-Note.',
+        robots: 'noindex,nofollow',
+      },
+      [APP_ROUTES.resetPassword]: {
+        title: 'Nouveau mot de passe | Let-Note',
+        description: 'Reinitialisation du mot de passe Let-Note.',
+        robots: 'noindex,nofollow',
       },
       [APP_ROUTES.dashboard]: {
         title: 'Dashboard | Let-Note',
@@ -144,6 +163,8 @@ function AppContent() {
             />
             <Route path={APP_ROUTES.terms} element={<TermsPage />} />
             <Route path={APP_ROUTES.privacy} element={<PrivacyPage />} />
+            <Route path={APP_ROUTES.verifyEmail} element={<VerifyEmailPage />} />
+            <Route path={APP_ROUTES.resetPassword} element={<ResetPasswordPage />} />
             <Route path="*" element={<Navigate to={APP_ROUTES.root} replace />} />
           </Routes>
         </div>

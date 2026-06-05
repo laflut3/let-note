@@ -33,6 +33,12 @@ Champs obligatoires:
 - `S3_BUCKET`: bucket S3
 - `S3_ACCESS_KEY`: cle d'acces S3
 - `S3_SECRET_KEY`: cle secrete S3
+- `APP_PUBLIC_URL`: URL publique de la plateforme, utilisee dans les liens email
+- `SMTP_HOST`: hote SMTP Gmail (`smtp.gmail.com`)
+- `SMTP_PORT`: port SMTP Gmail (`587`)
+- `SMTP_USERNAME`: adresse Gmail utilisee pour envoyer
+- `SMTP_PASSWORD`: mot de passe d'application Gmail
+- `SMTP_FROM`: expediteur affiche, souvent la meme adresse que `SMTP_USERNAME`
 - `INGRESS_HOST`: host public de l'environnement (recommande)
 
 ### Exemple dev
@@ -55,6 +61,12 @@ vault kv put secret/dev/let-note \
   S3_BUCKET="let-note-dev-files" \
   S3_ACCESS_KEY="seaweedfs" \
   S3_SECRET_KEY="seaweedfs" \
+  APP_PUBLIC_URL="http://dev.app.local" \
+  SMTP_HOST="smtp.gmail.com" \
+  SMTP_PORT="587" \
+  SMTP_USERNAME="votre-compte@gmail.com" \
+  SMTP_PASSWORD="mot-de-passe-application-gmail" \
+  SMTP_FROM="votre-compte@gmail.com" \
   INGRESS_HOST="dev.app.local"
 ```
 
@@ -78,6 +90,12 @@ vault kv put secret/staging/let-note \
   S3_BUCKET="let-note-staging-files" \
   S3_ACCESS_KEY="seaweedfs" \
   S3_SECRET_KEY="seaweedfs" \
+  APP_PUBLIC_URL="https://staging.app.local" \
+  SMTP_HOST="smtp.gmail.com" \
+  SMTP_PORT="587" \
+  SMTP_USERNAME="votre-compte@gmail.com" \
+  SMTP_PASSWORD="mot-de-passe-application-gmail" \
+  SMTP_FROM="votre-compte@gmail.com" \
   INGRESS_HOST="staging.app.local"
 ```
 
@@ -101,6 +119,12 @@ vault kv put secret/prod/let-note \
   S3_BUCKET="let-note-prod-files" \
   S3_ACCESS_KEY="seaweedfs" \
   S3_SECRET_KEY="seaweedfs" \
+  APP_PUBLIC_URL="https://let-note.prod.polydo.dev" \
+  SMTP_HOST="smtp.gmail.com" \
+  SMTP_PORT="587" \
+  SMTP_USERNAME="votre-compte@gmail.com" \
+  SMTP_PASSWORD="mot-de-passe-application-gmail" \
+  SMTP_FROM="votre-compte@gmail.com" \
   INGRESS_HOST="let-note.prod.polydo.dev"
 ```
 
