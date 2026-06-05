@@ -67,28 +67,6 @@ async fn get_accessible_promotion(
   .ok_or_else(|| ApiError::forbidden("promotion is not accessible"))
 }
 
-async fn can_manage_promo(
-  db: &PgPool,
-  auth: &AuthContext,
-  promo_id: Uuid,
-) -> Result<bool, ApiError> {
-  let has_scope = sqlx::query_scalar::<_, i64>(
-    r#"
-    SELECT COUNT(*)
-    FROM delegue_promo
-    WHERE id_etu = $1 AND id_promo = $2
-    "#,
-  )
-  .bind(auth.user_id)
-  .bind(promo_id)
-  .fetch_one(db)
-  .await
-  .map_err(map_schema_error("unable to validate permissions"))?
-    > 0;
-
-  Ok(has_scope)
-}
-
 async fn ensure_promotion_exists(db: &PgPool, promo_id: Uuid) -> Result<(), ApiError> {
   let exists = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM promotion WHERE id = $1")
     .bind(promo_id)
@@ -99,34 +77,6 @@ async fn ensure_promotion_exists(db: &PgPool, promo_id: Uuid) -> Result<(), ApiE
 
   if !exists {
     return Err(ApiError::bad_request("promotion not found"));
-  }
-
-  Ok(())
-}
-
-async fn ensure_student_in_promo(
-  db: &PgPool,
-  etu_id: Uuid,
-  promo_id: Uuid,
-) -> Result<(), ApiError> {
-  let in_promo = sqlx::query_scalar::<_, i64>(
-    r#"
-    SELECT COUNT(*)
-    FROM etu_promo
-    WHERE id_etu = $1 AND id_promo = $2
-    "#,
-  )
-  .bind(etu_id)
-  .bind(promo_id)
-  .fetch_one(db)
-  .await
-  .map_err(map_schema_error("unable to validate student"))?
-    > 0;
-
-  if !in_promo {
-    return Err(ApiError::bad_request(
-      "student is not attached to this promotion",
-    ));
   }
 
   Ok(())
