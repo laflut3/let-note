@@ -20,7 +20,7 @@ sqlx = { version = "=0.9.0", features = ["runtime-tokio", "postgres", "chrono", 
 thiserror = "=2.0.18"
 tokio = { version = "=1.52.3", features = ["full"] }
 tower-http = { version = "=0.6.11", features = ["cors"] }
-uuid = { version = "=1.23.1", features = ["serde", "v4"] }
+uuid = { version = "=1.23.2", features = ["serde", "v4"] }
 
 [dev-dependencies]
 tower = { version = "=0.5.3", features = ["util"] }
