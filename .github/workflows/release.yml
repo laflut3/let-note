@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - "v*"
+      - "latest"
   workflow_dispatch:
 
 permissions:
@@ -26,6 +27,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
+          if [[ "${RELEASE_TAG}" == "latest" ]]; then
+            echo "✅ Tag 'latest' accepted for image promotion"
+            exit 0
+          fi
 
           semver_re='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-((0|[1-9][0-9]*|[0-9]*[a-zA-Z-][0-9a-zA-Z-]*)(\.(0|[1-9][0-9]*|[0-9]*[a-zA-Z-][0-9a-zA-Z-]*))*))?(\+([0-9a-zA-Z-]+(\.[0-9a-zA-Z-]+)*))?$'
 
@@ -120,6 +126,7 @@ jobs:
             ${{ env.CONTAINER_REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}@${ARM64_DIGEST}
 
       - name: Create GitHub Release
+        if: ${{ github.ref_name != 'latest' }}
         uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
         with:
           generate_release_notes: true
