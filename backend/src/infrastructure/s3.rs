@@ -13,26 +13,11 @@ pub struct S3Config {
 }
 
 pub fn read_s3_config() -> anyhow::Result<S3Config> {
-  let endpoint = std::env::var("S3_ENDPOINT")
-    .unwrap_or_else(|_| "http://127.0.0.1:9000".to_string())
-    .trim()
-    .to_string();
-  let region = std::env::var("S3_REGION")
-    .unwrap_or_else(|_| "us-east-1".to_string())
-    .trim()
-    .to_string();
-  let bucket = std::env::var("S3_BUCKET")
-    .unwrap_or_else(|_| "let-note-files".to_string())
-    .trim()
-    .to_string();
-  let access_key = std::env::var("S3_ACCESS_KEY")
-    .unwrap_or_else(|_| "minioadmin".to_string())
-    .trim()
-    .to_string();
-  let secret_key = std::env::var("S3_SECRET_KEY")
-    .unwrap_or_else(|_| "minioadmin".to_string())
-    .trim()
-    .to_string();
+  let endpoint = required_env("S3_ENDPOINT")?;
+  let region = required_env("S3_REGION")?;
+  let bucket = required_env("S3_BUCKET")?;
+  let access_key = required_env("S3_ACCESS_KEY")?;
+  let secret_key = required_env("S3_SECRET_KEY")?;
 
   if endpoint.is_empty() || region.is_empty() || bucket.is_empty() {
     return Err(anyhow::anyhow!(
@@ -50,6 +35,17 @@ pub fn read_s3_config() -> anyhow::Result<S3Config> {
     access_key,
     secret_key,
   })
+}
+
+fn required_env(name: &str) -> anyhow::Result<String> {
+  let value = std::env::var(name)
+    .map_err(|_| anyhow::anyhow!("{name} must be set"))?
+    .trim()
+    .to_string();
+  if value.is_empty() {
+    return Err(anyhow::anyhow!("{name} must be non-empty"));
+  }
+  Ok(value)
 }
 
 pub async fn upload_bytes(

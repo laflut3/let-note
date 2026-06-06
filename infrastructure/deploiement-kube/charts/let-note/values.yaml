@@ -26,9 +26,6 @@ config:
   backend:
     PS_BDD_SERVER: postgres
     PS_BDD_PORT: "5432"
-    S3_ENDPOINT: http://seaweed-s3:8333
-    S3_REGION: us-east-1
-    S3_BUCKET: let-note-files
   frontend:
     APP_ENV: dev
   app:
@@ -55,9 +52,6 @@ secrets:
   create: true
   postgres:
     password: CHANGE_ME_STRONG_DB_PASSWORD_DEV
-  s3:
-    accessKey: CHANGE_ME_S3_ACCESS_KEY
-    secretKey: CHANGE_ME_S3_SECRET_KEY
 
 persistence:
   storageClassName: local-path
@@ -161,8 +155,6 @@ seaweedfs:
       memory: 256Mi
   s3:
     identityName: let-note
-    accessKey: seaweedfs
-    secretKey: seaweedfs
 
 ingress:
   enabled: true

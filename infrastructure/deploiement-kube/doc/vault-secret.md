@@ -41,6 +41,12 @@ Champs obligatoires:
 - `SMTP_FROM`: expediteur affiche, souvent la meme adresse que `SMTP_USERNAME`
 - `INGRESS_HOST`: host public de l'environnement (recommande)
 
+Ces valeurs S3 sont utilisees a deux endroits:
+- le backend les charge au demarrage depuis Vault;
+- le pod `seaweed-s3` genere son `s3.conf` au demarrage depuis le meme path Vault.
+
+Cela garantit que le backend et SeaweedFS partagent exactement la meme configuration.
+
 ### Exemple dev
 
 ```bash

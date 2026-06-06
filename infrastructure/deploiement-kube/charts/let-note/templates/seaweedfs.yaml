@@ -186,10 +186,43 @@ spec:
         app: seaweed-s3
         {{- include "let-note.commonLabels" . | nindent 8 }}
     spec:
+      serviceAccountName: let-note-backend
       volumes:
       - name: s3-config
+        emptyDir: {}
+      - name: s3-bootstrap
         configMap:
-          name: seaweed-s3-config
+          name: seaweed-s3-bootstrap
+          defaultMode: 0555
+      initContainers:
+      - name: render-s3-config
+        image: python:3.12-alpine
+        command:
+        - python
+        - /scripts/render_s3_config.py
+        env:
+        - name: VAULT_ADDR
+          value: {{ .Values.backend.vault.addr | quote }}
+        - name: VAULT_KV_MOUNT
+          value: {{ .Values.backend.vault.kvMount | quote }}
+        - name: VAULT_SECRET_PATH
+          value: {{ .Values.backend.vault.secretPath | quote }}
+        - name: VAULT_AUTH_METHOD
+          value: {{ .Values.backend.vault.authMethod | quote }}
+        - name: VAULT_K8S_AUTH_MOUNT
+          value: {{ .Values.backend.vault.k8sAuthMount | quote }}
+        - name: VAULT_K8S_ROLE
+          value: {{ .Values.backend.vault.k8sRole | quote }}
+        - name: SEAWEEDFS_S3_CONFIG_PATH
+          value: /etc/seaweedfs/s3.conf
+        - name: SEAWEEDFS_S3_IDENTITY_NAME
+          value: {{ .Values.seaweedfs.s3.identityName | quote }}
+        volumeMounts:
+        - name: s3-bootstrap
+          mountPath: /scripts
+          readOnly: true
+        - name: s3-config
+          mountPath: /etc/seaweedfs
       containers:
       - name: seaweed-s3
         image: {{ include "let-note.image" .Values.images.seaweedfs | quote }}
