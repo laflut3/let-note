@@ -60,6 +60,12 @@ jobs:
             -t ${{ env.CONTAINER_REGISTRY }}/${{ env.BACKEND_IMAGE_NAME }}:${DOCKER_TAG} \
             ${{ env.CONTAINER_REGISTRY }}/${{ env.BACKEND_IMAGE_NAME }}:${{ github.sha }}
 
+      - name: Tag and push backend latest image
+        run: |
+          docker buildx imagetools create \
+            -t ${{ env.CONTAINER_REGISTRY }}/${{ env.BACKEND_IMAGE_NAME }}:latest \
+            ${{ env.CONTAINER_REGISTRY }}/${{ env.BACKEND_IMAGE_NAME }}:${{ github.sha }}
+
       - name: Tag and push backend release image (amd64)
         run: |
           DOCKER_TAG="${RELEASE_TAG#v}"
@@ -85,6 +91,12 @@ jobs:
           DOCKER_TAG="${RELEASE_TAG#v}"
           docker buildx imagetools create \
             -t ${{ env.CONTAINER_REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}:${DOCKER_TAG} \
+            ${{ env.CONTAINER_REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}:${{ github.sha }}
+
+      - name: Tag and push frontend latest image
+        run: |
+          docker buildx imagetools create \
+            -t ${{ env.CONTAINER_REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}:latest \
             ${{ env.CONTAINER_REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}:${{ github.sha }}
 
       - name: Tag and push frontend release image (amd64)
