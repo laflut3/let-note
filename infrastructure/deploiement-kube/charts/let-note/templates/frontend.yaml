@@ -42,6 +42,7 @@ spec:
       containers:
       - name: front
         image: {{ include "let-note.image" .Values.images.frontend | quote }}
+        imagePullPolicy: Always
         securityContext:
           runAsNonRoot: true
           runAsUser: 101

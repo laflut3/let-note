@@ -43,6 +43,7 @@ spec:
       containers:
       - name: backend
         image: {{ include "let-note.image" .Values.images.backend | quote }}
+        imagePullPolicy: Always
         securityContext:
           runAsUser: 65532
           runAsGroup: 65532
