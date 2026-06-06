@@ -4,6 +4,9 @@ global:
   architecture: ""
   imagePullSecrets: []
 
+networkPolicy:
+  enabled: true
+
 images:
   backend:
     repository: ghcr.io/laflut3/let-note-backend

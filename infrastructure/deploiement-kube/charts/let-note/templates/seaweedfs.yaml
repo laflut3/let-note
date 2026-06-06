@@ -230,6 +230,7 @@ spec:
         - s3
         - -filer=seaweed-filer:8888
         - -port=8333
+        - -ip.bind=0.0.0.0
         - -iam=false
         - -config=/etc/seaweedfs/s3.conf
         ports:
