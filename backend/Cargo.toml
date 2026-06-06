@@ -14,7 +14,7 @@ base64 = "=0.22.1"
 chrono = { version = "=0.4.44", features = ["serde"] }
 clap = { version = "=4.6.1", features = ["derive", "env"] }
 jsonwebtoken = { version = "=10.4.0", features = ["rust_crypto"] }
-lettre = { version = "=0.11.19", default-features = false, features = ["builder", "smtp-transport", "tokio1-rustls-tls"] }
+lettre = { version = "=0.11.22", default-features = false, features = ["builder", "smtp-transport", "tokio1-rustls-tls"] }
 rand = "=0.9.4"
 reqwest = { version = "=0.13.4", default-features = false, features = ["json", "rustls"] }
 serde = { version = "=1.0.228", features = ["derive"] }
