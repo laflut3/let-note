@@ -16,7 +16,7 @@ spec:
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: minio-pvc
+  name: seaweed-master-pvc
   namespace: {{ include "let-note.namespace" . }}
   labels:
     {{- include "let-note.commonLabels" . | nindent 4 }}
@@ -26,4 +26,19 @@ spec:
   storageClassName: {{ .Values.persistence.storageClassName | quote }}
   resources:
     requests:
-      storage: {{ .Values.persistence.seaweedfs.size | quote }}
+      storage: {{ .Values.persistence.seaweedfs.master.size | quote }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: seaweed-volume-pvc
+  namespace: {{ include "let-note.namespace" . }}
+  labels:
+    {{- include "let-note.commonLabels" . | nindent 4 }}
+spec:
+  accessModes:
+  - ReadWriteOnce
+  storageClassName: {{ .Values.persistence.storageClassName | quote }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.seaweedfs.volume.size | quote }}
