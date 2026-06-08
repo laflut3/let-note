@@ -4,7 +4,6 @@ on:
   push:
     tags:
       - "v*"
-      - "latest"
   workflow_dispatch:
 
 permissions:
@@ -27,11 +26,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
-          if [[ "${RELEASE_TAG}" == "latest" ]]; then
-            echo "✅ Tag 'latest' accepted for image promotion"
-            exit 0
-          fi
 
           semver_re='^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-((0|[1-9][0-9]*|[0-9]*[a-zA-Z-][0-9a-zA-Z-]*)(\.(0|[1-9][0-9]*|[0-9]*[a-zA-Z-][0-9a-zA-Z-]*))*))?(\+([0-9a-zA-Z-]+(\.[0-9a-zA-Z-]+)*))?$'
 
@@ -126,7 +120,52 @@ jobs:
             ${{ env.CONTAINER_REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}@${ARM64_DIGEST}
 
       - name: Create GitHub Release
-        if: ${{ github.ref_name != 'latest' }}
         uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
         with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
           generate_release_notes: true
+
+      - name: Move latest tag to this release
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const ref = "tags/latest";
+
+            try {
+              await github.rest.git.deleteRef({ owner, repo, ref });
+            } catch (error) {
+              if (error.status !== 422 && error.status !== 404) {
+                throw error;
+              }
+            }
+
+            await github.rest.git.createRef({
+              owner,
+              repo,
+              ref: `refs/${ref}`,
+              sha: context.sha,
+            });
+
+      - name: Create or update latest GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          notes="Latest release: ${RELEASE_TAG}"
+
+          if gh release view latest >/dev/null 2>&1; then
+            gh release edit latest \
+              --title "latest" \
+              --notes "${notes}" \
+              --latest
+          else
+            gh release create latest \
+              --target "${GITHUB_SHA}" \
+              --title "latest" \
+              --notes "${notes}" \
+              --latest
+          fi
