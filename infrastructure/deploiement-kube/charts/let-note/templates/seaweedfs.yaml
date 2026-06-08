@@ -35,6 +35,7 @@ spec:
         - -mdir=/data/master
         ports:
         - containerPort: 9333
+        - containerPort: 19333
         startupProbe:
           tcpSocket:
             port: 9333
@@ -74,6 +75,10 @@ spec:
   ports:
   - port: 9333
     targetPort: 9333
+    name: http
+  - port: 19333
+    targetPort: 19333
+    name: grpc
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -97,6 +102,17 @@ spec:
         app: seaweed-volume
         {{- include "let-note.commonLabels" . | nindent 8 }}
     spec:
+      initContainers:
+      - name: wait-for-master
+        image: {{ include "let-note.image" .Values.images.busybox | quote }}
+        command:
+        - sh
+        - -ec
+        - |
+          until nc -z seaweed-master 9333; do
+            echo "waiting for seaweed-master"
+            sleep 2
+          done
       containers:
       - name: seaweed-volume
         image: {{ include "let-note.image" .Values.images.seaweedfs | quote }}
@@ -109,6 +125,7 @@ spec:
         - -dir=/data/volume
         ports:
         - containerPort: 8080
+        - containerPort: 18080
         startupProbe:
           tcpSocket:
             port: 8080
@@ -148,6 +165,10 @@ spec:
   ports:
   - port: 8080
     targetPort: 8080
+    name: http
+  - port: 18080
+    targetPort: 18080
+    name: grpc
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -171,6 +192,21 @@ spec:
         app: seaweed-filer
         {{- include "let-note.commonLabels" . | nindent 8 }}
     spec:
+      initContainers:
+      - name: wait-for-master-and-volume
+        image: {{ include "let-note.image" .Values.images.busybox | quote }}
+        command:
+        - sh
+        - -ec
+        - |
+          until nc -z seaweed-master 9333; do
+            echo "waiting for seaweed-master"
+            sleep 2
+          done
+          until nc -z seaweed-volume 8080; do
+            echo "waiting for seaweed-volume"
+            sleep 2
+          done
       containers:
       - name: seaweed-filer
         image: {{ include "let-note.image" .Values.images.seaweedfs | quote }}
@@ -183,6 +219,7 @@ spec:
         - -defaultStoreDir=/data/filer
         ports:
         - containerPort: 8888
+        - containerPort: 18888
         startupProbe:
           tcpSocket:
             port: 8888
@@ -222,6 +259,10 @@ spec:
   ports:
   - port: 8888
     targetPort: 8888
+    name: http
+  - port: 18888
+    targetPort: 18888
+    name: grpc
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -254,6 +295,16 @@ spec:
           name: seaweed-s3-bootstrap
           defaultMode: 0555
       initContainers:
+      - name: wait-for-filer
+        image: {{ include "let-note.image" .Values.images.busybox | quote }}
+        command:
+        - sh
+        - -ec
+        - |
+          until nc -z seaweed-filer 8888; do
+            echo "waiting for seaweed-filer"
+            sleep 2
+          done
       - name: render-s3-config
         image: python:3.12-alpine
         command:
@@ -329,3 +380,4 @@ spec:
   ports:
   - port: 8333
     targetPort: 8333
+    name: http
