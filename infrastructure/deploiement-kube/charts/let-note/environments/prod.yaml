@@ -1,12 +1,12 @@
 ---
 global:
   environment: prod
-  deployId: e980901072668799241995f23ac2df0cc9091342
+  deployId: 10c8da244fc2c88007cddf41c62f40d343f33c30
 images:
   backend:
-    tag: 1.1.4
+    tag: 1.1.6
   frontend:
-    tag: 1.1.4
+    tag: 1.1.6
 config:
   frontend:
     APP_ENV: prod
