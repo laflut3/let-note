@@ -65,6 +65,8 @@ persistence:
       size: 1Gi
     volume:
       size: 10Gi
+    filer:
+      size: 2Gi
 
 postgres:
   database: let_note_dev

@@ -35,6 +35,11 @@ spec:
         - -mdir=/data/master
         ports:
         - containerPort: 9333
+        startupProbe:
+          tcpSocket:
+            port: 9333
+          failureThreshold: 30
+          periodSeconds: 5
         readinessProbe:
           tcpSocket:
             port: 9333
@@ -99,10 +104,16 @@ spec:
         - volume
         - -mserver=seaweed-master:9333
         - -ip=seaweed-volume
+        - -ip.bind=0.0.0.0
         - -port=8080
         - -dir=/data/volume
         ports:
         - containerPort: 8080
+        startupProbe:
+          tcpSocket:
+            port: 8080
+          failureThreshold: 30
+          periodSeconds: 5
         readinessProbe:
           tcpSocket:
             port: 8080
@@ -163,9 +174,20 @@ spec:
       containers:
       - name: seaweed-filer
         image: {{ include "let-note.image" .Values.images.seaweedfs | quote }}
-        args: ["filer", "-master=seaweed-master:9333", "-ip=seaweed-filer", "-port=8888"]
+        args:
+        - filer
+        - -master=seaweed-master:9333
+        - -ip=seaweed-filer
+        - -ip.bind=0.0.0.0
+        - -port=8888
+        - -defaultStoreDir=/data/filer
         ports:
         - containerPort: 8888
+        startupProbe:
+          tcpSocket:
+            port: 8888
+          failureThreshold: 30
+          periodSeconds: 5
         readinessProbe:
           tcpSocket:
             port: 8888
@@ -176,8 +198,15 @@ spec:
             port: 8888
           initialDelaySeconds: 15
           periodSeconds: 15
+        volumeMounts:
+        - name: filer-data
+          mountPath: /data/filer
         resources:
           {{- toYaml .Values.seaweedfs.resources | nindent 10 }}
+      volumes:
+      - name: filer-data
+        persistentVolumeClaim:
+          claimName: seaweed-filer-pvc
 ---
 apiVersion: v1
 kind: Service
@@ -265,6 +294,11 @@ spec:
         - -config=/etc/seaweedfs/s3.conf
         ports:
         - containerPort: 8333
+        startupProbe:
+          tcpSocket:
+            port: 8333
+          failureThreshold: 30
+          periodSeconds: 5
         readinessProbe:
           tcpSocket:
             port: 8333

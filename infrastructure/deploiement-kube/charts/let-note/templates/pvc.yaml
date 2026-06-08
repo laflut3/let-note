@@ -42,3 +42,18 @@ spec:
   resources:
     requests:
       storage: {{ .Values.persistence.seaweedfs.volume.size | quote }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: seaweed-filer-pvc
+  namespace: {{ include "let-note.namespace" . }}
+  labels:
+    {{- include "let-note.commonLabels" . | nindent 4 }}
+spec:
+  accessModes:
+  - ReadWriteOnce
+  storageClassName: {{ .Values.persistence.storageClassName | quote }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.seaweedfs.filer.size | quote }}
