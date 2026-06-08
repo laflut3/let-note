@@ -125,90 +125,68 @@ jobs:
           tag_name: ${{ github.ref_name }}
           name: ${{ github.ref_name }}
           generate_release_notes: true
+          make_latest: true
 
-      - name: Move latest tag to this release
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+      - name: Checkout main for GitOps promotion
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
-          script: |
-            const owner = context.repo.owner;
-            const repo = context.repo.repo;
-            const latestRef = "tags/latest";
-            const releaseRef = `tags/${context.ref.replace("refs/tags/", "")}`;
+          ref: main
+          token: ${{ secrets.GITOPS_TOKEN }}
 
-            const releaseTag = await github.rest.git.getRef({
-              owner,
-              repo,
-              ref: releaseRef,
-            });
-
-            let targetSha = releaseTag.data.object.sha;
-            if (releaseTag.data.object.type === "tag") {
-              const tagObject = await github.rest.git.getTag({
-                owner,
-                repo,
-                tag_sha: targetSha,
-              });
-              targetSha = tagObject.data.object.sha;
-            }
-
-            try {
-              await github.rest.git.updateRef({
-                owner,
-                repo,
-                ref: latestRef,
-                sha: targetSha,
-                force: true,
-              });
-            } catch (error) {
-              const referenceIsMissing =
-                error.status === 404 ||
-                (error.status === 422 && error.response?.data?.message === "Reference does not exist");
-
-              if (!referenceIsMissing) {
-                throw error;
-              }
-
-              try {
-                await github.rest.git.createRef({
-                  owner,
-                  repo,
-                  ref: `refs/${latestRef}`,
-                  sha: targetSha,
-                });
-              } catch (createError) {
-                if (
-                  createError.status !== 422 ||
-                  createError.response?.data?.message !== "Reference already exists"
-                ) {
-                  throw createError;
-                }
-                await github.rest.git.updateRef({
-                  owner,
-                  repo,
-                  ref: latestRef,
-                  sha: targetSha,
-                  force: true,
-                });
-              }
-            }
-
-      - name: Create or update latest GitHub Release
+      - name: Promote production desired state
+        id: promote_prod
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IMAGE_TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
 
-          notes="Latest release: ${RELEASE_TAG}"
+          export DOCKER_TAG="${IMAGE_TAG#v}"
+          values_file="infrastructure/deploiement-kube/charts/let-note/environments/prod.yaml"
 
-          if gh release view latest >/dev/null 2>&1; then
-            gh release edit latest \
-              --title "latest" \
-              --notes "${notes}" \
-              --latest
-          else
-            gh release create latest \
-              --verify-tag \
-              --title "latest" \
-              --notes "${notes}" \
-              --latest
+          ruby <<'RUBY'
+          require "yaml"
+
+          values_file = "infrastructure/deploiement-kube/charts/let-note/environments/prod.yaml"
+          values = YAML.load_file(values_file)
+          values["global"] ||= {}
+          values["images"] ||= {}
+          values["images"]["backend"] ||= {}
+          values["images"]["frontend"] ||= {}
+          values["images"]["backend"]["tag"] = ENV.fetch("DOCKER_TAG")
+          values["images"]["frontend"]["tag"] = ENV.fetch("DOCKER_TAG")
+          values["global"]["deployId"] = ENV.fetch("GITHUB_SHA")
+          File.write(values_file, values.to_yaml)
+          RUBY
+
+          if git diff --quiet -- "${values_file}"; then
+            echo "changed=false" >> "${GITHUB_OUTPUT}"
+            exit 0
           fi
+
+          echo "changed=true" >> "${GITHUB_OUTPUT}"
+
+      - name: Open production promotion pull request
+        if: steps.promote_prod.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITOPS_TOKEN }}
+          IMAGE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          docker_tag="${IMAGE_TAG#v}"
+          branch="gitops/promote-prod-${docker_tag}-${GITHUB_RUN_ID}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "${branch}"
+          git add infrastructure/deploiement-kube/charts/let-note/environments/prod.yaml
+          git commit -m "deploy(prod): promote ${docker_tag}"
+          git push origin "${branch}"
+
+          pr_url="$(gh pr create \
+            --base main \
+            --head "${branch}" \
+            --title "deploy(prod): promote ${docker_tag}" \
+            --body "Promotes Let-Note ${docker_tag} to prod. Argo CD will synchronize after merge.")"
+
+          gh pr merge "${pr_url}" --squash --auto
