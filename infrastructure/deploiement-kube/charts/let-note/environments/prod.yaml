@@ -1,12 +1,12 @@
+---
 global:
   environment: prod
-
+  deployId: 3dc824bdce6b541f0fe0806e180187fbc9334c65
 images:
   backend:
-    tag: latest
+    tag: 1.1.3
   frontend:
-    tag: latest
-
+    tag: 1.1.3
 config:
   frontend:
     APP_ENV: prod
@@ -19,14 +19,11 @@ config:
       host: let-note.prod.polydo.dev
     cors:
       allowedOrigins:
-        - https://let-note.prod.polydo.dev
-
+      - https://let-note.prod.polydo.dev
 postgres:
   database: let_note_prod
-
 secrets:
   create: false
-
 backend:
   replicas: 2
   autoscaling:
@@ -47,7 +44,6 @@ backend:
     limits:
       cpu: 400m
       memory: 512Mi
-
 frontend:
   replicas: 2
   autoscaling:
@@ -65,7 +61,6 @@ frontend:
     limits:
       cpu: 400m
       memory: 512Mi
-
 ingress:
   host: let-note.prod.polydo.dev
   annotations:
