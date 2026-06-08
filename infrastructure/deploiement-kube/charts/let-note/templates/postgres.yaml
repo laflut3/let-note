@@ -20,6 +20,7 @@ spec:
         app: postgres
         {{- include "let-note.commonLabels" . | nindent 8 }}
     spec:
+      serviceAccountName: let-note-backend
       securityContext:
         fsGroup: 999
       initContainers:
@@ -36,9 +37,43 @@ spec:
         volumeMounts:
         - name: data
           mountPath: /var/lib/postgresql
+      - name: render-postgres-password
+        image: python:3.12-alpine
+        command:
+        - python
+        - /scripts/render_vault_env.py
+        env:
+        - name: VAULT_ADDR
+          value: {{ .Values.backend.vault.addr | quote }}
+        - name: VAULT_KV_MOUNT
+          value: {{ .Values.backend.vault.kvMount | quote }}
+        - name: VAULT_SECRET_PATH
+          value: {{ .Values.backend.vault.secretPath | quote }}
+        - name: VAULT_AUTH_METHOD
+          value: {{ .Values.backend.vault.authMethod | quote }}
+        - name: VAULT_K8S_AUTH_MOUNT
+          value: {{ .Values.backend.vault.k8sAuthMount | quote }}
+        - name: VAULT_K8S_ROLE
+          value: {{ .Values.backend.vault.k8sRole | quote }}
+        - name: VAULT_ENV_OUTPUT_PATH
+          value: /vault/secrets/postgres.env
+        - name: VAULT_ENV_MAPPINGS
+          value: POSTGRES_PASSWORD=PS_BDD_PASS
+        volumeMounts:
+        - name: vault-env-bootstrap
+          mountPath: /scripts
+          readOnly: true
+        - name: vault-secrets
+          mountPath: /vault/secrets
       containers:
       - name: postgres
         image: {{ include "let-note.image" .Values.images.postgres | quote }}
+        command:
+        - sh
+        - -ec
+        - |
+          . /vault/secrets/postgres.env
+          exec docker-entrypoint.sh postgres
         securityContext:
           runAsUser: 999
           runAsGroup: 999
@@ -47,11 +82,12 @@ spec:
         envFrom:
         - configMapRef:
             name: postgres-config
-        - secretRef:
-            name: postgres-secret
         volumeMounts:
         - name: data
           mountPath: /var/lib/postgresql
+        - name: vault-secrets
+          mountPath: /vault/secrets
+          readOnly: true
         readinessProbe:
           exec:
             command: ["sh", "-c", "pg_isready -U $POSTGRES_USER -d $POSTGRES_DB"]
@@ -68,6 +104,12 @@ spec:
       - name: data
         persistentVolumeClaim:
           claimName: postgres-pvc
+      - name: vault-env-bootstrap
+        configMap:
+          name: vault-env-bootstrap
+          defaultMode: 0555
+      - name: vault-secrets
+        emptyDir: {}
 ---
 apiVersion: v1
 kind: Service

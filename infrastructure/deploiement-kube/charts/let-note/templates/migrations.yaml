@@ -33,10 +33,40 @@ spec:
         app: db-migration
         {{- include "let-note.commonLabels" . | nindent 8 }}
     spec:
+      serviceAccountName: let-note-backend
       restartPolicy: Never
       securityContext:
         seccompProfile:
           type: RuntimeDefault
+      initContainers:
+      - name: render-postgres-password
+        image: python:3.12-alpine
+        command:
+        - python
+        - /scripts/render_vault_env.py
+        env:
+        - name: VAULT_ADDR
+          value: {{ .Values.backend.vault.addr | quote }}
+        - name: VAULT_KV_MOUNT
+          value: {{ .Values.backend.vault.kvMount | quote }}
+        - name: VAULT_SECRET_PATH
+          value: {{ .Values.backend.vault.secretPath | quote }}
+        - name: VAULT_AUTH_METHOD
+          value: {{ .Values.backend.vault.authMethod | quote }}
+        - name: VAULT_K8S_AUTH_MOUNT
+          value: {{ .Values.backend.vault.k8sAuthMount | quote }}
+        - name: VAULT_K8S_ROLE
+          value: {{ .Values.backend.vault.k8sRole | quote }}
+        - name: VAULT_ENV_OUTPUT_PATH
+          value: /vault/secrets/postgres.env
+        - name: VAULT_ENV_MAPPINGS
+          value: PGPASSWORD=PS_BDD_PASS
+        volumeMounts:
+        - name: vault-env-bootstrap
+          mountPath: /scripts
+          readOnly: true
+        - name: vault-secrets
+          mountPath: /vault/secrets
       containers:
       - name: migrate
         image: {{ include "let-note.image" .Values.images.postgres | quote }}
@@ -53,16 +83,12 @@ spec:
         envFrom:
         - configMapRef:
             name: postgres-config
-        env:
-        - name: PGPASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: postgres-secret
-              key: POSTGRES_PASSWORD
         command:
         - sh
         - -ec
         - |
+          . /vault/secrets/postgres.env
+
           until pg_isready -h postgres -U "${POSTGRES_USER}" -d "${POSTGRES_DB}"; do
             echo "waiting for postgres"
             sleep 5
@@ -88,10 +114,19 @@ spec:
         - name: migrations
           mountPath: /migrations
           readOnly: true
+        - name: vault-secrets
+          mountPath: /vault/secrets
+          readOnly: true
         resources:
           {{- toYaml .Values.migrations.resources | nindent 10 }}
       volumes:
       - name: migrations
         configMap:
           name: db-migrations
+      - name: vault-env-bootstrap
+        configMap:
+          name: vault-env-bootstrap
+          defaultMode: 0555
+      - name: vault-secrets
+        emptyDir: {}
 {{- end }}
