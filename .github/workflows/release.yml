@@ -160,15 +160,36 @@ jobs:
                 force: true,
               });
             } catch (error) {
-              if (error.status !== 404) {
+              const referenceIsMissing =
+                error.status === 404 ||
+                (error.status === 422 && error.response?.data?.message === "Reference does not exist");
+
+              if (!referenceIsMissing) {
                 throw error;
               }
-              await github.rest.git.createRef({
-                owner,
-                repo,
-                ref: `refs/${latestRef}`,
-                sha: targetSha,
-              });
+
+              try {
+                await github.rest.git.createRef({
+                  owner,
+                  repo,
+                  ref: `refs/${latestRef}`,
+                  sha: targetSha,
+                });
+              } catch (createError) {
+                if (
+                  createError.status !== 422 ||
+                  createError.response?.data?.message !== "Reference already exists"
+                ) {
+                  throw createError;
+                }
+                await github.rest.git.updateRef({
+                  owner,
+                  repo,
+                  ref: latestRef,
+                  sha: targetSha,
+                  force: true,
+                });
+              }
             }
 
       - name: Create or update latest GitHub Release
