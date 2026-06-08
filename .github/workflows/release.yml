@@ -9,6 +9,7 @@ on:
 permissions:
   contents: write
   packages: write
+  pull-requests: write
 
 env:
   CONTAINER_REGISTRY: ghcr.io
@@ -43,81 +44,34 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Check backend source image exists
+      - name: Promote OCI images
+        env:
+          IMAGES: >-
+            ${{ env.BACKEND_IMAGE_NAME }}
+            ${{ env.FRONTEND_IMAGE_NAME }}
         run: |
-          docker buildx imagetools inspect \
-            ${{ env.CONTAINER_REGISTRY }}/${{ env.BACKEND_IMAGE_NAME }}:${{ github.sha }}
+          set -euo pipefail
 
-      - name: Check frontend source image exists
-        run: |
-          docker buildx imagetools inspect \
-            ${{ env.CONTAINER_REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}:${{ github.sha }}
+          docker_tag="${RELEASE_TAG#v}"
 
-      - name: Tag and push backend release image
-        run: |
-          DOCKER_TAG="${RELEASE_TAG#v}"
-          docker buildx imagetools create \
-            -t ${{ env.CONTAINER_REGISTRY }}/${{ env.BACKEND_IMAGE_NAME }}:${DOCKER_TAG} \
-            ${{ env.CONTAINER_REGISTRY }}/${{ env.BACKEND_IMAGE_NAME }}:${{ github.sha }}
+          for image in ${IMAGES}; do
+            source="${CONTAINER_REGISTRY}/${image}:${GITHUB_SHA}"
+            docker buildx imagetools inspect "${source}"
 
-      - name: Tag and push backend latest image
-        run: |
-          docker buildx imagetools create \
-            -t ${{ env.CONTAINER_REGISTRY }}/${{ env.BACKEND_IMAGE_NAME }}:latest \
-            ${{ env.CONTAINER_REGISTRY }}/${{ env.BACKEND_IMAGE_NAME }}:${{ github.sha }}
+            docker buildx imagetools create \
+              -t "${CONTAINER_REGISTRY}/${image}:${docker_tag}" \
+              -t "${CONTAINER_REGISTRY}/${image}:latest" \
+              "${source}"
 
-      - name: Tag and push backend release image (amd64)
-        run: |
-          DOCKER_TAG="${RELEASE_TAG#v}"
-          AMD64_DIGEST="$(docker buildx imagetools inspect ${{ env.CONTAINER_REGISTRY }}/${{ env.BACKEND_IMAGE_NAME }}:${{ github.sha }} --raw \
-            | jq -r '.manifests[] | select(.platform.architecture=="amd64" and .platform.os=="linux") | .digest')"
-          test -n "${AMD64_DIGEST}"
-          docker buildx imagetools create \
-            -t ${{ env.CONTAINER_REGISTRY }}/${{ env.BACKEND_IMAGE_NAME }}:${DOCKER_TAG}-amd64 \
-            ${{ env.CONTAINER_REGISTRY }}/${{ env.BACKEND_IMAGE_NAME }}@${AMD64_DIGEST}
-
-      - name: Tag and push backend release image (arm64)
-        run: |
-          DOCKER_TAG="${RELEASE_TAG#v}"
-          ARM64_DIGEST="$(docker buildx imagetools inspect ${{ env.CONTAINER_REGISTRY }}/${{ env.BACKEND_IMAGE_NAME }}:${{ github.sha }} --raw \
-            | jq -r '.manifests[] | select(.platform.architecture=="arm64" and .platform.os=="linux") | .digest')"
-          test -n "${ARM64_DIGEST}"
-          docker buildx imagetools create \
-            -t ${{ env.CONTAINER_REGISTRY }}/${{ env.BACKEND_IMAGE_NAME }}:${DOCKER_TAG}-arm64 \
-            ${{ env.CONTAINER_REGISTRY }}/${{ env.BACKEND_IMAGE_NAME }}@${ARM64_DIGEST}
-
-      - name: Tag and push frontend release image
-        run: |
-          DOCKER_TAG="${RELEASE_TAG#v}"
-          docker buildx imagetools create \
-            -t ${{ env.CONTAINER_REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}:${DOCKER_TAG} \
-            ${{ env.CONTAINER_REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}:${{ github.sha }}
-
-      - name: Tag and push frontend latest image
-        run: |
-          docker buildx imagetools create \
-            -t ${{ env.CONTAINER_REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}:latest \
-            ${{ env.CONTAINER_REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}:${{ github.sha }}
-
-      - name: Tag and push frontend release image (amd64)
-        run: |
-          DOCKER_TAG="${RELEASE_TAG#v}"
-          AMD64_DIGEST="$(docker buildx imagetools inspect ${{ env.CONTAINER_REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}:${{ github.sha }} --raw \
-            | jq -r '.manifests[] | select(.platform.architecture=="amd64" and .platform.os=="linux") | .digest')"
-          test -n "${AMD64_DIGEST}"
-          docker buildx imagetools create \
-            -t ${{ env.CONTAINER_REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}:${DOCKER_TAG}-amd64 \
-            ${{ env.CONTAINER_REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}@${AMD64_DIGEST}
-
-      - name: Tag and push frontend release image (arm64)
-        run: |
-          DOCKER_TAG="${RELEASE_TAG#v}"
-          ARM64_DIGEST="$(docker buildx imagetools inspect ${{ env.CONTAINER_REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}:${{ github.sha }} --raw \
-            | jq -r '.manifests[] | select(.platform.architecture=="arm64" and .platform.os=="linux") | .digest')"
-          test -n "${ARM64_DIGEST}"
-          docker buildx imagetools create \
-            -t ${{ env.CONTAINER_REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}:${DOCKER_TAG}-arm64 \
-            ${{ env.CONTAINER_REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}@${ARM64_DIGEST}
+            for arch in amd64 arm64; do
+              digest="$(docker buildx imagetools inspect "${source}" --raw \
+                | jq -r --arg arch "${arch}" '.manifests[] | select(.platform.architecture==$arch and .platform.os=="linux") | .digest')"
+              test -n "${digest}"
+              docker buildx imagetools create \
+                -t "${CONTAINER_REGISTRY}/${image}:${docker_tag}-${arch}" \
+                "${CONTAINER_REGISTRY}/${image}@${digest}"
+            done
+          done
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
@@ -131,7 +85,7 @@ jobs:
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           ref: main
-          token: ${{ secrets.GITOPS_TOKEN }}
+          token: ${{ secrets.GITOPS_TOKEN || github.token }}
 
       - name: Promote production desired state
         id: promote_prod
@@ -168,7 +122,7 @@ jobs:
       - name: Open production promotion pull request
         if: steps.promote_prod.outputs.changed == 'true'
         env:
-          GH_TOKEN: ${{ secrets.GITOPS_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITOPS_TOKEN || github.token }}
           IMAGE_TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
