@@ -35,6 +35,16 @@ spec:
         - -mdir=/data/master
         ports:
         - containerPort: 9333
+        readinessProbe:
+          tcpSocket:
+            port: 9333
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        livenessProbe:
+          tcpSocket:
+            port: 9333
+          initialDelaySeconds: 15
+          periodSeconds: 15
         volumeMounts:
         - name: master-data
           mountPath: /data/master
@@ -43,7 +53,7 @@ spec:
       volumes:
       - name: master-data
         persistentVolumeClaim:
-          claimName: minio-pvc
+          claimName: seaweed-master-pvc
 ---
 apiVersion: v1
 kind: Service
@@ -93,6 +103,16 @@ spec:
         - -dir=/data/volume
         ports:
         - containerPort: 8080
+        readinessProbe:
+          tcpSocket:
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        livenessProbe:
+          tcpSocket:
+            port: 8080
+          initialDelaySeconds: 15
+          periodSeconds: 15
         volumeMounts:
         - name: volume-data
           mountPath: /data/volume
@@ -101,7 +121,7 @@ spec:
       volumes:
       - name: volume-data
         persistentVolumeClaim:
-          claimName: minio-pvc
+          claimName: seaweed-volume-pvc
 ---
 apiVersion: v1
 kind: Service
@@ -146,6 +166,16 @@ spec:
         args: ["filer", "-master=seaweed-master:9333", "-ip=seaweed-filer", "-port=8888"]
         ports:
         - containerPort: 8888
+        readinessProbe:
+          tcpSocket:
+            port: 8888
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        livenessProbe:
+          tcpSocket:
+            port: 8888
+          initialDelaySeconds: 15
+          periodSeconds: 15
         resources:
           {{- toYaml .Values.seaweedfs.resources | nindent 10 }}
 ---
@@ -235,6 +265,16 @@ spec:
         - -config=/etc/seaweedfs/s3.conf
         ports:
         - containerPort: 8333
+        readinessProbe:
+          tcpSocket:
+            port: 8333
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        livenessProbe:
+          tcpSocket:
+            port: 8333
+          initialDelaySeconds: 15
+          periodSeconds: 15
         volumeMounts:
         - name: s3-config
           mountPath: /etc/seaweedfs
