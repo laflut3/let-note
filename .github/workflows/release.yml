@@ -132,22 +132,44 @@ jobs:
           script: |
             const owner = context.repo.owner;
             const repo = context.repo.repo;
-            const ref = "tags/latest";
+            const latestRef = "tags/latest";
+            const releaseRef = `tags/${context.ref.replace("refs/tags/", "")}`;
 
-            try {
-              await github.rest.git.deleteRef({ owner, repo, ref });
-            } catch (error) {
-              if (error.status !== 422 && error.status !== 404) {
-                throw error;
-              }
-            }
-
-            await github.rest.git.createRef({
+            const releaseTag = await github.rest.git.getRef({
               owner,
               repo,
-              ref: `refs/${ref}`,
-              sha: context.sha,
+              ref: releaseRef,
             });
+
+            let targetSha = releaseTag.data.object.sha;
+            if (releaseTag.data.object.type === "tag") {
+              const tagObject = await github.rest.git.getTag({
+                owner,
+                repo,
+                tag_sha: targetSha,
+              });
+              targetSha = tagObject.data.object.sha;
+            }
+
+            try {
+              await github.rest.git.updateRef({
+                owner,
+                repo,
+                ref: latestRef,
+                sha: targetSha,
+                force: true,
+              });
+            } catch (error) {
+              if (error.status !== 404) {
+                throw error;
+              }
+              await github.rest.git.createRef({
+                owner,
+                repo,
+                ref: `refs/${latestRef}`,
+                sha: targetSha,
+              });
+            }
 
       - name: Create or update latest GitHub Release
         env:
@@ -164,7 +186,7 @@ jobs:
               --latest
           else
             gh release create latest \
-              --target "${GITHUB_SHA}" \
+              --verify-tag \
               --title "latest" \
               --notes "${notes}" \
               --latest
