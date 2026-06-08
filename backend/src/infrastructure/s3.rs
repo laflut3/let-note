@@ -1,6 +1,10 @@
 use anyhow::Context;
 use aws_credential_types::Credentials;
-use aws_sdk_s3::{Client, config::Builder as S3ConfigBuilder, primitives::ByteStream};
+use aws_sdk_s3::{
+  Client,
+  config::{Builder as S3ConfigBuilder, RequestChecksumCalculation},
+  primitives::ByteStream,
+};
 use aws_types::region::Region;
 
 #[derive(Debug, Clone)]
@@ -95,11 +99,19 @@ pub async fn download_bytes(bucket: &str, key: &str) -> anyhow::Result<(Vec<u8>,
   Ok((bytes, content_type))
 }
 
+pub async fn verify_bucket_access(cfg: &S3Config) -> anyhow::Result<()> {
+  let client = client_from_config(cfg);
+  ensure_bucket_exists(&client, &cfg.bucket)
+    .await
+    .with_context(|| format!("unable to access S3 bucket {}", cfg.bucket))
+}
+
 fn client_from_config(cfg: &S3Config) -> Client {
   let client_config = S3ConfigBuilder::new()
     .region(Region::new(cfg.region.clone()))
     .endpoint_url(cfg.endpoint.clone())
     .force_path_style(true)
+    .request_checksum_calculation(RequestChecksumCalculation::WhenRequired)
     .credentials_provider(Credentials::new(
       cfg.access_key.clone(),
       cfg.secret_key.clone(),

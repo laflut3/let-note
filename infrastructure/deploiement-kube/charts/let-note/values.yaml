@@ -61,7 +61,10 @@ persistence:
   postgres:
     size: 2Gi
   seaweedfs:
-    size: 10Gi
+    master:
+      size: 1Gi
+    volume:
+      size: 10Gi
 
 postgres:
   database: let_note_dev
