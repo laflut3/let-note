@@ -29,7 +29,7 @@ import {
 } from '@/services/api';
 import type { SortDirection } from '@/types/common';
 
-export type AdminTab = 'promotions' | 'etudiants' | 'professeurs' | 'matieres' | 'devoirs';
+export type AdminTab = 'promotions' | 'etudiants' | 'professeurs' | 'matieres' | 'events';
 
 export type Feedback = {
   type: '' | 'success' | 'error';
@@ -65,7 +65,8 @@ export function useAdminController(navigate: NavigateFunction) {
 
   const [promoName, setPromoName] = useState('');
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
-  const [imageUrl, setImageUrl] = useState('');
+  const [promotionUserSearch, setPromotionUserSearch] = useState('');
+  const [promotionImageFile, setPromotionImageFile] = useState<File | null>(null);
   const [icalUrl, setIcalUrl] = useState('');
   const [anneeArrivee, setAnneeArrivee] = useState(String(new Date().getFullYear()));
   const [anneeDepart, setAnneeDepart] = useState(String(new Date().getFullYear() + 3));
@@ -75,6 +76,7 @@ export function useAdminController(navigate: NavigateFunction) {
   const [selectedPromoId, setSelectedPromoId] = useState('');
   const [editPromoName, setEditPromoName] = useState('');
   const [editPromoImage, setEditPromoImage] = useState('');
+  const [editPromoImageFile, setEditPromoImageFile] = useState<File | null>(null);
   const [editPromoIcal, setEditPromoIcal] = useState('');
   const [editPromoArrivee, setEditPromoArrivee] = useState('');
   const [editPromoDepart, setEditPromoDepart] = useState('');
@@ -83,6 +85,7 @@ export function useAdminController(navigate: NavigateFunction) {
   const [studentsPopupPromoId, setStudentsPopupPromoId] = useState('');
   const [promoStudents, setPromoStudents] = useState<PromotionStudent[]>([]);
   const [selectedStudentForPromo, setSelectedStudentForPromo] = useState('');
+  const [promoStudentSearch, setPromoStudentSearch] = useState('');
 
   const [profPrenom, setProfPrenom] = useState('');
   const [profNom, setProfNom] = useState('');
@@ -107,9 +110,9 @@ export function useAdminController(navigate: NavigateFunction) {
   const [resourceTitle, setResourceTitle] = useState('');
   const [resourceDescription, setResourceDescription] = useState('');
   const [resourceFile, setResourceFile] = useState<File | null>(null);
+  const [resourcePromoId, setResourcePromoId] = useState('');
 
   const [selectedDelegueId, setSelectedDelegueId] = useState('');
-  const [editStudentNumero, setEditStudentNumero] = useState('');
   const [editStudentPrenom, setEditStudentPrenom] = useState('');
   const [editStudentNom, setEditStudentNom] = useState('');
   const [editStudentEmail, setEditStudentEmail] = useState('');
@@ -136,12 +139,12 @@ export function useAdminController(navigate: NavigateFunction) {
   const canCreatePromotion = useMemo(() => {
     return (
       promoName.trim().length > 0 &&
-      imageUrl.trim().length > 0 &&
+      promotionImageFile !== null &&
       Number.isInteger(Number(anneeArrivee)) &&
       Number.isInteger(Number(anneeDepart)) &&
       selectedCount > 0
     );
-  }, [anneeArrivee, anneeDepart, imageUrl, promoName, selectedCount]);
+  }, [anneeArrivee, anneeDepart, promoName, promotionImageFile, selectedCount]);
 
   const filteredPromotions = useMemo(() => {
     const query = promotionSearch.trim().toLowerCase();
@@ -159,6 +162,16 @@ export function useAdminController(navigate: NavigateFunction) {
       return promotionSort === 'asc' ? cmp : -cmp;
     });
   }, [promotions, promotionSearch, promotionSort]);
+
+  const filteredUsersForPromotionCreate = useMemo(() => {
+    const query = promotionUserSearch.trim().toLowerCase();
+    return users
+      .filter((user) => {
+        if (!query) return true;
+        return `${user.prenom} ${user.nom} ${user.email}`.toLowerCase().includes(query);
+      })
+      .sort((a, b) => `${a.nom} ${a.prenom}`.localeCompare(`${b.nom} ${b.prenom}`, 'fr'));
+  }, [promotionUserSearch, users]);
 
   const filteredProfesseurs = useMemo(() => {
     const query = profSearch.trim().toLowerCase();
@@ -183,8 +196,7 @@ export function useAdminController(navigate: NavigateFunction) {
       return (
         item.prenom.toLowerCase().includes(query) ||
         item.nom.toLowerCase().includes(query) ||
-        item.email.toLowerCase().includes(query) ||
-        (item.numero_etudiant ?? '').toLowerCase().includes(query)
+        item.email.toLowerCase().includes(query)
       );
     });
     return filtered.sort((a, b) => {
@@ -288,6 +300,7 @@ export function useAdminController(navigate: NavigateFunction) {
 
     setEditPromoName(promo.nom);
     setEditPromoImage(promo.image_url);
+    setEditPromoImageFile(null);
     setEditPromoIcal(promo.ical_url ?? '');
     setEditPromoArrivee(String(promo.annee_arrivee));
     setEditPromoDepart(String(promo.annee_depart));
@@ -351,15 +364,17 @@ export function useAdminController(navigate: NavigateFunction) {
           type: 'error',
           message: await extractErrorMessage(response, 'Operation impossible.'),
         });
-        return;
+        return false;
       }
 
       setFeedback({ type: 'success', message: successMessage });
       if (refresh) {
         await loadAdminData();
       }
+      return true;
     } catch {
       setFeedback({ type: 'error', message: 'Erreur reseau. Reessayez.' });
+      return false;
     }
   };
 
@@ -368,22 +383,30 @@ export function useAdminController(navigate: NavigateFunction) {
     setSelectedPromoId(promotion.id);
     setEditPromoName(promotion.nom);
     setEditPromoImage(promotion.image_url);
+    setEditPromoImageFile(null);
     setEditPromoIcal(promotion.ical_url ?? '');
     setEditPromoArrivee(String(promotion.annee_arrivee));
     setEditPromoDepart(String(promotion.annee_depart));
     setEditPromoReferentId(promotion.referent_prof_id ?? '');
   };
 
-  const openStudentsPopup = async (promoId: string) => {
-    setStudentsPopupPromoId(promoId);
-    setPromoStudents([]);
-    setSelectedStudentForPromo('');
+  const refreshPromoStudents = async (promoId: string) => {
     const response = await adminListPromotionStudentsRequest(promoId);
     if (response.ok) {
       const students = (await response.json()) as PromotionStudent[];
       setPromoStudents(students);
-      setSelectedStudentForPromo(students[0]?.id ?? '');
+      setSelectedStudentForPromo((prev) =>
+        prev && students.every((student) => student.id !== prev) ? prev : ''
+      );
     }
+  };
+
+  const openStudentsPopup = async (promoId: string) => {
+    setStudentsPopupPromoId(promoId);
+    setPromoStudents([]);
+    setSelectedStudentForPromo('');
+    setPromoStudentSearch('');
+    await refreshPromoStudents(promoId);
   };
 
   const toggleStudentDetails = (student: AdminStudentDetails) => {
@@ -392,7 +415,6 @@ export function useAdminController(navigate: NavigateFunction) {
       return;
     }
     setExpandedStudentId(student.id);
-    setEditStudentNumero(student.numero_etudiant ?? '');
     setEditStudentPrenom(student.prenom);
     setEditStudentNom(student.nom);
     setEditStudentEmail(student.email);
@@ -442,7 +464,7 @@ export function useAdminController(navigate: NavigateFunction) {
       () =>
         adminCreatePromotionRequest({
           nom: promoName.trim(),
-          image_url: imageUrl.trim(),
+          image_file: promotionImageFile as File,
           ical_url: icalUrl.trim() || undefined,
           annee_arrivee: Number(anneeArrivee),
           annee_depart: Number(anneeDepart),
@@ -488,14 +510,15 @@ export function useAdminController(navigate: NavigateFunction) {
   };
 
   const handleCreateMatiereResource = async () => {
-    if (!selectedMatiereCode || !resourceTitle.trim() || !resourceFile) {
-      setFeedback({ type: 'error', message: 'Matiere, titre et fichier sont requis.' });
+    if (!selectedMatiereCode || !resourcePromoId || !resourceTitle.trim() || !resourceFile) {
+      setFeedback({ type: 'error', message: 'Matiere, promotion, titre et fichier sont requis.' });
       return;
     }
 
     await runAction(
       () =>
         adminCreateMatiereResourceRequest(selectedMatiereCode, {
+          id_promo: resourcePromoId,
           type_metier: resourceType,
           title: resourceTitle.trim(),
           description: resourceDescription.trim() || undefined,
@@ -512,6 +535,7 @@ export function useAdminController(navigate: NavigateFunction) {
     setResourceTitle('');
     setResourceDescription('');
     setResourceFile(null);
+    setResourcePromoId('');
   };
 
   const handleDeleteMatiereResource = async (resourceId: string) => {
@@ -661,8 +685,11 @@ export function useAdminController(navigate: NavigateFunction) {
     promoName,
     setPromoName,
     selectedUserIds,
-    imageUrl,
-    setImageUrl,
+    promotionUserSearch,
+    setPromotionUserSearch,
+    filteredUsersForPromotionCreate,
+    promotionImageFile,
+    setPromotionImageFile,
     icalUrl,
     setIcalUrl,
     anneeArrivee,
@@ -678,6 +705,8 @@ export function useAdminController(navigate: NavigateFunction) {
     setEditPromoName,
     editPromoImage,
     setEditPromoImage,
+    editPromoImageFile,
+    setEditPromoImageFile,
     editPromoIcal,
     setEditPromoIcal,
     editPromoArrivee,
@@ -693,6 +722,9 @@ export function useAdminController(navigate: NavigateFunction) {
     promoStudents,
     selectedStudentForPromo,
     setSelectedStudentForPromo,
+    promoStudentSearch,
+    setPromoStudentSearch,
+    refreshPromoStudents,
     profPrenom,
     setProfPrenom,
     profNom,
@@ -729,14 +761,14 @@ export function useAdminController(navigate: NavigateFunction) {
     setResourceDescription,
     resourceFile,
     setResourceFile,
+    resourcePromoId,
+    setResourcePromoId,
     linkPromoId,
     setLinkPromoId,
     linkReferentProfId,
     setLinkReferentProfId,
     selectedDelegueId,
     setSelectedDelegueId,
-    editStudentNumero,
-    setEditStudentNumero,
     editStudentPrenom,
     setEditStudentPrenom,
     editStudentNom,

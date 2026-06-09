@@ -1,13 +1,10 @@
 pub async fn create_promotion(
   db: &PgPool,
-  payload: CreatePromotion,
+  payload: CreatePromotionInput,
 ) -> Result<CreatedPromotion, ApiError> {
   let promo_name = payload.nom.trim().to_string();
   if promo_name.is_empty() {
     return Err(ApiError::bad_request("promotion name is required"));
-  }
-  if payload.image_url.trim().is_empty() {
-    return Err(ApiError::bad_request("promotion image is required"));
   }
 
   let mut etudiant_ids = payload.etudiant_ids;
@@ -21,6 +18,7 @@ pub async fn create_promotion(
   etudiant_ids.dedup();
 
   let (annee_debut, annee_fin) = years_bounds(payload.annee_arrivee, payload.annee_depart)?;
+  let promo_id = Uuid::new_v4();
 
   if let Some(referent_prof_id) = payload.referent_prof_id {
     let referent_exists = sqlx::query_scalar::<_, i64>(
@@ -41,10 +39,28 @@ pub async fn create_promotion(
     }
   }
 
+  let existing_students = sqlx::query_scalar::<_, i64>(
+    r#"
+    SELECT COUNT(*)
+    FROM etudiant
+    WHERE id = ANY($1::uuid[])
+    "#,
+  )
+  .bind(&etudiant_ids)
+  .fetch_one(db)
+  .await
+  .map_err(map_schema_error("unable to validate promotion students"))?;
+
+  if existing_students != i64::try_from(etudiant_ids.len()).unwrap_or(i64::MAX) {
+    return Err(ApiError::bad_request("one or more students do not exist"));
+  }
+
   let ical_url = payload
     .ical_url
     .map(|value| value.trim().to_string())
     .filter(|value| !value.is_empty());
+  let image = upload_promotion_image(promo_id, payload.image).await?;
+  let image_url = promotion_image_url(promo_id);
 
   let mut tx = db
     .begin()
@@ -57,13 +73,17 @@ pub async fn create_promotion(
   >(
     r#"
     INSERT INTO promotion
-      (nom, image_url, ical_url, annee_arrivee, annee_depart, annee_debut, annee_fin, referent_prof_id)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      (id, nom, image_url, image_s3_bucket, image_s3_key, image_content_type, ical_url, annee_arrivee, annee_depart, annee_debut, annee_fin, referent_prof_id)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
     RETURNING id, nom, image_url, ical_url, annee_arrivee, annee_depart, referent_prof_id
     "#,
   )
+  .bind(promo_id)
   .bind(&promo_name)
-  .bind(payload.image_url.trim())
+  .bind(image_url)
+  .bind(image.bucket)
+  .bind(image.key)
+  .bind(image.content_type)
   .bind(ical_url)
   .bind(payload.annee_arrivee)
   .bind(payload.annee_depart)
@@ -102,6 +122,86 @@ pub async fn create_promotion(
     referent_prof_id: created.6,
     user_count: etudiant_ids.len(),
   })
+}
+
+struct UploadedPromotionImage {
+  bucket: String,
+  key: String,
+  content_type: String,
+}
+
+async fn upload_promotion_image(
+  promo_id: Uuid,
+  image: PromotionImageUploadInput,
+) -> Result<UploadedPromotionImage, ApiError> {
+  if image.bytes.is_empty() {
+    return Err(ApiError::bad_request("promotion image is required"));
+  }
+  if image.bytes.len() > 8 * 1024 * 1024 {
+    return Err(ApiError::bad_request("promotion image is too large (max 8MB)"));
+  }
+
+  let detected_content_type = detect_image_content_type(&image.bytes)
+    .ok_or_else(|| ApiError::bad_request("promotion image must be a jpeg, png, webp or gif"))?;
+
+  if let Some(provided) = image.content_type.as_deref().map(|value| {
+    value
+      .split(';')
+      .next()
+      .unwrap_or("")
+      .trim()
+      .to_ascii_lowercase()
+  }) && !provided.is_empty()
+    && provided != detected_content_type
+  {
+    return Err(ApiError::bad_request(
+      "promotion image content type does not match the uploaded file",
+    ));
+  }
+
+  let cfg = s3::read_s3_config().map_err(|_| ApiError::internal("unable to read S3 config"))?;
+  let key = format!(
+    "promotions/{}/{}",
+    promo_id,
+    sanitize_file_name(&image.file_name)
+  );
+
+  s3::upload_bytes(&key, image.bytes, Some(detected_content_type))
+    .await
+    .map_err(|error| {
+      eprintln!("promotion image upload failed: {error:#}");
+      ApiError::internal("unable to upload promotion image")
+    })?;
+
+  Ok(UploadedPromotionImage {
+    bucket: cfg.bucket,
+    key,
+    content_type: detected_content_type.to_string(),
+  })
+}
+
+fn promotion_image_url(promo_id: Uuid) -> String {
+  format!("/api/promotions/{promo_id}/image")
+}
+
+fn detect_image_content_type(bytes: &[u8]) -> Option<&'static str> {
+  if bytes.len() >= 3 && bytes[0..3] == [0xFF, 0xD8, 0xFF] {
+    return Some("image/jpeg");
+  }
+
+  if bytes.len() >= 8 && bytes[0..8] == [0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A] {
+    return Some("image/png");
+  }
+
+  if bytes.len() >= 12 && bytes[0..4] == *b"RIFF" && bytes[8..12] == *b"WEBP" {
+    return Some("image/webp");
+  }
+
+  if bytes.len() >= 6 && (bytes[0..6] == *b"GIF87a" || bytes[0..6] == *b"GIF89a") {
+    return Some("image/gif");
+  }
+
+  None
 }
 
 pub async fn assign_delegue(
@@ -213,7 +313,6 @@ pub async fn list_promotion_students(
     r#"
     SELECT
       e.id,
-      e.numero_etudiant,
       e.nom,
       e.prenom,
       e.email,

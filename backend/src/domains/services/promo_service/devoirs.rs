@@ -49,6 +49,7 @@ pub async fn create_devoir_for_promo(
     return Err(ApiError::bad_request("id_mat and titre are required"));
   }
 
+  let _promotion = get_accessible_promotion(db, auth, promo_id).await?;
   ensure_subject_in_promo(db, &code, promo_id).await?;
 
   sqlx::query(

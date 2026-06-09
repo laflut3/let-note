@@ -1,4 +1,4 @@
-import { BookOpen, GraduationCap, User, Users } from 'lucide-react';
+import { BookOpen, GraduationCap, PartyPopper, User, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/auth/ThemeToggle';
 import { useThemeContext } from '@/context/theme-context';
@@ -15,7 +15,7 @@ const tabs: Array<[AdminTab, string, typeof GraduationCap]> = [
   ['etudiants', 'Etudiants', Users],
   ['professeurs', 'Professeurs', User],
   ['matieres', 'Matieres', BookOpen],
-  ['devoirs', 'Devoirs', BookOpen],
+  ['events', 'Events', PartyPopper],
 ];
 
 export function AdminNav({ controller, onDashboard }: Props) {

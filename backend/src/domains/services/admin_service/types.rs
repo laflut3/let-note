@@ -10,6 +10,24 @@ pub struct CreatedPromotion {
   pub user_count: usize,
 }
 
+#[derive(Debug, Clone)]
+pub struct PromotionImageUploadInput {
+  pub file_name: String,
+  pub content_type: Option<String>,
+  pub bytes: Vec<u8>,
+}
+
+#[derive(Debug, Clone)]
+pub struct CreatePromotionInput {
+  pub nom: String,
+  pub ical_url: Option<String>,
+  pub annee_arrivee: i32,
+  pub annee_depart: i32,
+  pub referent_prof_id: Option<Uuid>,
+  pub etudiant_ids: Vec<Uuid>,
+  pub image: PromotionImageUploadInput,
+}
+
 #[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
 pub struct AdminPromotionSummary {
   pub id: Uuid,
@@ -52,7 +70,6 @@ pub struct AdminMatiereSummary {
 #[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
 pub struct PromotionStudent {
   pub id: Uuid,
-  pub numero_etudiant: Option<String>,
   pub nom: String,
   pub prenom: String,
   pub email: String,
@@ -62,7 +79,6 @@ pub struct PromotionStudent {
 #[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
 pub struct AdminStudentDetailsRow {
   pub id: Uuid,
-  pub numero_etudiant: Option<String>,
   pub nom: String,
   pub prenom: String,
   pub email: String,
@@ -82,7 +98,6 @@ pub struct AdminStudentPromoInfo {
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct AdminStudentDetails {
   pub id: Uuid,
-  pub numero_etudiant: Option<String>,
   pub nom: String,
   pub prenom: String,
   pub email: String,
@@ -93,21 +108,20 @@ pub struct AdminStudentDetails {
 
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct UpdateStudentInput {
-  pub numero_etudiant: Option<String>,
   pub prenom: Option<String>,
   pub nom: Option<String>,
   pub email: Option<String>,
   pub date_naissance: Option<NaiveDate>,
 }
 
-#[derive(Debug, Clone, serde::Deserialize)]
+#[derive(Debug, Clone)]
 pub struct UpdatePromotionInput {
   pub nom: Option<String>,
-  pub image_url: Option<String>,
   pub ical_url: Option<String>,
   pub annee_arrivee: Option<i32>,
   pub annee_depart: Option<i32>,
   pub referent_prof_id: Option<Uuid>,
+  pub image: Option<PromotionImageUploadInput>,
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]

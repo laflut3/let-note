@@ -5,7 +5,7 @@ import { ProfessorsTab } from '@/components/admin/ProfessorsSection';
 import { PromotionsTab } from '@/components/admin/PromotionsSection';
 import { StudentsTab } from '@/components/admin/StudentsSection';
 import { SubjectsTab } from '@/components/admin/SubjectsSection';
-import { DevoirsSection } from '@/components/devoirs/DevoirsSection';
+import { StudentEventsSection } from '@/components/events/StudentEventsSection';
 import { adminUi } from '@/lib/admin-ui';
 import { useAdminController } from '@/hooks/useAdminController';
 
@@ -22,21 +22,13 @@ export function AdminPage() {
         {controller.activeTab === 'professeurs' && <ProfessorsTab controller={controller} />}
         {controller.activeTab === 'etudiants' && <StudentsTab controller={controller} />}
         {controller.activeTab === 'matieres' && <SubjectsTab controller={controller} />}
-        {controller.activeTab === 'devoirs' && (
-          <DevoirsSection
+        {controller.activeTab === 'events' && (
+          <StudentEventsSection
             promotions={controller.promotions}
-            matieres={controller.matieres}
             selectedPromoId={controller.selectedPromoId}
             onPromoChange={controller.setSelectedPromoId}
             onFeedback={controller.setFeedback}
-            theme={{
-              panel: adminUi.panel,
-              title: 'text-xl font-semibold text-foreground',
-              input: adminUi.input,
-              select: adminUi.select,
-              primaryButton: adminUi.primaryBtn,
-              row: 'flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--surface-border)] bg-[var(--surface-muted)] p-4',
-            }}
+            panelClassName={adminUi.panel}
           />
         )}
 

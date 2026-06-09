@@ -9,7 +9,7 @@ use uuid::Uuid;
 use crate::domains::{
   entities::etudiant::{CreateEtudiant, GetEtudiant},
   error::ApiError,
-  services::auth_service,
+  services::{auth_service, email_service},
 };
 use crate::infrastructure::s3;
 
@@ -17,13 +17,12 @@ pub async fn create_etudiant(
   db: &PgPool,
   etudiant: CreateEtudiant,
 ) -> Result<GetEtudiant, ApiError> {
-  let numero = etudiant.numero_etudiant.trim().to_string();
-  if numero.len() != 8 || !numero.chars().all(|char| char.is_ascii_digit()) {
-    return Err(ApiError::bad_request(
-      "student number must contain exactly 8 digits",
-    ));
+  let nom = etudiant.nom.trim().to_string();
+  let prenom = etudiant.prenom.trim().to_string();
+  let email = etudiant.email.trim().to_lowercase();
+  if nom.is_empty() || prenom.is_empty() || email.is_empty() {
+    return Err(ApiError::bad_request("nom, prenom and email are required"));
   }
-
   if etudiant.mot_de_passe.trim().len() < 8 {
     return Err(ApiError::bad_request(
       "password must be at least 8 characters",
@@ -32,6 +31,7 @@ pub async fn create_etudiant(
 
   let password_hash = hash_password(&etudiant.mot_de_passe)
     .map_err(|_| ApiError::internal("unable to secure password at this time"))?;
+  let verification = auth_service::prepare_email_verification()?;
 
   let mut tx = db
     .begin()
@@ -40,22 +40,21 @@ pub async fn create_etudiant(
 
   let created = sqlx::query_as::<_, GetEtudiant>(
     r#"
-    INSERT INTO etudiant (numero_etudiant, nom, prenom, email, date_naissance, mot_de_passe)
-    VALUES ($1, $2, $3, $4, $5, $6)
-    RETURNING id, numero_etudiant, nom, prenom, email, date_naissance
+    INSERT INTO etudiant (nom, prenom, email, date_naissance, mot_de_passe)
+    VALUES ($1, $2, $3, $4, $5)
+    RETURNING id, nom, prenom, email, date_naissance
     "#,
   )
-  .bind(numero)
-  .bind(&etudiant.nom)
-  .bind(&etudiant.prenom)
-  .bind(etudiant.email.trim().to_lowercase())
+  .bind(nom)
+  .bind(prenom)
+  .bind(&email)
   .bind(etudiant.date_naissance)
   .bind(password_hash)
   .fetch_one(&mut *tx)
   .await
   .map_err(map_create_error)?;
 
-  sqlx::query(
+  let role_inserted = sqlx::query(
     r#"
     INSERT INTO role_etu (id_role, id_etu)
     SELECT r.id, $1
@@ -67,20 +66,45 @@ pub async fn create_etudiant(
   .bind(created.id)
   .execute(&mut *tx)
   .await
-  .map_err(|_| ApiError::internal("unable to assign default role"))?;
+  .map_err(|_| ApiError::internal("unable to assign default role"))?
+  .rows_affected();
+
+  if role_inserted == 0 {
+    return Err(ApiError::internal("default student role is missing"));
+  }
+
+  let verification_updated = sqlx::query(
+    r#"
+    UPDATE etudiant
+    SET email_verified = FALSE,
+        email_verification_token_hash = $2,
+        email_verification_expires_at = $3
+    WHERE id = $1
+    "#,
+  )
+  .bind(created.id)
+  .bind(&verification.token_hash)
+  .bind(verification.expires_at)
+  .execute(&mut *tx)
+  .await
+  .map_err(|_| ApiError::internal("unable to prepare email verification"))?
+  .rows_affected();
+
+  if verification_updated == 0 {
+    return Err(ApiError::internal("unable to prepare email verification"));
+  }
+
+  email_service::send_verification_email(&email, &verification.token).await?;
 
   tx.commit()
     .await
     .map_err(|_| ApiError::internal("unable to finalize account creation"))?;
-
-  auth_service::create_email_verification(db, created.id, &created.email).await?;
 
   Ok(created)
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct UpdateMyProfileInput {
-  pub numero_etudiant: Option<String>,
   pub nom: Option<String>,
   pub prenom: Option<String>,
   pub email: Option<String>,
@@ -90,7 +114,6 @@ pub struct UpdateMyProfileInput {
 #[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
 pub struct MyProfilePayload {
   pub id: Uuid,
-  pub numero_etudiant: Option<String>,
   pub nom: String,
   pub prenom: String,
   pub email: String,
@@ -101,7 +124,7 @@ pub struct MyProfilePayload {
 pub async fn get_etudiant_by_id(db: &PgPool, etu_id: Uuid) -> Result<GetEtudiant, ApiError> {
   sqlx::query_as::<_, GetEtudiant>(
     r#"
-    SELECT id, numero_etudiant, nom, prenom, email, date_naissance
+    SELECT id, nom, prenom, email, date_naissance
     FROM etudiant
     WHERE id = $1
     "#,
@@ -118,7 +141,6 @@ pub async fn get_my_profile_by_id(db: &PgPool, etu_id: Uuid) -> Result<MyProfile
     r#"
     SELECT
       id,
-      numero_etudiant,
       nom,
       prenom,
       email,
@@ -145,25 +167,6 @@ pub async fn update_etudiant_by_id(
 ) -> Result<GetEtudiant, ApiError> {
   let current = get_etudiant_by_id(db, etu_id).await?;
 
-  let numero_etudiant = payload
-    .numero_etudiant
-    .map(|value| value.trim().to_string());
-  let numero_etudiant =
-    numero_etudiant.unwrap_or_else(|| current.numero_etudiant.unwrap_or_default());
-  let numero_etudiant = if numero_etudiant.is_empty() {
-    None
-  } else {
-    Some(numero_etudiant)
-  };
-
-  if let Some(numero) = &numero_etudiant
-    && (numero.len() != 8 || !numero.chars().all(|char| char.is_ascii_digit()))
-  {
-    return Err(ApiError::bad_request(
-      "student number must contain exactly 8 digits",
-    ));
-  }
-
   let nom = payload
     .nom
     .map(|value| value.trim().to_string())
@@ -180,13 +183,12 @@ pub async fn update_etudiant_by_id(
   sqlx::query_as::<_, GetEtudiant>(
     r#"
     UPDATE etudiant
-    SET numero_etudiant = $2, nom = $3, prenom = $4, email = $5, date_naissance = $6
+    SET nom = $2, prenom = $3, email = $4, date_naissance = $5
     WHERE id = $1
-    RETURNING id, numero_etudiant, nom, prenom, email, date_naissance
+    RETURNING id, nom, prenom, email, date_naissance
     "#,
   )
   .bind(etu_id)
-  .bind(numero_etudiant)
   .bind(nom)
   .bind(prenom)
   .bind(email)
@@ -306,15 +308,12 @@ fn map_create_error(error: sqlx::Error) -> ApiError {
     sqlx::Error::Database(db_err) if db_err.code().as_deref() == Some("23505") => {
       if db_err
         .constraint()
-        .map(|value| value.contains("numero_etudiant"))
+        .map(|value| value.contains("email"))
         .unwrap_or(false)
       {
-        return ApiError::conflict("student number already exists");
+        return ApiError::conflict("email already exists");
       }
       ApiError::conflict("email already exists")
-    }
-    sqlx::Error::Database(db_err) if db_err.code().as_deref() == Some("23514") => {
-      ApiError::bad_request("student number must contain exactly 8 digits")
     }
     _ => ApiError::internal("unable to create account at this time"),
   }

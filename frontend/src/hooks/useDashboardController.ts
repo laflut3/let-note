@@ -22,7 +22,7 @@ import {
   type ScheduleEvent,
 } from '@/lib/dashboard/schedule';
 
-export type DashboardTab = 'accueil' | 'matieres' | 'devoirs' | 'edt' | 'profil';
+export type DashboardTab = 'accueil' | 'matieres' | 'devoirs' | 'events' | 'edt' | 'profil';
 
 async function extractError(response: Response, fallback: string): Promise<string> {
   const data = (await response.json().catch(() => null)) as { message?: string } | null;
@@ -45,7 +45,6 @@ export function useDashboardController(navigate: NavigateFunction) {
   const [allEvents, setAllEvents] = useState<ScheduleEvent[]>([]);
   const [profile, setProfile] = useState<MyProfilePayload | null>(null);
   const [profileForm, setProfileForm] = useState({
-    numero_etudiant: '',
     nom: '',
     prenom: '',
     email: '',
@@ -189,7 +188,6 @@ export function useDashboardController(navigate: NavigateFunction) {
       const objectUrl = data.photo_url ? await loadProfilePhotoBlob() : '';
       replacePhotoObjectUrl(objectUrl);
       setProfileForm({
-        numero_etudiant: data.numero_etudiant ?? '',
         nom: data.nom,
         prenom: data.prenom,
         email: data.email,
@@ -227,7 +225,10 @@ export function useDashboardController(navigate: NavigateFunction) {
   useEffect(() => {
     if (
       !hasPromotionContext &&
-      (activeTab === 'matieres' || activeTab === 'devoirs' || activeTab === 'edt')
+      (activeTab === 'matieres' ||
+        activeTab === 'devoirs' ||
+        activeTab === 'events' ||
+        activeTab === 'edt')
     ) {
       setActiveTab('accueil');
     }
@@ -249,7 +250,6 @@ export function useDashboardController(navigate: NavigateFunction) {
 
     try {
       const response = await updateMyProfileRequest({
-        numero_etudiant: profileForm.numero_etudiant,
         nom: profileForm.nom,
         prenom: profileForm.prenom,
         email: profileForm.email,
@@ -266,7 +266,6 @@ export function useDashboardController(navigate: NavigateFunction) {
       const objectUrl = updated.photo_url ? await loadProfilePhotoBlob() : '';
       replacePhotoObjectUrl(objectUrl);
       setProfileForm({
-        numero_etudiant: updated.numero_etudiant ?? '',
         nom: updated.nom,
         prenom: updated.prenom,
         email: updated.email,
@@ -295,7 +294,6 @@ export function useDashboardController(navigate: NavigateFunction) {
       const objectUrl = updated.photo_url ? await loadProfilePhotoBlob() : '';
       replacePhotoObjectUrl(objectUrl);
       setProfileForm({
-        numero_etudiant: updated.numero_etudiant ?? '',
         nom: updated.nom,
         prenom: updated.prenom,
         email: updated.email,

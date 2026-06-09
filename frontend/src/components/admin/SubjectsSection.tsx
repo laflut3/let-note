@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import { Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ListControls } from '@/components/common/ListControls';
 import { adminDeleteMatiereRequest, adminUpdateMatiereRequest } from '@/services/api';
@@ -12,6 +13,7 @@ export function SubjectsTab({ controller }: Props) {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isResourceModalOpen, setIsResourceModalOpen] = useState(false);
   const [isLinkPromoModalOpen, setIsLinkPromoModalOpen] = useState(false);
+  const [linkPromoSearch, setLinkPromoSearch] = useState('');
 
   const {
     newMatiereCode,
@@ -30,6 +32,8 @@ export function SubjectsTab({ controller }: Props) {
     setResourceDescription,
     resourceFile,
     setResourceFile,
+    resourcePromoId,
+    setResourcePromoId,
     linkPromoId,
     setLinkPromoId,
     linkReferentProfId,
@@ -54,6 +58,27 @@ export function SubjectsTab({ controller }: Props) {
   );
   const isSelectedPromoAlreadyLinked =
     !!linkPromoId && !!selectedMatiere?.linked_promo_ids.includes(linkPromoId);
+  const resourcePromotions = promotions.filter((promo) =>
+    selectedMatiere?.linked_promo_ids.includes(promo.id)
+  );
+  const filteredPromotionsForLink = useMemo(() => {
+    const query = linkPromoSearch.trim().toLowerCase();
+    return promotions
+      .filter((promo) => {
+        if (!query) return true;
+        return `${promo.nom} ${promo.annee_arrivee} ${promo.annee_depart}`
+          .toLowerCase()
+          .includes(query);
+      })
+      .sort((a, b) => a.nom.localeCompare(b.nom, 'fr'))
+      .slice(0, 20);
+  }, [linkPromoSearch, promotions]);
+  const visibleMatiereResources = useMemo(() => {
+    return matiereResources.filter((resource) => {
+      if (!resourcePromoId) return true;
+      return resource.id_promo === resourcePromoId;
+    });
+  }, [matiereResources, resourcePromoId]);
 
   return (
     <section className={adminUi.panel}>
@@ -124,6 +149,7 @@ export function SubjectsTab({ controller }: Props) {
                   className="h-9 rounded-lg"
                   onClick={() => {
                     setSelectedMatiereCode(matiere.code_matiere);
+                    setLinkPromoSearch('');
                     setIsLinkPromoModalOpen(true);
                   }}
                 >
@@ -147,6 +173,7 @@ export function SubjectsTab({ controller }: Props) {
                   className="h-9 rounded-lg"
                   onClick={() => {
                     setSelectedMatiereCode(matiere.code_matiere);
+                    setResourcePromoId(matiere.linked_promo_ids[0] ?? '');
                     setIsResourceModalOpen(true);
                   }}
                 >
@@ -250,19 +277,57 @@ export function SubjectsTab({ controller }: Props) {
           </>
         }
       >
-        <div className="grid gap-2 sm:grid-cols-2">
-          <select
-            value={linkPromoId}
-            onChange={(e) => setLinkPromoId(e.target.value)}
-            className={adminUi.select}
-          >
-            <option value="">Selectionner promotion</option>
-            {promotions.map((promo) => (
-              <option key={promo.id} value={promo.id}>
-                {promo.nom} ({promo.annee_arrivee}-{promo.annee_depart})
-              </option>
-            ))}
-          </select>
+        <div className="grid gap-3">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <input
+              value={linkPromoSearch}
+              onChange={(e) => {
+                setLinkPromoSearch(e.target.value);
+                setLinkPromoId('');
+              }}
+              placeholder="Rechercher une promotion"
+              className={`${adminUi.input} pl-9`}
+            />
+          </div>
+          <div className="max-h-64 overflow-y-auto rounded-xl border border-[var(--surface-border)] bg-[var(--surface-muted)] p-2">
+            {filteredPromotionsForLink.length === 0 ? (
+              <p className="px-2 py-3 text-sm text-muted-foreground">
+                Aucune promotion ne correspond a cette recherche.
+              </p>
+            ) : (
+              <ul className="space-y-2">
+                {filteredPromotionsForLink.map((promo) => {
+                  const selected = linkPromoId === promo.id;
+                  const alreadyLinked = selectedMatiere?.linked_promo_ids.includes(promo.id);
+                  return (
+                    <li
+                      key={promo.id}
+                      className={[
+                        'rounded-lg border px-3 py-2',
+                        selected
+                          ? 'border-[var(--surface-strong)] bg-[var(--surface-1)]'
+                          : 'border-[var(--surface-border)] bg-[var(--surface-1)]',
+                      ].join(' ')}
+                    >
+                      <button
+                        type="button"
+                        className="w-full text-left"
+                        onClick={() => setLinkPromoId(promo.id)}
+                      >
+                        <span className="block text-sm font-medium text-foreground">
+                          {promo.nom} ({promo.annee_arrivee}-{promo.annee_depart})
+                        </span>
+                        <span className="block text-xs text-muted-foreground">
+                          {alreadyLinked ? 'Deja liee' : 'Disponible'}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
           <select
             value={linkReferentProfId}
             onChange={(e) => setLinkReferentProfId(e.target.value)}
@@ -345,7 +410,7 @@ export function SubjectsTab({ controller }: Props) {
             </Button>
             <Button
               type="button"
-              disabled={!selectedMatiereCode || !resourceFile}
+              disabled={!selectedMatiereCode || !resourcePromoId || !resourceFile}
               className="h-10 rounded-xl bg-[var(--surface-strong)] px-4 text-white hover:bg-[var(--surface-strong-hover)] dark:text-zinc-900"
               onClick={() => void handleCreateMatiereResource()}
             >
@@ -355,6 +420,18 @@ export function SubjectsTab({ controller }: Props) {
         }
       >
         <div className="grid gap-2 sm:grid-cols-2">
+          <select
+            value={resourcePromoId}
+            onChange={(e) => setResourcePromoId(e.target.value)}
+            className={`${adminUi.select} sm:col-span-2`}
+          >
+            <option value="">Selectionner la promotion du fichier</option>
+            {resourcePromotions.map((promo) => (
+              <option key={promo.id} value={promo.id}>
+                {promo.nom} ({promo.annee_arrivee}-{promo.annee_depart})
+              </option>
+            ))}
+          </select>
           <select
             value={resourceType}
             onChange={(e) => setResourceType(e.target.value as 'cours' | 'td' | 'tp' | 'exam')}
@@ -383,9 +460,14 @@ export function SubjectsTab({ controller }: Props) {
             onChange={(e) => setResourceFile(e.target.files?.[0] ?? null)}
           />
         </div>
+        {resourcePromotions.length === 0 && (
+          <p className="mt-2 text-xs text-amber-700">
+            Cette matiere doit etre liee a une promotion avant d ajouter un fichier.
+          </p>
+        )}
 
         <div className="mt-4 space-y-2">
-          {matiereResources.map((resource) => (
+          {visibleMatiereResources.map((resource) => (
             <div
               key={resource.id}
               className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[var(--surface-border)] px-3 py-2 text-sm"
@@ -404,6 +486,11 @@ export function SubjectsTab({ controller }: Props) {
               </Button>
             </div>
           ))}
+          {visibleMatiereResources.length === 0 && (
+            <p className="rounded-lg border border-[var(--surface-border)] px-3 py-2 text-sm text-muted-foreground">
+              Aucun fichier pour cette selection.
+            </p>
+          )}
         </div>
       </Modal>
     </section>

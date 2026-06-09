@@ -72,7 +72,7 @@ pub async fn get_promotion_dashboard(
 
   let etudiants = sqlx::query_as::<_, PromoStudent>(
     r#"
-    SELECT e.id, e.numero_etudiant, e.nom, e.prenom, e.email
+    SELECT e.id, e.nom, e.prenom, e.email
     FROM etu_promo ep
     JOIN etudiant e ON e.id = ep.id_etu
     WHERE ep.id_promo = $1
@@ -124,7 +124,7 @@ pub async fn get_promotion_dashboard(
     SELECT id, id_mat, id_promo, type_metier::text AS type_metier, title, description,
            s3_bucket, s3_key, url, content_type, size_bytes, created_at
     FROM matiere_resource
-    WHERE id_promo = $1 OR id_promo IS NULL
+    WHERE id_promo = $1
     ORDER BY created_at DESC
     "#,
   )
@@ -162,6 +162,7 @@ pub async fn get_promotion_dashboard(
   .map_err(map_schema_error("unable to load professors"))?;
 
   let devoirs = list_devoirs_for_promo(db, auth, promo_id).await?;
+  let events = list_promotion_events_for_year(db, promo_id).await?;
 
   Ok(DashboardPayload {
     promotion,
@@ -169,6 +170,7 @@ pub async fn get_promotion_dashboard(
     matieres,
     professeurs,
     devoirs,
+    events,
   })
 }
 
@@ -222,4 +224,40 @@ pub async fn get_resource_file_for_user(
     .or(downloaded_ct)
     .unwrap_or_else(|| "application/octet-stream".to_string());
   Ok((bytes, content_type, resource.title))
+}
+
+pub async fn get_promotion_image_for_user(
+  db: &PgPool,
+  auth: &AuthContext,
+  promo_id: Uuid,
+) -> Result<(Vec<u8>, String), ApiError> {
+  let _promotion = get_accessible_promotion(db, auth, promo_id).await?;
+  let image = sqlx::query_as::<_, (Option<String>, Option<String>, Option<String>)>(
+    r#"
+    SELECT image_s3_bucket, image_s3_key, image_content_type
+    FROM promotion
+    WHERE id = $1
+    "#,
+  )
+  .bind(promo_id)
+  .fetch_optional(db)
+  .await
+  .map_err(map_schema_error("unable to load promotion image"))?
+  .ok_or_else(|| ApiError::bad_request("promotion not found"))?;
+
+  let bucket = image
+    .0
+    .ok_or_else(|| ApiError::bad_request("promotion image not found"))?;
+  let key = image
+    .1
+    .ok_or_else(|| ApiError::bad_request("promotion image not found"))?;
+
+  let (bytes, downloaded_ct) = s3::download_bytes(&bucket, &key)
+    .await
+    .map_err(|_| ApiError::internal("unable to load promotion image"))?;
+  let content_type = image
+    .2
+    .or(downloaded_ct)
+    .unwrap_or_else(|| "application/octet-stream".to_string());
+  Ok((bytes, content_type))
 }

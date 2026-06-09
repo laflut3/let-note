@@ -23,13 +23,15 @@ pub async fn update_promotion(
     .filter(|value| !value.is_empty())
     .unwrap_or(&current.0)
     .to_string();
-  let image_url = payload
-    .image_url
-    .as_deref()
-    .map(str::trim)
-    .filter(|value| !value.is_empty())
-    .unwrap_or(&current.1)
-    .to_string();
+  let uploaded_image = match payload.image {
+    Some(image) => Some(upload_promotion_image(promo_id, image).await?),
+    None => None,
+  };
+  let image_url = if uploaded_image.is_some() {
+    promotion_image_url(promo_id)
+  } else {
+    current.1.clone()
+  };
   let ical_url = payload
     .ical_url
     .map(|value| value.trim().to_string())
@@ -71,7 +73,10 @@ pub async fn update_promotion(
       annee_depart = $6,
       annee_debut = $7,
       annee_fin = $8,
-      referent_prof_id = $9
+      referent_prof_id = $9,
+      image_s3_bucket = COALESCE($10, image_s3_bucket),
+      image_s3_key = COALESCE($11, image_s3_key),
+      image_content_type = COALESCE($12, image_content_type)
     WHERE id = $1
     "#,
   )
@@ -84,6 +89,9 @@ pub async fn update_promotion(
   .bind(annee_debut)
   .bind(annee_fin)
   .bind(referent_prof_id)
+  .bind(uploaded_image.as_ref().map(|image| image.bucket.as_str()))
+  .bind(uploaded_image.as_ref().map(|image| image.key.as_str()))
+  .bind(uploaded_image.as_ref().map(|image| image.content_type.as_str()))
   .execute(db)
   .await
   .map_err(map_schema_error("unable to update promotion"))?;

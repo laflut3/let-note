@@ -11,8 +11,6 @@ export function StudentsTab({ controller }: Props) {
     filteredStudents,
     expandedStudentId,
     toggleStudentDetails,
-    editStudentNumero,
-    setEditStudentNumero,
     editStudentBirthDate,
     setEditStudentBirthDate,
     editStudentPrenom,
@@ -46,7 +44,7 @@ export function StudentsTab({ controller }: Props) {
         className="mt-3"
         searchValue={studentSearch}
         onSearchChange={setStudentSearch}
-        searchPlaceholder="Rechercher (nom, prenom, email, numero)"
+        searchPlaceholder="Rechercher (nom, prenom, email)"
         sortValue={studentSort}
         onSortChange={setStudentSort}
         resultCount={filteredStudents.length}
@@ -135,12 +133,6 @@ export function StudentsTab({ controller }: Props) {
                 <div className="mt-3 space-y-3 border-t border-[var(--surface-border)] pt-3">
                   <div className="grid gap-2 sm:grid-cols-2">
                     <input
-                      value={editStudentNumero}
-                      onChange={(e) => setEditStudentNumero(e.target.value)}
-                      placeholder="Numero etudiant"
-                      className={adminUi.input}
-                    />
-                    <input
                       value={editStudentBirthDate}
                       onChange={(e) => setEditStudentBirthDate(e.target.value)}
                       type="date"
@@ -172,7 +164,6 @@ export function StudentsTab({ controller }: Props) {
                       void runAction(
                         () =>
                           adminUpdateUserRequest(student.id, {
-                            numero_etudiant: editStudentNumero || undefined,
                             prenom: editStudentPrenom,
                             nom: editStudentNom,
                             email: editStudentEmail,

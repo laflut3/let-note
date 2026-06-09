@@ -9,7 +9,6 @@ export type SubmitState = {
 
 export type AuthFields = {
   fullName: string;
-  studentNumber: string;
   email: string;
   password: string;
   confirmPassword: string;

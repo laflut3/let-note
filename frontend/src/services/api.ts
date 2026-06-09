@@ -4,7 +4,6 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api';
 
 export type AdminUser = {
   id: string;
-  numero_etudiant: string | null;
   nom: string;
   prenom: string;
   email: string;
@@ -12,7 +11,6 @@ export type AdminUser = {
 
 export type AdminStudentDetails = {
   id: string;
-  numero_etudiant: string | null;
   nom: string;
   prenom: string;
   email: string;
@@ -29,7 +27,7 @@ export type AdminStudentDetails = {
 
 export type CreatePromotionPayload = {
   nom: string;
-  image_url: string;
+  image_file: File;
   ical_url?: string;
   annee_arrivee: number;
   annee_depart: number;
@@ -38,6 +36,11 @@ export type CreatePromotionPayload = {
 };
 
 export type PromotionStudent = AdminUser & {
+  is_delegue: boolean;
+};
+
+export type PromoStudentManagementItem = AdminUser & {
+  is_in_promo: boolean;
   is_delegue: boolean;
 };
 
@@ -89,7 +92,6 @@ export type PromotionDashboardPayload = {
   promotion: PromotionScope;
   etudiants: {
     id: string;
-    numero_etudiant: string | null;
     nom: string;
     prenom: string;
     email: string;
@@ -97,6 +99,32 @@ export type PromotionDashboardPayload = {
   matieres: MatiereDashboardItem[];
   professeurs: ProfesseurDashboardItem[];
   devoirs: DevoirItem[];
+  events: PromotionEventItem[];
+};
+
+export type PromotionEventItem = {
+  id: string | null;
+  id_etu: string;
+  student_nom: string;
+  student_prenom: string;
+  event_type: 'birthday' | 'croissantage';
+  title: string;
+  event_month: number;
+  event_day: number;
+  occurrence_date: string;
+  is_today: boolean;
+};
+
+export type StudentEventConfig = {
+  id: string;
+  id_etu: string;
+  student_nom: string;
+  student_prenom: string;
+  event_type: 'croissantage';
+  title: string;
+  event_month: number;
+  event_day: number;
+  updated_at: string;
 };
 
 export type DevoirItem = {
@@ -163,7 +191,6 @@ export type AuthMePayload = {
 
 export type MyProfilePayload = {
   id: string;
-  numero_etudiant: string | null;
   nom: string;
   prenom: string;
   email: string;
@@ -246,7 +273,6 @@ export async function getMyProfileRequest(): Promise<Response> {
 }
 
 export async function updateMyProfileRequest(payload: {
-  numero_etudiant?: string;
   nom?: string;
   prenom?: string;
   email?: string;
@@ -287,7 +313,6 @@ export async function registerRequest(fields: AuthFields): Promise<Response> {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      numero_etudiant: fields.studentNumber,
       nom,
       prenom,
       email: fields.email,
@@ -312,7 +337,6 @@ export async function adminListUsersDetailsRequest(): Promise<Response> {
 export async function adminUpdateUserRequest(
   etuId: string,
   payload: {
-    numero_etudiant?: string;
     prenom?: string;
     nom?: string;
     email?: string;
@@ -376,12 +400,18 @@ export async function adminDeleteProfesseurRequest(profId: string): Promise<Resp
 export async function adminCreatePromotionRequest(
   payload: CreatePromotionPayload
 ): Promise<Response> {
+  const formData = new FormData();
+  formData.append('nom', payload.nom);
+  formData.append('image', payload.image_file);
+  if (payload.ical_url) formData.append('ical_url', payload.ical_url);
+  formData.append('annee_arrivee', String(payload.annee_arrivee));
+  formData.append('annee_depart', String(payload.annee_depart));
+  if (payload.referent_prof_id) formData.append('referent_prof_id', payload.referent_prof_id);
+  formData.append('etudiant_ids', JSON.stringify(payload.etudiant_ids));
+
   return jsonRequest('/admin/promotions', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload),
+    body: formData,
   });
 }
 
@@ -389,19 +419,27 @@ export async function adminUpdatePromotionRequest(
   promoId: string,
   payload: {
     nom?: string;
-    image_url?: string;
+    image_file?: File;
     ical_url?: string;
     annee_arrivee?: number;
     annee_depart?: number;
     referent_prof_id?: string;
   }
 ): Promise<Response> {
+  const formData = new FormData();
+  if (payload.nom !== undefined) formData.append('nom', payload.nom);
+  if (payload.image_file) formData.append('image', payload.image_file);
+  if (payload.ical_url !== undefined) formData.append('ical_url', payload.ical_url);
+  if (payload.annee_arrivee !== undefined) {
+    formData.append('annee_arrivee', String(payload.annee_arrivee));
+  }
+  if (payload.annee_depart !== undefined)
+    formData.append('annee_depart', String(payload.annee_depart));
+  if (payload.referent_prof_id) formData.append('referent_prof_id', payload.referent_prof_id);
+
   return jsonRequest(`/admin/promotions/${promoId}`, {
     method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload),
+    body: formData,
   });
 }
 
@@ -504,7 +542,7 @@ export async function adminListMatiereResourcesRequest(codeMatiere: string): Pro
 export async function adminCreateMatiereResourceRequest(
   codeMatiere: string,
   payload: {
-    id_promo?: string;
+    id_promo: string;
     type_metier: 'cours' | 'td' | 'tp' | 'exam';
     title: string;
     description?: string;
@@ -583,6 +621,24 @@ export async function addProfesseurRequest(
   });
 }
 
+export async function listPromoStudentsManagementRequest(promoId: string): Promise<Response> {
+  return jsonRequest(`/promotions/${promoId}/etudiants`, { method: 'GET' });
+}
+
+export async function addStudentToPromoRequest(
+  promoId: string,
+  studentId: string
+): Promise<Response> {
+  return jsonRequest(`/promotions/${promoId}/etudiants/${studentId}`, { method: 'POST' });
+}
+
+export async function removeStudentFromPromoRequest(
+  promoId: string,
+  studentId: string
+): Promise<Response> {
+  return jsonRequest(`/promotions/${promoId}/etudiants/${studentId}`, { method: 'DELETE' });
+}
+
 export async function setReferentRequest(
   promoId: string,
   matiereId: string,
@@ -636,4 +692,33 @@ export async function updateDevoirRequest(
 
 export async function deleteDevoirRequest(promoId: string, devoirId: string): Promise<Response> {
   return jsonRequest(`/promotions/${promoId}/devoirs/${devoirId}`, { method: 'DELETE' });
+}
+
+export async function listStudentEventsRequest(promoId: string): Promise<Response> {
+  return jsonRequest(`/promotions/${promoId}/student-events`, { method: 'GET' });
+}
+
+export async function upsertStudentEventRequest(
+  promoId: string,
+  payload: {
+    id_etu: string;
+    event_month: number;
+    event_day: number;
+    title?: string;
+  }
+): Promise<Response> {
+  return jsonRequest(`/promotions/${promoId}/student-events`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteStudentEventRequest(
+  promoId: string,
+  eventId: string
+): Promise<Response> {
+  return jsonRequest(`/promotions/${promoId}/student-events/${eventId}`, { method: 'DELETE' });
 }
