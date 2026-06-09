@@ -5,6 +5,7 @@ import { ProfessorsTab } from '@/components/admin/ProfessorsSection';
 import { PromotionsTab } from '@/components/admin/PromotionsSection';
 import { StudentsTab } from '@/components/admin/StudentsSection';
 import { SubjectsTab } from '@/components/admin/SubjectsSection';
+import { StudentEventsSection } from '@/components/events/StudentEventsSection';
 import { adminUi } from '@/lib/admin-ui';
 import { useAdminController } from '@/hooks/useAdminController';
 
@@ -21,6 +22,15 @@ export function AdminPage() {
         {controller.activeTab === 'professeurs' && <ProfessorsTab controller={controller} />}
         {controller.activeTab === 'etudiants' && <StudentsTab controller={controller} />}
         {controller.activeTab === 'matieres' && <SubjectsTab controller={controller} />}
+        {controller.activeTab === 'events' && (
+          <StudentEventsSection
+            promotions={controller.promotions}
+            selectedPromoId={controller.selectedPromoId}
+            onPromoChange={controller.setSelectedPromoId}
+            onFeedback={controller.setFeedback}
+            panelClassName={adminUi.panel}
+          />
+        )}
 
         <AdminOverlays controller={controller} />
 

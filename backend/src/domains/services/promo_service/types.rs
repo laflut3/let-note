@@ -56,6 +56,7 @@ pub struct DashboardPayload {
   pub matieres: Vec<MatiereDashboardItem>,
   pub professeurs: Vec<ProfesseurDashboardItem>,
   pub devoirs: Vec<DevoirPayload>,
+  pub events: Vec<PromotionEventPayload>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
@@ -64,6 +65,41 @@ pub struct PromoStudent {
   pub nom: String,
   pub prenom: String,
   pub email: String,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct UpsertStudentEventInput {
+  pub id_etu: Uuid,
+  pub event_month: i32,
+  pub event_day: i32,
+  pub title: Option<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+pub struct StudentEventConfig {
+  pub id: Uuid,
+  pub id_etu: Uuid,
+  pub student_nom: String,
+  pub student_prenom: String,
+  pub event_type: String,
+  pub title: String,
+  pub event_month: i32,
+  pub event_day: i32,
+  pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct PromotionEventPayload {
+  pub id: Option<Uuid>,
+  pub id_etu: Uuid,
+  pub student_nom: String,
+  pub student_prenom: String,
+  pub event_type: String,
+  pub title: String,
+  pub event_month: i32,
+  pub event_day: i32,
+  pub occurrence_date: NaiveDate,
+  pub is_today: bool,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]

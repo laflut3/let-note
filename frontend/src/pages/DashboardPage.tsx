@@ -11,6 +11,8 @@ import { StudentProfileModule } from '@/components/dashboard/StudentProfileModul
 import { WeeklyScheduleModule } from '@/components/dashboard/WeeklyScheduleModule';
 import { SubjectsLibraryTab } from '@/components/dashboard/SubjectsLibraryTab';
 import { ArchivedHomeworkTab } from '@/components/dashboard/ArchivedHomeworkTab';
+import { EventsModule } from '@/components/dashboard/EventsModule';
+import { EventsYearTab } from '@/components/dashboard/EventsYearTab';
 import { useDashboardController } from '@/hooks/useDashboardController';
 import { adminUi } from '@/lib/admin-ui';
 
@@ -65,6 +67,7 @@ export function DashboardPage() {
                       events={safeTodayEvents}
                     />
                     <HomeworkModule dashboard={controller.dashboard} />
+                    <EventsModule dashboard={controller.dashboard} />
                   </div>
 
                   <div className="space-y-4">
@@ -98,6 +101,10 @@ export function DashboardPage() {
                   selectedPromoId={controller.selectedPromoId}
                   onCreated={controller.refreshDashboard}
                 />
+              )}
+
+              {controller.activeTab === 'events' && (
+                <EventsYearTab dashboard={controller.dashboard} />
               )}
 
               {controller.activeTab === 'edt' && (

@@ -94,6 +94,32 @@ export type PromotionDashboardPayload = {
   matieres: MatiereDashboardItem[];
   professeurs: ProfesseurDashboardItem[];
   devoirs: DevoirItem[];
+  events: PromotionEventItem[];
+};
+
+export type PromotionEventItem = {
+  id: string | null;
+  id_etu: string;
+  student_nom: string;
+  student_prenom: string;
+  event_type: 'birthday' | 'croissantage';
+  title: string;
+  event_month: number;
+  event_day: number;
+  occurrence_date: string;
+  is_today: boolean;
+};
+
+export type StudentEventConfig = {
+  id: string;
+  id_etu: string;
+  student_nom: string;
+  student_prenom: string;
+  event_type: 'croissantage';
+  title: string;
+  event_month: number;
+  event_day: number;
+  updated_at: string;
 };
 
 export type DevoirItem = {
@@ -629,4 +655,33 @@ export async function updateDevoirRequest(
 
 export async function deleteDevoirRequest(promoId: string, devoirId: string): Promise<Response> {
   return jsonRequest(`/promotions/${promoId}/devoirs/${devoirId}`, { method: 'DELETE' });
+}
+
+export async function listStudentEventsRequest(promoId: string): Promise<Response> {
+  return jsonRequest(`/promotions/${promoId}/student-events`, { method: 'GET' });
+}
+
+export async function upsertStudentEventRequest(
+  promoId: string,
+  payload: {
+    id_etu: string;
+    event_month: number;
+    event_day: number;
+    title?: string;
+  }
+): Promise<Response> {
+  return jsonRequest(`/promotions/${promoId}/student-events`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteStudentEventRequest(
+  promoId: string,
+  eventId: string
+): Promise<Response> {
+  return jsonRequest(`/promotions/${promoId}/student-events/${eventId}`, { method: 'DELETE' });
 }

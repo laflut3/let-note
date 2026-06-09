@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BookOpen, Home, LogOut, Shield, User, Users } from 'lucide-react';
+import { BookOpen, Home, LogOut, PartyPopper, Shield, User, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ThemeToggle } from '@/components/auth/ThemeToggle';
@@ -8,6 +8,7 @@ import { useThemeContext } from '@/context/theme-context';
 import { adminUi } from '@/lib/admin-ui';
 import { SubjectsTab } from '@/components/admin/SubjectsSection';
 import { AdminOverlays } from '@/components/admin/AdminOverlays';
+import { StudentEventsSection } from '@/components/events/StudentEventsSection';
 import { useAdminController } from '@/hooks/useAdminController';
 import {
   addProfesseurRequest,
@@ -20,7 +21,7 @@ import {
   type PromotionScope,
 } from '@/services/api';
 
-type DelegateTab = 'general' | 'matieres' | 'professeurs' | 'etudiants';
+type DelegateTab = 'general' | 'matieres' | 'professeurs' | 'etudiants' | 'events';
 
 type Feedback = {
   type: '' | 'success' | 'error';
@@ -169,6 +170,7 @@ export function DelegatePage() {
                 ['etudiants', 'Etudiants'],
                 ['professeurs', 'Professeurs'],
                 ['matieres', 'Matieres'],
+                ['events', 'Events'],
               ] as const
             ).map(([value, label]) => (
               <button
@@ -184,6 +186,7 @@ export function DelegatePage() {
                 {value === 'matieres' && <BookOpen className="h-4 w-4" />}
                 {value === 'professeurs' && <User className="h-4 w-4" />}
                 {value === 'etudiants' && <Users className="h-4 w-4" />}
+                {value === 'events' && <PartyPopper className="h-4 w-4" />}
                 <span className="hidden md:inline">{label}</span>
               </button>
             ))}
@@ -390,6 +393,16 @@ export function DelegatePage() {
                 </tbody>
               </table>
             </div>
+          )}
+
+          {activeTab === 'events' && selectedPromoId && (
+            <StudentEventsSection
+              promotions={promotions}
+              selectedPromoId={selectedPromoId}
+              onPromoChange={setSelectedPromoId}
+              onFeedback={setFeedback}
+              panelClassName="mt-4 rounded-2xl border border-[var(--surface-border)] bg-[var(--surface-2)] p-4 shadow-[0_12px_30px_rgba(79,23,48,0.08)] sm:p-6"
+            />
           )}
 
           {feedback.message && (

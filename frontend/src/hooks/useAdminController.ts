@@ -29,7 +29,7 @@ import {
 } from '@/services/api';
 import type { SortDirection } from '@/types/common';
 
-export type AdminTab = 'promotions' | 'etudiants' | 'professeurs' | 'matieres';
+export type AdminTab = 'promotions' | 'etudiants' | 'professeurs' | 'matieres' | 'events';
 
 export type Feedback = {
   type: '' | 'success' | 'error';

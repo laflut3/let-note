@@ -46,6 +46,20 @@ pub fn promo_routes(db: PgPool) -> Router<PgPool> {
       ),
     )
     .route(
+      "/promotions/{promo_id}/student-events",
+      middleware::right_admin_or_delegue_for_promo(
+        get(list_student_events_for_promo).post(upsert_student_event_for_promo),
+        db.clone(),
+      ),
+    )
+    .route(
+      "/promotions/{promo_id}/student-events/{event_id}",
+      middleware::right_admin_or_delegue_for_promo(
+        axum::routing::delete(delete_student_event_for_promo),
+        db.clone(),
+      ),
+    )
+    .route(
       "/promotions/{promo_id}/matieres/{matiere_id}/referent/{prof_id}",
       middleware::right_admin_or_delegue_for_promo(put(set_referent_for_matiere), db.clone()),
     )
@@ -86,4 +100,5 @@ async fn set_referent_for_matiere(
 include!("promo_routes/types.rs");
 include!("promo_routes/dashboard.rs");
 include!("promo_routes/devoirs.rs");
+include!("promo_routes/events.rs");
 include!("promo_routes/resources.rs");

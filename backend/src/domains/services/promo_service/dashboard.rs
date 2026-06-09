@@ -162,6 +162,7 @@ pub async fn get_promotion_dashboard(
   .map_err(map_schema_error("unable to load professors"))?;
 
   let devoirs = list_devoirs_for_promo(db, auth, promo_id).await?;
+  let events = list_promotion_events_for_year(db, promo_id).await?;
 
   Ok(DashboardPayload {
     promotion,
@@ -169,6 +170,7 @@ pub async fn get_promotion_dashboard(
     matieres,
     professeurs,
     devoirs,
+    events,
   })
 }
 
