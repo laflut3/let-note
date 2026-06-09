@@ -109,7 +109,7 @@ services:
       - seaweed-s3
 
   seaweed-master:
-    image: chrislusf/seaweedfs:4.29@sha256:d47c7ee99fcb951351d7194915f4e3a5ea604a8e8871183d713907dec4fb9bf5
+    image: chrislusf/seaweedfs:4.31@sha256:e14ad400e28c811fe8426dc08abf248ec722b9f017713290a9b84a54557f45c2
     user: "0:0"
     command: "master -ip=seaweed-master -mdir=/data"
     restart: unless-stopped
@@ -119,7 +119,7 @@ services:
       - seaweed_master_data:/data
 
   seaweed-volume:
-    image: chrislusf/seaweedfs:4.29@sha256:d47c7ee99fcb951351d7194915f4e3a5ea604a8e8871183d713907dec4fb9bf5
+    image: chrislusf/seaweedfs:4.31@sha256:e14ad400e28c811fe8426dc08abf248ec722b9f017713290a9b84a54557f45c2
     user: "0:0"
     command: "volume -mserver=seaweed-master:9333 -ip=seaweed-volume -port=8080 -dir=/data"
     restart: unless-stopped
@@ -131,7 +131,7 @@ services:
       - seaweed_volume_data:/data
 
   seaweed-filer:
-    image: chrislusf/seaweedfs:4.29@sha256:d47c7ee99fcb951351d7194915f4e3a5ea604a8e8871183d713907dec4fb9bf5
+    image: chrislusf/seaweedfs:4.31@sha256:e14ad400e28c811fe8426dc08abf248ec722b9f017713290a9b84a54557f45c2
     user: "0:0"
     command: "filer -master=seaweed-master:9333 -ip=seaweed-filer -port=8888"
     restart: unless-stopped
@@ -142,7 +142,7 @@ services:
       - "8888:8888"
 
   seaweed-s3:
-    image: chrislusf/seaweedfs:4.29@sha256:d47c7ee99fcb951351d7194915f4e3a5ea604a8e8871183d713907dec4fb9bf5
+    image: chrislusf/seaweedfs:4.31@sha256:e14ad400e28c811fe8426dc08abf248ec722b9f017713290a9b84a54557f45c2
     user: "0:0"
     environment:
       S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY:-seaweedfs}
