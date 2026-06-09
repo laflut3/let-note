@@ -82,11 +82,15 @@ async fn send_mail(
     .map_err(|_| ApiError::internal("unable to build email"))?;
 
   let creds = Credentials::new(cfg.username.clone(), cfg.password.clone());
-  let mailer = AsyncSmtpTransport::<Tokio1Executor>::relay(&cfg.host)
-    .map_err(|_| ApiError::internal("mail service is misconfigured"))?
-    .port(cfg.port)
-    .credentials(creds)
-    .build();
+  let builder = if cfg.port == 465 {
+    AsyncSmtpTransport::<Tokio1Executor>::relay(&cfg.host)
+  } else {
+    AsyncSmtpTransport::<Tokio1Executor>::starttls_relay(&cfg.host)
+  }
+  .map_err(|_| ApiError::internal("mail service is misconfigured"))?
+  .port(cfg.port)
+  .credentials(creds);
+  let mailer = builder.build();
 
   mailer.send(email).await.map_err(|error| {
     eprintln!("email send failed: {error:#}");
