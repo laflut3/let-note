@@ -9,7 +9,7 @@ use uuid::Uuid;
 use crate::domains::{
   entities::etudiant::{CreateEtudiant, GetEtudiant},
   error::ApiError,
-  services::auth_service,
+  services::{auth_service, email_service},
 };
 use crate::infrastructure::s3;
 
@@ -17,6 +17,12 @@ pub async fn create_etudiant(
   db: &PgPool,
   etudiant: CreateEtudiant,
 ) -> Result<GetEtudiant, ApiError> {
+  let nom = etudiant.nom.trim().to_string();
+  let prenom = etudiant.prenom.trim().to_string();
+  let email = etudiant.email.trim().to_lowercase();
+  if nom.is_empty() || prenom.is_empty() || email.is_empty() {
+    return Err(ApiError::bad_request("nom, prenom and email are required"));
+  }
   if etudiant.mot_de_passe.trim().len() < 8 {
     return Err(ApiError::bad_request(
       "password must be at least 8 characters",
@@ -25,6 +31,7 @@ pub async fn create_etudiant(
 
   let password_hash = hash_password(&etudiant.mot_de_passe)
     .map_err(|_| ApiError::internal("unable to secure password at this time"))?;
+  let verification = auth_service::prepare_email_verification()?;
 
   let mut tx = db
     .begin()
@@ -38,16 +45,16 @@ pub async fn create_etudiant(
     RETURNING id, nom, prenom, email, date_naissance
     "#,
   )
-  .bind(&etudiant.nom)
-  .bind(&etudiant.prenom)
-  .bind(etudiant.email.trim().to_lowercase())
+  .bind(nom)
+  .bind(prenom)
+  .bind(&email)
   .bind(etudiant.date_naissance)
   .bind(password_hash)
   .fetch_one(&mut *tx)
   .await
   .map_err(map_create_error)?;
 
-  sqlx::query(
+  let role_inserted = sqlx::query(
     r#"
     INSERT INTO role_etu (id_role, id_etu)
     SELECT r.id, $1
@@ -59,13 +66,39 @@ pub async fn create_etudiant(
   .bind(created.id)
   .execute(&mut *tx)
   .await
-  .map_err(|_| ApiError::internal("unable to assign default role"))?;
+  .map_err(|_| ApiError::internal("unable to assign default role"))?
+  .rows_affected();
+
+  if role_inserted == 0 {
+    return Err(ApiError::internal("default student role is missing"));
+  }
+
+  let verification_updated = sqlx::query(
+    r#"
+    UPDATE etudiant
+    SET email_verified = FALSE,
+        email_verification_token_hash = $2,
+        email_verification_expires_at = $3
+    WHERE id = $1
+    "#,
+  )
+  .bind(created.id)
+  .bind(&verification.token_hash)
+  .bind(verification.expires_at)
+  .execute(&mut *tx)
+  .await
+  .map_err(|_| ApiError::internal("unable to prepare email verification"))?
+  .rows_affected();
+
+  if verification_updated == 0 {
+    return Err(ApiError::internal("unable to prepare email verification"));
+  }
+
+  email_service::send_verification_email(&email, &verification.token).await?;
 
   tx.commit()
     .await
     .map_err(|_| ApiError::internal("unable to finalize account creation"))?;
-
-  auth_service::create_email_verification(db, created.id, &created.email).await?;
 
   Ok(created)
 }

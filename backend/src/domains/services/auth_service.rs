@@ -42,6 +42,12 @@ pub struct AuthUserContext {
   pub roles: Vec<String>,
 }
 
+pub struct PreparedEmailVerification {
+  pub token: String,
+  pub token_hash: String,
+  pub expires_at: DateTime<Utc>,
+}
+
 pub async fn authenticate_user(
   db: &PgPool,
   input: LoginInfo,
@@ -217,8 +223,7 @@ pub async fn create_email_verification(
   user_id: Uuid,
   email: &str,
 ) -> Result<(), ApiError> {
-  let token = new_public_token();
-  let token_hash = hash_token(&token)?;
+  let verification = prepare_email_verification()?;
   sqlx::query(
     r#"
     UPDATE etudiant
@@ -229,13 +234,23 @@ pub async fn create_email_verification(
     "#,
   )
   .bind(user_id)
-  .bind(token_hash)
-  .bind(Utc::now() + ChronoDuration::hours(EMAIL_VERIFICATION_TTL_HOURS))
+  .bind(&verification.token_hash)
+  .bind(verification.expires_at)
   .execute(db)
   .await
   .map_err(|_| ApiError::internal("unable to prepare email verification"))?;
 
-  email_service::send_verification_email(email, &token).await
+  email_service::send_verification_email(email, &verification.token).await
+}
+
+pub fn prepare_email_verification() -> Result<PreparedEmailVerification, ApiError> {
+  let token = new_public_token();
+  let token_hash = hash_token(&token)?;
+  Ok(PreparedEmailVerification {
+    token,
+    token_hash,
+    expires_at: Utc::now() + ChronoDuration::hours(EMAIL_VERIFICATION_TTL_HOURS),
+  })
 }
 
 pub fn parse_token(token: &str) -> Result<Claims, ApiError> {
