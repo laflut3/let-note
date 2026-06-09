@@ -29,7 +29,7 @@ import {
 } from '@/services/api';
 import type { SortDirection } from '@/types/common';
 
-export type AdminTab = 'promotions' | 'etudiants' | 'professeurs' | 'matieres' | 'devoirs';
+export type AdminTab = 'promotions' | 'etudiants' | 'professeurs' | 'matieres';
 
 export type Feedback = {
   type: '' | 'success' | 'error';
@@ -109,7 +109,6 @@ export function useAdminController(navigate: NavigateFunction) {
   const [resourceFile, setResourceFile] = useState<File | null>(null);
 
   const [selectedDelegueId, setSelectedDelegueId] = useState('');
-  const [editStudentNumero, setEditStudentNumero] = useState('');
   const [editStudentPrenom, setEditStudentPrenom] = useState('');
   const [editStudentNom, setEditStudentNom] = useState('');
   const [editStudentEmail, setEditStudentEmail] = useState('');
@@ -183,8 +182,7 @@ export function useAdminController(navigate: NavigateFunction) {
       return (
         item.prenom.toLowerCase().includes(query) ||
         item.nom.toLowerCase().includes(query) ||
-        item.email.toLowerCase().includes(query) ||
-        (item.numero_etudiant ?? '').toLowerCase().includes(query)
+        item.email.toLowerCase().includes(query)
       );
     });
     return filtered.sort((a, b) => {
@@ -392,7 +390,6 @@ export function useAdminController(navigate: NavigateFunction) {
       return;
     }
     setExpandedStudentId(student.id);
-    setEditStudentNumero(student.numero_etudiant ?? '');
     setEditStudentPrenom(student.prenom);
     setEditStudentNom(student.nom);
     setEditStudentEmail(student.email);
@@ -735,8 +732,6 @@ export function useAdminController(navigate: NavigateFunction) {
     setLinkReferentProfId,
     selectedDelegueId,
     setSelectedDelegueId,
-    editStudentNumero,
-    setEditStudentNumero,
     editStudentPrenom,
     setEditStudentPrenom,
     editStudentNom,

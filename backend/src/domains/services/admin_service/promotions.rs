@@ -213,7 +213,6 @@ pub async fn list_promotion_students(
     r#"
     SELECT
       e.id,
-      e.numero_etudiant,
       e.nom,
       e.prenom,
       e.email,

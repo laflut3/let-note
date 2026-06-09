@@ -4,7 +4,6 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api';
 
 export type AdminUser = {
   id: string;
-  numero_etudiant: string | null;
   nom: string;
   prenom: string;
   email: string;
@@ -12,7 +11,6 @@ export type AdminUser = {
 
 export type AdminStudentDetails = {
   id: string;
-  numero_etudiant: string | null;
   nom: string;
   prenom: string;
   email: string;
@@ -89,7 +87,6 @@ export type PromotionDashboardPayload = {
   promotion: PromotionScope;
   etudiants: {
     id: string;
-    numero_etudiant: string | null;
     nom: string;
     prenom: string;
     email: string;
@@ -163,7 +160,6 @@ export type AuthMePayload = {
 
 export type MyProfilePayload = {
   id: string;
-  numero_etudiant: string | null;
   nom: string;
   prenom: string;
   email: string;
@@ -246,7 +242,6 @@ export async function getMyProfileRequest(): Promise<Response> {
 }
 
 export async function updateMyProfileRequest(payload: {
-  numero_etudiant?: string;
   nom?: string;
   prenom?: string;
   email?: string;
@@ -287,7 +282,6 @@ export async function registerRequest(fields: AuthFields): Promise<Response> {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      numero_etudiant: fields.studentNumber,
       nom,
       prenom,
       email: fields.email,
@@ -312,7 +306,6 @@ export async function adminListUsersDetailsRequest(): Promise<Response> {
 export async function adminUpdateUserRequest(
   etuId: string,
   payload: {
-    numero_etudiant?: string;
     prenom?: string;
     nom?: string;
     email?: string;

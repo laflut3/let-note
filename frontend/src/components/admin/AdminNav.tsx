@@ -15,7 +15,6 @@ const tabs: Array<[AdminTab, string, typeof GraduationCap]> = [
   ['etudiants', 'Etudiants', Users],
   ['professeurs', 'Professeurs', User],
   ['matieres', 'Matieres', BookOpen],
-  ['devoirs', 'Devoirs', BookOpen],
 ];
 
 export function AdminNav({ controller, onDashboard }: Props) {

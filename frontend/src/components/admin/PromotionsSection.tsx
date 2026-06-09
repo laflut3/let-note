@@ -124,8 +124,7 @@ export function PromotionsTab({ controller }: Props) {
                       className="h-4 w-4 rounded border-zinc-400"
                     />
                     <span className="text-sm text-foreground">
-                      {user.prenom} {user.nom} - {user.numero_etudiant ?? 'sans numero'} -{' '}
-                      {user.email}
+                      {user.prenom} {user.nom} - {user.email}
                     </span>
                   </label>
                 );

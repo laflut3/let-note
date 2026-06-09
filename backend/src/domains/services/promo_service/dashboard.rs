@@ -72,7 +72,7 @@ pub async fn get_promotion_dashboard(
 
   let etudiants = sqlx::query_as::<_, PromoStudent>(
     r#"
-    SELECT e.id, e.numero_etudiant, e.nom, e.prenom, e.email
+    SELECT e.id, e.nom, e.prenom, e.email
     FROM etu_promo ep
     JOIN etudiant e ON e.id = ep.id_etu
     WHERE ep.id_promo = $1

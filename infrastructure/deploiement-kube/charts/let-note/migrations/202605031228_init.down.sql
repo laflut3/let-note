@@ -23,6 +23,5 @@ DROP TABLE IF EXISTS ue;
 DROP TABLE IF EXISTS role;
 DROP TABLE IF EXISTS promotion;
 DROP TABLE IF EXISTS professeur;
-DROP INDEX IF EXISTS ux_etudiant_numero_etudiant;
 DROP TABLE IF EXISTS etudiant;
 DROP TYPE IF EXISTS resource_type_metier;

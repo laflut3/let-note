@@ -1,7 +1,7 @@
 pub async fn list_etudiants(db: &PgPool) -> Result<Vec<GetEtudiant>, ApiError> {
   sqlx::query_as::<_, GetEtudiant>(
     r#"
-    SELECT id, numero_etudiant, nom, prenom, email, date_naissance
+    SELECT id, nom, prenom, email, date_naissance
     FROM etudiant
     ORDER BY nom, prenom, email
     "#,
@@ -50,7 +50,6 @@ pub async fn list_students_details(db: &PgPool) -> Result<Vec<AdminStudentDetail
     r#"
     SELECT
       e.id,
-      e.numero_etudiant,
       e.nom,
       e.prenom,
       e.email,
@@ -94,7 +93,6 @@ pub async fn list_students_details(db: &PgPool) -> Result<Vec<AdminStudentDetail
 
     out.push(AdminStudentDetails {
       id: row.id,
-      numero_etudiant: row.numero_etudiant,
       nom: row.nom,
       prenom: row.prenom,
       email: row.email,
@@ -112,9 +110,9 @@ pub async fn update_student(
   etu_id: Uuid,
   payload: UpdateStudentInput,
 ) -> Result<MutationAck, ApiError> {
-  let current = sqlx::query_as::<_, (Option<String>, String, String, String, NaiveDate)>(
+  let current = sqlx::query_as::<_, (String, String, String, NaiveDate)>(
     r#"
-    SELECT numero_etudiant, prenom, nom, email, date_naissance
+    SELECT prenom, nom, email, date_naissance
     FROM etudiant
     WHERE id = $1
     "#,
@@ -125,53 +123,37 @@ pub async fn update_student(
   .map_err(map_schema_error("unable to update student"))?
   .ok_or_else(|| ApiError::bad_request("student not found"))?;
 
-  let numero_etudiant = payload
-    .numero_etudiant
-    .as_deref()
-    .map(str::trim)
-    .filter(|v| !v.is_empty())
-    .map(str::to_string)
-    .or(current.0);
-  if let Some(ref numero) = numero_etudiant
-    && (numero.len() != 8 || !numero.chars().all(|char| char.is_ascii_digit()))
-  {
-    return Err(ApiError::bad_request(
-      "student number must contain exactly 8 digits",
-    ));
-  }
-
   let prenom = payload
     .prenom
     .as_deref()
     .map(str::trim)
     .filter(|v| !v.is_empty())
-    .unwrap_or(&current.1)
+    .unwrap_or(&current.0)
     .to_string();
   let nom = payload
     .nom
     .as_deref()
     .map(str::trim)
     .filter(|v| !v.is_empty())
-    .unwrap_or(&current.2)
+    .unwrap_or(&current.1)
     .to_string();
   let email = payload
     .email
     .as_deref()
     .map(str::trim)
     .filter(|v| !v.is_empty())
-    .unwrap_or(&current.3)
+    .unwrap_or(&current.2)
     .to_lowercase();
-  let date_naissance = payload.date_naissance.unwrap_or(current.4);
+  let date_naissance = payload.date_naissance.unwrap_or(current.3);
 
   sqlx::query(
     r#"
     UPDATE etudiant
-    SET numero_etudiant = $2, prenom = $3, nom = $4, email = $5, date_naissance = $6
+    SET prenom = $2, nom = $3, email = $4, date_naissance = $5
     WHERE id = $1
     "#,
   )
   .bind(etu_id)
-  .bind(numero_etudiant)
   .bind(prenom)
   .bind(nom)
   .bind(email)

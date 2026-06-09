@@ -61,7 +61,6 @@ pub struct DashboardPayload {
 #[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
 pub struct PromoStudent {
   pub id: Uuid,
-  pub numero_etudiant: Option<String>,
   pub nom: String,
   pub prenom: String,
   pub email: String,

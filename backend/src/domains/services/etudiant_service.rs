@@ -17,13 +17,6 @@ pub async fn create_etudiant(
   db: &PgPool,
   etudiant: CreateEtudiant,
 ) -> Result<GetEtudiant, ApiError> {
-  let numero = etudiant.numero_etudiant.trim().to_string();
-  if numero.len() != 8 || !numero.chars().all(|char| char.is_ascii_digit()) {
-    return Err(ApiError::bad_request(
-      "student number must contain exactly 8 digits",
-    ));
-  }
-
   if etudiant.mot_de_passe.trim().len() < 8 {
     return Err(ApiError::bad_request(
       "password must be at least 8 characters",
@@ -40,12 +33,11 @@ pub async fn create_etudiant(
 
   let created = sqlx::query_as::<_, GetEtudiant>(
     r#"
-    INSERT INTO etudiant (numero_etudiant, nom, prenom, email, date_naissance, mot_de_passe)
-    VALUES ($1, $2, $3, $4, $5, $6)
-    RETURNING id, numero_etudiant, nom, prenom, email, date_naissance
+    INSERT INTO etudiant (nom, prenom, email, date_naissance, mot_de_passe)
+    VALUES ($1, $2, $3, $4, $5)
+    RETURNING id, nom, prenom, email, date_naissance
     "#,
   )
-  .bind(numero)
   .bind(&etudiant.nom)
   .bind(&etudiant.prenom)
   .bind(etudiant.email.trim().to_lowercase())
@@ -80,7 +72,6 @@ pub async fn create_etudiant(
 
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct UpdateMyProfileInput {
-  pub numero_etudiant: Option<String>,
   pub nom: Option<String>,
   pub prenom: Option<String>,
   pub email: Option<String>,
@@ -90,7 +81,6 @@ pub struct UpdateMyProfileInput {
 #[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
 pub struct MyProfilePayload {
   pub id: Uuid,
-  pub numero_etudiant: Option<String>,
   pub nom: String,
   pub prenom: String,
   pub email: String,
@@ -101,7 +91,7 @@ pub struct MyProfilePayload {
 pub async fn get_etudiant_by_id(db: &PgPool, etu_id: Uuid) -> Result<GetEtudiant, ApiError> {
   sqlx::query_as::<_, GetEtudiant>(
     r#"
-    SELECT id, numero_etudiant, nom, prenom, email, date_naissance
+    SELECT id, nom, prenom, email, date_naissance
     FROM etudiant
     WHERE id = $1
     "#,
@@ -118,7 +108,6 @@ pub async fn get_my_profile_by_id(db: &PgPool, etu_id: Uuid) -> Result<MyProfile
     r#"
     SELECT
       id,
-      numero_etudiant,
       nom,
       prenom,
       email,
@@ -145,25 +134,6 @@ pub async fn update_etudiant_by_id(
 ) -> Result<GetEtudiant, ApiError> {
   let current = get_etudiant_by_id(db, etu_id).await?;
 
-  let numero_etudiant = payload
-    .numero_etudiant
-    .map(|value| value.trim().to_string());
-  let numero_etudiant =
-    numero_etudiant.unwrap_or_else(|| current.numero_etudiant.unwrap_or_default());
-  let numero_etudiant = if numero_etudiant.is_empty() {
-    None
-  } else {
-    Some(numero_etudiant)
-  };
-
-  if let Some(numero) = &numero_etudiant
-    && (numero.len() != 8 || !numero.chars().all(|char| char.is_ascii_digit()))
-  {
-    return Err(ApiError::bad_request(
-      "student number must contain exactly 8 digits",
-    ));
-  }
-
   let nom = payload
     .nom
     .map(|value| value.trim().to_string())
@@ -180,13 +150,12 @@ pub async fn update_etudiant_by_id(
   sqlx::query_as::<_, GetEtudiant>(
     r#"
     UPDATE etudiant
-    SET numero_etudiant = $2, nom = $3, prenom = $4, email = $5, date_naissance = $6
+    SET nom = $2, prenom = $3, email = $4, date_naissance = $5
     WHERE id = $1
-    RETURNING id, numero_etudiant, nom, prenom, email, date_naissance
+    RETURNING id, nom, prenom, email, date_naissance
     "#,
   )
   .bind(etu_id)
-  .bind(numero_etudiant)
   .bind(nom)
   .bind(prenom)
   .bind(email)
@@ -306,15 +275,12 @@ fn map_create_error(error: sqlx::Error) -> ApiError {
     sqlx::Error::Database(db_err) if db_err.code().as_deref() == Some("23505") => {
       if db_err
         .constraint()
-        .map(|value| value.contains("numero_etudiant"))
+        .map(|value| value.contains("email"))
         .unwrap_or(false)
       {
-        return ApiError::conflict("student number already exists");
+        return ApiError::conflict("email already exists");
       }
       ApiError::conflict("email already exists")
-    }
-    sqlx::Error::Database(db_err) if db_err.code().as_deref() == Some("23514") => {
-      ApiError::bad_request("student number must contain exactly 8 digits")
     }
     _ => ApiError::internal("unable to create account at this time"),
   }

@@ -4,7 +4,6 @@ import { Button } from '@/components/ui/button';
 import { changePasswordRequest } from '@/services/api';
 
 type ProfileForm = {
-  numero_etudiant: string;
   nom: string;
   prenom: string;
   email: string;
@@ -134,17 +133,6 @@ export function StudentProfileModule({
 
       <div className="p-4">
         <div className="grid gap-2 sm:grid-cols-2">
-          <input
-            value={profileForm.numero_etudiant}
-            onChange={(event) =>
-              setProfileForm((prev) => ({
-                ...prev,
-                numero_etudiant: event.target.value,
-              }))
-            }
-            className="rounded-md border border-[var(--surface-border)] bg-[var(--surface-2)] px-2 py-1 text-sm text-foreground"
-            placeholder="Numero etudiant"
-          />
           <input
             type="date"
             value={profileForm.date_naissance}

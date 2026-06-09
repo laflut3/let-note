@@ -9,7 +9,6 @@ END$$;
 
 CREATE TABLE IF NOT EXISTS etudiant (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  numero_etudiant VARCHAR(8),
   nom TEXT NOT NULL,
   prenom TEXT NOT NULL,
   email TEXT NOT NULL UNIQUE,
@@ -22,14 +21,8 @@ CREATE TABLE IF NOT EXISTS etudiant (
   locked_until TIMESTAMPTZ,
   password_reset_token_hash TEXT,
   password_reset_expires_at TIMESTAMPTZ,
-  password_reset_requested_at TIMESTAMPTZ,
-  CONSTRAINT chk_etudiant_numero_8_digits
-    CHECK (numero_etudiant IS NULL OR numero_etudiant ~ '^[0-9]{8}$')
+  password_reset_requested_at TIMESTAMPTZ
 );
-
-CREATE UNIQUE INDEX IF NOT EXISTS ux_etudiant_numero_etudiant
-ON etudiant (numero_etudiant)
-WHERE numero_etudiant IS NOT NULL;
 
 CREATE INDEX IF NOT EXISTS ix_etudiant_email_verification_token
 ON etudiant (email_verification_token_hash)

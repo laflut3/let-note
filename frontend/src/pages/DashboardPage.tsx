@@ -93,7 +93,11 @@ export function DashboardPage() {
               )}
 
               {controller.activeTab === 'devoirs' && (
-                <ArchivedHomeworkTab dashboard={controller.dashboard} />
+                <ArchivedHomeworkTab
+                  dashboard={controller.dashboard}
+                  selectedPromoId={controller.selectedPromoId}
+                  onCreated={controller.refreshDashboard}
+                />
               )}
 
               {controller.activeTab === 'edt' && (

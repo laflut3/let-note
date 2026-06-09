@@ -6,7 +6,6 @@ import { Input } from '@/components/ui/input';
 import { ThemeToggle } from '@/components/auth/ThemeToggle';
 import { useThemeContext } from '@/context/theme-context';
 import { adminUi } from '@/lib/admin-ui';
-import { DevoirsSection } from '@/components/devoirs/DevoirsSection';
 import { SubjectsTab } from '@/components/admin/SubjectsSection';
 import { AdminOverlays } from '@/components/admin/AdminOverlays';
 import { useAdminController } from '@/hooks/useAdminController';
@@ -21,7 +20,7 @@ import {
   type PromotionScope,
 } from '@/services/api';
 
-type DelegateTab = 'general' | 'matieres' | 'professeurs' | 'etudiants' | 'devoirs';
+type DelegateTab = 'general' | 'matieres' | 'professeurs' | 'etudiants';
 
 type Feedback = {
   type: '' | 'success' | 'error';
@@ -170,7 +169,6 @@ export function DelegatePage() {
                 ['etudiants', 'Etudiants'],
                 ['professeurs', 'Professeurs'],
                 ['matieres', 'Matieres'],
-                ['devoirs', 'Devoirs'],
               ] as const
             ).map(([value, label]) => (
               <button
@@ -186,7 +184,6 @@ export function DelegatePage() {
                 {value === 'matieres' && <BookOpen className="h-4 w-4" />}
                 {value === 'professeurs' && <User className="h-4 w-4" />}
                 {value === 'etudiants' && <Users className="h-4 w-4" />}
-                {value === 'devoirs' && <BookOpen className="h-4 w-4" />}
                 <span className="hidden md:inline">{label}</span>
               </button>
             ))}
@@ -368,7 +365,6 @@ export function DelegatePage() {
                 <thead className="bg-[var(--surface-muted)] text-foreground">
                   <tr>
                     <th className="px-3 py-2 text-left">Etudiant</th>
-                    <th className="px-3 py-2 text-left">Numero</th>
                     <th className="px-3 py-2 text-left">Email</th>
                   </tr>
                 </thead>
@@ -381,13 +377,12 @@ export function DelegatePage() {
                       <td className="px-3 py-2">
                         {etudiant.prenom} {etudiant.nom}
                       </td>
-                      <td className="px-3 py-2">{etudiant.numero_etudiant ?? '-'}</td>
                       <td className="px-3 py-2">{etudiant.email}</td>
                     </tr>
                   ))}
                   {(dashboard?.etudiants ?? []).length === 0 && (
                     <tr className="border-t border-[var(--surface-border)] bg-[var(--surface-2)]">
-                      <td className="px-3 py-2 text-muted-foreground" colSpan={3}>
+                      <td className="px-3 py-2 text-muted-foreground" colSpan={2}>
                         Aucun etudiant dans cette promotion.
                       </td>
                     </tr>
@@ -395,28 +390,6 @@ export function DelegatePage() {
                 </tbody>
               </table>
             </div>
-          )}
-
-          {activeTab === 'devoirs' && selectedPromoId && (
-            <DevoirsSection
-              promotions={promotions}
-              matieres={dashboard?.matieres ?? []}
-              selectedPromoId={selectedPromoId}
-              onPromoChange={setSelectedPromoId}
-              onFeedback={setFeedback}
-              theme={{
-                panel:
-                  'mt-4 rounded-2xl border border-[var(--surface-border)] bg-[var(--surface-2)] p-4 shadow-[0_12px_30px_rgba(79,23,48,0.08)] sm:p-6',
-                title: 'text-xl font-semibold text-foreground',
-                input:
-                  'h-11 rounded-xl border border-[var(--surface-border)] bg-[var(--surface-2)] px-3',
-                select:
-                  'h-11 rounded-xl border border-[var(--surface-border)] bg-[var(--surface-2)] px-3',
-                primaryButton:
-                  'h-10 rounded-xl bg-[var(--surface-strong)] text-white hover:bg-[var(--surface-strong-hover)] dark:text-zinc-900',
-                row: 'flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--surface-border)] bg-[var(--surface-muted)] p-4',
-              }}
-            />
           )}
 
           {feedback.message && (

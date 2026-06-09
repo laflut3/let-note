@@ -263,8 +263,7 @@ export function AdminOverlays({ controller }: Props) {
                 className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[var(--surface-border)] bg-[var(--surface-1)] px-3 py-2"
               >
                 <span>
-                  {student.prenom} {student.nom} ({student.numero_etudiant ?? 'sans numero'}){' '}
-                  {student.is_delegue ? '- delegue' : ''}
+                  {student.prenom} {student.nom} {student.is_delegue ? '- delegue' : ''}
                 </span>
                 <div className="flex items-center gap-2">
                   <Button
