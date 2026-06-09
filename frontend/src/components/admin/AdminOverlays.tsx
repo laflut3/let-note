@@ -1,3 +1,5 @@
+import { useMemo } from 'react';
+import { Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Modal } from '@/components/admin/Modal';
 import { adminUi } from '@/lib/admin-ui';
@@ -19,7 +21,8 @@ export function AdminOverlays({ controller }: Props) {
     editPromoName,
     setEditPromoName,
     editPromoImage,
-    setEditPromoImage,
+    editPromoImageFile,
+    setEditPromoImageFile,
     editPromoArrivee,
     setEditPromoArrivee,
     editPromoDepart,
@@ -44,6 +47,9 @@ export function AdminOverlays({ controller }: Props) {
     setSelectedStudentForPromo,
     users,
     promoStudents,
+    promoStudentSearch,
+    setPromoStudentSearch,
+    refreshPromoStudents,
     setStudentsPopupPromoId,
     openConfirmDialog,
     confirmDialog,
@@ -55,6 +61,22 @@ export function AdminOverlays({ controller }: Props) {
     (student) => student.id === selectedStudentForPromo
   );
   const delegueCount = promoStudents.filter((student) => student.is_delegue).length;
+  const promoStudentIds = useMemo(
+    () => new Set(promoStudents.map((student) => student.id)),
+    [promoStudents]
+  );
+  const filteredUsersForPromo = useMemo(() => {
+    const query = promoStudentSearch.trim().toLowerCase();
+    const candidates = users.filter((user) => {
+      if (!query) return !promoStudentIds.has(user.id);
+      const haystack = `${user.prenom} ${user.nom} ${user.email}`.toLowerCase();
+      return haystack.includes(query);
+    });
+
+    return candidates
+      .sort((a, b) => `${a.nom} ${a.prenom}`.localeCompare(`${b.nom} ${b.prenom}`, 'fr'))
+      .slice(0, 20);
+  }, [promoStudentIds, promoStudentSearch, users]);
 
   return (
     <>
@@ -72,7 +94,7 @@ export function AdminOverlays({ controller }: Props) {
                   () =>
                     adminUpdatePromotionRequest(editingPromoId, {
                       nom: editPromoName,
-                      image_url: editPromoImage,
+                      image_file: editPromoImageFile ?? undefined,
                       ical_url: editPromoIcal,
                       annee_arrivee: Number(editPromoArrivee),
                       annee_depart: Number(editPromoDepart),
@@ -102,12 +124,26 @@ export function AdminOverlays({ controller }: Props) {
             placeholder="Nom"
             className={adminUi.input}
           />
-          <input
-            value={editPromoImage}
-            onChange={(e) => setEditPromoImage(e.target.value)}
-            placeholder="Image URL"
-            className={adminUi.input}
-          />
+          <div className="space-y-2">
+            {editPromoImage ? (
+              <img
+                src={editPromoImage}
+                alt=""
+                className="h-20 w-full rounded-lg border border-[var(--surface-border)] object-cover"
+              />
+            ) : null}
+            <label className={`${adminUi.input} flex cursor-pointer items-center`}>
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                onChange={(e) => setEditPromoImageFile(e.target.files?.[0] ?? null)}
+                className="sr-only"
+              />
+              <span className="truncate">
+                {editPromoImageFile ? editPromoImageFile.name : "Remplacer l'image"}
+              </span>
+            </label>
+          </div>
           <input
             value={editPromoArrivee}
             onChange={(e) => setEditPromoArrivee(e.target.value)}
@@ -213,40 +249,76 @@ export function AdminOverlays({ controller }: Props) {
           </Button>
         }
       >
-        <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_auto]">
-          <select
-            value={selectedStudentForPromo}
-            onChange={(e) => setSelectedStudentForPromo(e.target.value)}
-            className={adminUi.select}
-          >
-            <option value="">Selectionner un eleve</option>
-            {users.map((user) => (
-              <option key={user.id} value={user.id}>
-                {user.prenom} {user.nom}
-              </option>
-            ))}
-          </select>
-          <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              className={adminUi.primaryBtn}
-              disabled={!selectedStudentForPromo || isSelectedStudentInPromo}
-              onClick={() => {
-                if (selectedStudentForPromo) {
-                  void runAction(
-                    () =>
-                      adminAddStudentToPromotionRequest(
-                        studentsPopupPromoId,
-                        selectedStudentForPromo
-                      ),
-                    'Eleve ajoute.'
-                  );
-                }
+        <div className="mt-3 space-y-3">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <input
+              value={promoStudentSearch}
+              onChange={(e) => {
+                setPromoStudentSearch(e.target.value);
+                setSelectedStudentForPromo('');
               }}
-            >
-              Ajouter
-            </Button>
+              placeholder="Rechercher un eleve par nom, prenom ou email"
+              className={`${adminUi.input} pl-9`}
+            />
           </div>
+          <div className="max-h-72 overflow-y-auto rounded-xl border border-[var(--surface-border)] bg-[var(--surface-muted)] p-2">
+            {filteredUsersForPromo.length === 0 ? (
+              <p className="px-2 py-3 text-sm text-muted-foreground">
+                Aucun eleve disponible pour cette recherche.
+              </p>
+            ) : (
+              <ul className="space-y-2">
+                {filteredUsersForPromo.map((user) => {
+                  const alreadyInPromo = promoStudentIds.has(user.id);
+                  return (
+                    <li
+                      key={user.id}
+                      className="flex flex-col gap-2 rounded-lg border border-[var(--surface-border)] bg-[var(--surface-1)] px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <button
+                        type="button"
+                        className="min-w-0 text-left"
+                        onClick={() => setSelectedStudentForPromo(user.id)}
+                      >
+                        <span className="block truncate text-sm font-medium text-foreground">
+                          {user.prenom} {user.nom}
+                        </span>
+                        <span className="block truncate text-xs text-muted-foreground">
+                          {user.email}
+                        </span>
+                      </button>
+                      <Button
+                        type="button"
+                        className={adminUi.primaryBtn}
+                        disabled={alreadyInPromo}
+                        onClick={() => {
+                          void (async () => {
+                            const success = await runAction(
+                              () =>
+                                adminAddStudentToPromotionRequest(studentsPopupPromoId, user.id),
+                              'Eleve ajoute.',
+                              false
+                            );
+                            if (success) {
+                              setSelectedStudentForPromo('');
+                              await refreshPromoStudents(studentsPopupPromoId);
+                            }
+                          })();
+                        }}
+                      >
+                        {alreadyInPromo ? 'Deja ajoute' : 'Ajouter'}
+                      </Button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {filteredUsersForPromo.length} resultat{filteredUsersForPromo.length > 1 ? 's' : ''}{' '}
+            affiche{filteredUsersForPromo.length > 1 ? 's' : ''}.
+          </p>
         </div>
         {isSelectedStudentInPromo && (
           <p className="mt-2 text-xs text-muted-foreground">
@@ -271,15 +343,21 @@ export function AdminOverlays({ controller }: Props) {
                     className={adminUi.primaryBtn}
                     disabled={!student.is_delegue && delegueCount >= 2}
                     onClick={() =>
-                      void runAction(
-                        () =>
+                      void (async () => {
+                        const success = await runAction(
+                          () =>
+                            student.is_delegue
+                              ? adminRemoveDelegueRequest(studentsPopupPromoId, student.id)
+                              : adminAssignDelegueRequest(studentsPopupPromoId, student.id),
                           student.is_delegue
-                            ? adminRemoveDelegueRequest(studentsPopupPromoId, student.id)
-                            : adminAssignDelegueRequest(studentsPopupPromoId, student.id),
-                        student.is_delegue
-                          ? 'Delegue retire de la promotion.'
-                          : 'Delegue assigne a la promotion.'
-                      )
+                            ? 'Delegue retire de la promotion.'
+                            : 'Delegue assigne a la promotion.',
+                          false
+                        );
+                        if (success) {
+                          await refreshPromoStudents(studentsPopupPromoId);
+                        }
+                      })()
                     }
                   >
                     {student.is_delegue ? 'Retirer delegue' : 'Assigner delegue'}
@@ -295,14 +373,20 @@ export function AdminOverlays({ controller }: Props) {
                         confirmLabel: 'Desaffecter',
                         isDanger: true,
                         onConfirm: () => {
-                          void runAction(
-                            () =>
-                              adminRemoveStudentFromPromotionRequest(
-                                studentsPopupPromoId,
-                                student.id
-                              ),
-                            'Eleve retire de la promo.'
-                          );
+                          void (async () => {
+                            const success = await runAction(
+                              () =>
+                                adminRemoveStudentFromPromotionRequest(
+                                  studentsPopupPromoId,
+                                  student.id
+                                ),
+                              'Eleve retire de la promo.',
+                              false
+                            );
+                            if (success) {
+                              await refreshPromoStudents(studentsPopupPromoId);
+                            }
+                          })();
                         },
                       });
                     }}

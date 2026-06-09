@@ -44,6 +44,9 @@ CREATE TABLE IF NOT EXISTS promotion (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   nom TEXT NOT NULL,
   image_url TEXT NOT NULL DEFAULT '',
+  image_s3_bucket TEXT,
+  image_s3_key TEXT,
+  image_content_type TEXT,
   ical_url TEXT,
   annee_arrivee INTEGER NOT NULL,
   annee_depart INTEGER NOT NULL,
@@ -193,7 +196,7 @@ CREATE INDEX IF NOT EXISTS ix_note_resultat_etu ON note_resultat(id_etu);
 CREATE TABLE IF NOT EXISTS matiere_resource (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   id_mat TEXT NOT NULL REFERENCES matiere(code_matiere) ON DELETE CASCADE,
-  id_promo UUID REFERENCES promotion(id) ON DELETE CASCADE,
+  id_promo UUID NOT NULL REFERENCES promotion(id) ON DELETE CASCADE,
   type_metier resource_type_metier NOT NULL,
   title TEXT NOT NULL,
   description TEXT,
@@ -203,7 +206,11 @@ CREATE TABLE IF NOT EXISTS matiere_resource (
   content_type TEXT,
   size_bytes BIGINT,
   created_by UUID REFERENCES etudiant(id) ON DELETE SET NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT fk_matiere_resource_mat_promo
+    FOREIGN KEY (id_mat, id_promo)
+    REFERENCES mat_promo(id_mat, id_promo)
+    ON DELETE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS ix_matiere_resource_mat ON matiere_resource(id_mat);

@@ -18,8 +18,8 @@ export function PromotionsTab({ controller }: Props) {
     setAnneeArrivee,
     anneeDepart,
     setAnneeDepart,
-    imageUrl,
-    setImageUrl,
+    promotionImageFile,
+    setPromotionImageFile,
     icalUrl,
     setIcalUrl,
     referentProfId,
@@ -28,6 +28,9 @@ export function PromotionsTab({ controller }: Props) {
     selectedCount,
     isLoading,
     users,
+    promotionUserSearch,
+    setPromotionUserSearch,
+    filteredUsersForPromotionCreate,
     selectedUserIds,
     toggleUser,
     handleCreatePromotion,
@@ -72,12 +75,17 @@ export function PromotionsTab({ controller }: Props) {
             step="1"
             className={adminUi.input}
           />
-          <input
-            value={imageUrl}
-            onChange={(e) => setImageUrl(e.target.value)}
-            placeholder="Image URL"
-            className={adminUi.input}
-          />
+          <label className={`${adminUi.input} flex cursor-pointer items-center`}>
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/gif"
+              onChange={(e) => setPromotionImageFile(e.target.files?.[0] ?? null)}
+              className="sr-only"
+            />
+            <span className="truncate">
+              {promotionImageFile ? promotionImageFile.name : 'Selectionner une image'}
+            </span>
+          </label>
           <input
             value={icalUrl}
             onChange={(e) => setIcalUrl(e.target.value)}
@@ -102,6 +110,12 @@ export function PromotionsTab({ controller }: Props) {
           <p className="text-sm font-medium text-foreground">
             Etudiants ({selectedCount} selectionne{selectedCount > 1 ? 's' : ''})
           </p>
+          <input
+            value={promotionUserSearch}
+            onChange={(e) => setPromotionUserSearch(e.target.value)}
+            placeholder="Rechercher un eleve par nom, prenom ou email"
+            className={`${adminUi.input} mt-2`}
+          />
           <div className="mt-2 max-h-60 overflow-y-auto rounded-xl border border-[var(--surface-border)] bg-[var(--surface-muted)] p-2">
             {isLoading ? (
               <p className="px-2 py-1 text-sm text-muted-foreground">Chargement...</p>
@@ -109,8 +123,12 @@ export function PromotionsTab({ controller }: Props) {
               <p className="px-2 py-1 text-sm text-muted-foreground">
                 Aucun utilisateur disponible.
               </p>
+            ) : filteredUsersForPromotionCreate.length === 0 ? (
+              <p className="px-2 py-1 text-sm text-muted-foreground">
+                Aucun eleve ne correspond a cette recherche.
+              </p>
             ) : (
-              users.map((user) => {
+              filteredUsersForPromotionCreate.map((user) => {
                 const checked = selectedUserIds.includes(user.id);
                 return (
                   <label
@@ -131,6 +149,11 @@ export function PromotionsTab({ controller }: Props) {
               })
             )}
           </div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {filteredUsersForPromotionCreate.length} eleve
+            {filteredUsersForPromotionCreate.length > 1 ? 's' : ''} affiche
+            {filteredUsersForPromotionCreate.length > 1 ? 's' : ''}.
+          </p>
         </div>
 
         <Button

@@ -16,6 +16,7 @@ pub fn promo_routes(db: PgPool) -> Router<PgPool> {
   Router::new()
     .route("/resources/{resource_id}/file", get(get_resource_file))
     .route("/promotions", get(list_accessible_promotions))
+    .route("/promotions/{promo_id}/image", get(get_promotion_image))
     .route("/promotions/{promo_id}/dashboard", get(get_promo_dashboard))
     .route("/promotions/{promo_id}/ical", get(get_promo_ical))
     .route(
@@ -29,6 +30,20 @@ pub fn promo_routes(db: PgPool) -> Router<PgPool> {
     .route(
       "/promotions/{promo_id}/professeurs",
       middleware::right_admin_or_delegue_for_promo(post(add_professeur_to_promo), db.clone()),
+    )
+    .route(
+      "/promotions/{promo_id}/etudiants",
+      middleware::right_admin_or_delegue_for_promo(
+        get(list_students_for_promo_management),
+        db.clone(),
+      ),
+    )
+    .route(
+      "/promotions/{promo_id}/etudiants/{etu_id}",
+      middleware::right_admin_or_delegue_for_promo(
+        post(add_student_to_promo).delete(remove_student_from_promo),
+        db.clone(),
+      ),
     )
     .route(
       "/promotions/{promo_id}/devoirs",
@@ -82,6 +97,36 @@ async fn add_professeur_to_promo(
   Json(payload): Json<promo_service::CreateProfesseurInput>,
 ) -> impl IntoResponse {
   match promo_service::add_professeur_to_promo(&db, promo_id, payload).await {
+    Ok(data) => axum::Json(data).into_response(),
+    Err(error) => error.into_response(),
+  }
+}
+
+async fn list_students_for_promo_management(
+  State(db): State<PgPool>,
+  Path(promo_id): Path<Uuid>,
+) -> impl IntoResponse {
+  match promo_service::list_students_for_promo_management(&db, promo_id).await {
+    Ok(data) => axum::Json(data).into_response(),
+    Err(error) => error.into_response(),
+  }
+}
+
+async fn add_student_to_promo(
+  State(db): State<PgPool>,
+  Path((promo_id, etu_id)): Path<(Uuid, Uuid)>,
+) -> impl IntoResponse {
+  match promo_service::add_student_to_promo(&db, promo_id, etu_id).await {
+    Ok(data) => axum::Json(data).into_response(),
+    Err(error) => error.into_response(),
+  }
+}
+
+async fn remove_student_from_promo(
+  State(db): State<PgPool>,
+  Path((promo_id, etu_id)): Path<(Uuid, Uuid)>,
+) -> impl IntoResponse {
+  match promo_service::remove_student_from_promo(&db, promo_id, etu_id).await {
     Ok(data) => axum::Json(data).into_response(),
     Err(error) => error.into_response(),
   }

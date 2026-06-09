@@ -101,6 +101,10 @@ pub async fn create_matiere_resource(
   if payload.s3_bucket.trim().is_empty() || payload.s3_key.trim().is_empty() {
     return Err(ApiError::bad_request("s3_bucket and s3_key are required"));
   }
+  let promo_id = payload.id_promo.ok_or_else(|| {
+    ApiError::bad_request("promotion is required for subject resource")
+  })?;
+  ensure_subject_linked_to_promotion(db, &code, promo_id).await?;
 
   sqlx::query(
     r#"
@@ -110,7 +114,7 @@ pub async fn create_matiere_resource(
     "#,
   )
   .bind(code)
-  .bind(payload.id_promo)
+  .bind(promo_id)
   .bind(payload.type_metier.trim().to_lowercase())
   .bind(payload.title.trim())
   .bind(payload.description.map(|v| v.trim().to_string()))
@@ -144,6 +148,11 @@ pub async fn create_matiere_resource_from_upload(
   if payload.bytes.is_empty() {
     return Err(ApiError::bad_request("file is required"));
   }
+  let promo_id = payload.id_promo.ok_or_else(|| {
+    ApiError::bad_request("promotion is required for subject resource")
+  })?;
+
+  ensure_subject_linked_to_promotion(db, &code, promo_id).await?;
 
   let s3_config =
     s3::read_s3_config().map_err(|_| ApiError::internal("unable to read S3 config"))?;
@@ -170,7 +179,7 @@ pub async fn create_matiere_resource_from_upload(
   )
   .bind(resource_id)
   .bind(code)
-  .bind(payload.id_promo)
+  .bind(promo_id)
   .bind(payload.type_metier.trim().to_lowercase())
   .bind(payload.title.trim())
   .bind(payload.description.map(|v| v.trim().to_string()))
@@ -186,6 +195,34 @@ pub async fn create_matiere_resource_from_upload(
   Ok(MutationAck {
     message: "subject resource created",
   })
+}
+
+async fn ensure_subject_linked_to_promotion(
+  db: &PgPool,
+  code_matiere: &str,
+  promo_id: Uuid,
+) -> Result<(), ApiError> {
+  let exists = sqlx::query_scalar::<_, i64>(
+    r#"
+    SELECT COUNT(*)
+    FROM mat_promo
+    WHERE id_mat = $1 AND id_promo = $2
+    "#,
+  )
+  .bind(code_matiere)
+  .bind(promo_id)
+  .fetch_one(db)
+  .await
+  .map_err(map_schema_error("unable to validate subject promotion"))?
+    > 0;
+
+  if !exists {
+    return Err(ApiError::bad_request(
+      "subject is not linked to this promotion",
+    ));
+  }
+
+  Ok(())
 }
 
 pub async fn delete_matiere_resource(

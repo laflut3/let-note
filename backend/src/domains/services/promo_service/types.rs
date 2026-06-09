@@ -67,6 +67,16 @@ pub struct PromoStudent {
   pub email: String,
 }
 
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+pub struct PromoStudentManagementItem {
+  pub id: Uuid,
+  pub nom: String,
+  pub prenom: String,
+  pub email: String,
+  pub is_in_promo: bool,
+  pub is_delegue: bool,
+}
+
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct UpsertStudentEventInput {
   pub id_etu: Uuid,

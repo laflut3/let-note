@@ -3,7 +3,7 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::domains::{
-  entities::{etudiant::GetEtudiant, professeur::CreateProfesseur, promotion::CreatePromotion},
+  entities::{etudiant::GetEtudiant, professeur::CreateProfesseur},
   error::ApiError,
 };
 use crate::infrastructure::s3;

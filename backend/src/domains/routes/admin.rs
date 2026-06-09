@@ -9,9 +9,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::domains::{
-  entities::promotion::CreatePromotion, error::ApiError, middleware, services::admin_service,
-};
+use crate::domains::{error::ApiError, middleware, services::admin_service};
 
 pub fn admin_routes(db: PgPool) -> Router<PgPool> {
   Router::new()

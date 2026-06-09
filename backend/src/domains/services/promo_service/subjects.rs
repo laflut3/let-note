@@ -269,3 +269,105 @@ pub async fn update_promotion_ical_url(
     message: "iCal URL updated",
   })
 }
+
+pub async fn list_students_for_promo_management(
+  db: &PgPool,
+  promo_id: Uuid,
+) -> Result<Vec<PromoStudentManagementItem>, ApiError> {
+  ensure_promotion_exists(db, promo_id).await?;
+
+  sqlx::query_as::<_, PromoStudentManagementItem>(
+    r#"
+    SELECT
+      e.id,
+      e.nom,
+      e.prenom,
+      e.email,
+      EXISTS (
+        SELECT 1
+        FROM etu_promo ep
+        WHERE ep.id_etu = e.id AND ep.id_promo = $1
+      ) AS is_in_promo,
+      EXISTS (
+        SELECT 1
+        FROM delegue_promo dp
+        WHERE dp.id_etu = e.id AND dp.id_promo = $1
+      ) AS is_delegue
+    FROM etudiant e
+    ORDER BY e.nom, e.prenom, e.email
+    "#,
+  )
+  .bind(promo_id)
+  .fetch_all(db)
+  .await
+  .map_err(map_schema_error("unable to list students"))
+}
+
+pub async fn add_student_to_promo(
+  db: &PgPool,
+  promo_id: Uuid,
+  etu_id: Uuid,
+) -> Result<MutationAck, ApiError> {
+  ensure_promotion_exists(db, promo_id).await?;
+
+  let student_exists = sqlx::query_scalar::<_, i64>(
+    r#"
+    SELECT COUNT(*)
+    FROM etudiant
+    WHERE id = $1
+    "#,
+  )
+  .bind(etu_id)
+  .fetch_one(db)
+  .await
+  .map_err(map_schema_error("unable to validate student"))?
+    > 0;
+
+  if !student_exists {
+    return Err(ApiError::bad_request("student not found"));
+  }
+
+  sqlx::query(
+    r#"
+    INSERT INTO etu_promo (id_etu, id_promo)
+    VALUES ($1, $2)
+    ON CONFLICT DO NOTHING
+    "#,
+  )
+  .bind(etu_id)
+  .bind(promo_id)
+  .execute(db)
+  .await
+  .map_err(map_schema_error("unable to add student to promotion"))?;
+
+  Ok(MutationAck {
+    message: "student added to promotion",
+  })
+}
+
+pub async fn remove_student_from_promo(
+  db: &PgPool,
+  promo_id: Uuid,
+  etu_id: Uuid,
+) -> Result<MutationAck, ApiError> {
+  let deleted = sqlx::query(
+    r#"
+    DELETE FROM etu_promo
+    WHERE id_etu = $1 AND id_promo = $2
+    "#,
+  )
+  .bind(etu_id)
+  .bind(promo_id)
+  .execute(db)
+  .await
+  .map_err(map_schema_error("unable to remove student from promotion"))?
+  .rows_affected();
+
+  if deleted == 0 {
+    return Err(ApiError::bad_request("student is not attached to this promotion"));
+  }
+
+  Ok(MutationAck {
+    message: "student removed from promotion",
+  })
+}

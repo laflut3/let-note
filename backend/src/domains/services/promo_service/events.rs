@@ -3,6 +3,7 @@ pub async fn list_student_events_for_promo(
   promo_id: Uuid,
 ) -> Result<Vec<StudentEventConfig>, ApiError> {
   ensure_promotion_exists(db, promo_id).await?;
+  purge_expired_student_events(db).await?;
 
   sqlx::query_as::<_, StudentEventConfig>(
     r#"
@@ -37,6 +38,7 @@ pub async fn upsert_student_event_for_promo(
 ) -> Result<MutationAck, ApiError> {
   ensure_student_in_promo(db, payload.id_etu, promo_id).await?;
   validate_month_day(payload.event_month, payload.event_day)?;
+  ensure_event_date_not_past(payload.event_month, payload.event_day)?;
 
   let title = payload
     .title
@@ -113,6 +115,8 @@ async fn list_promotion_events_for_year(
   db: &PgPool,
   promo_id: Uuid,
 ) -> Result<Vec<PromotionEventPayload>, ApiError> {
+  purge_expired_student_events(db).await?;
+
   let today = Utc::now().date_naive();
   let year = today.year();
   let year_end = NaiveDate::from_ymd_opt(year, 12, 31)
@@ -216,6 +220,25 @@ async fn list_promotion_events_for_year(
   Ok(events)
 }
 
+async fn purge_expired_student_events(db: &PgPool) -> Result<(), ApiError> {
+  let today = Utc::now().date_naive();
+
+  sqlx::query(
+    r#"
+    DELETE FROM student_event
+    WHERE event_month < $1
+      OR (event_month = $1 AND event_day < $2)
+    "#,
+  )
+  .bind(today.month() as i32)
+  .bind(today.day() as i32)
+  .execute(db)
+  .await
+  .map_err(map_schema_error("unable to purge expired student events"))?;
+
+  Ok(())
+}
+
 async fn ensure_student_in_promo(db: &PgPool, etu_id: Uuid, promo_id: Uuid) -> Result<(), ApiError> {
   let exists = sqlx::query_scalar::<_, i64>(
     r#"
@@ -245,6 +268,20 @@ fn validate_month_day(month: i32, day: i32) -> Result<(), ApiError> {
 
   if NaiveDate::from_ymd_opt(2024, month as u32, day as u32).is_none() {
     return Err(ApiError::bad_request("event date is invalid"));
+  }
+
+  Ok(())
+}
+
+fn ensure_event_date_not_past(month: i32, day: i32) -> Result<(), ApiError> {
+  let today = Utc::now().date_naive();
+  let Some(occurrence_date) = NaiveDate::from_ymd_opt(today.year(), month as u32, day as u32)
+  else {
+    return Err(ApiError::bad_request("event date is invalid"));
+  };
+
+  if occurrence_date < today {
+    return Err(ApiError::bad_request("event date has already passed"));
   }
 
   Ok(())
