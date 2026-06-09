@@ -200,13 +200,14 @@ fn mail_config() -> Result<MailConfig, ApiError> {
     .ok()
     .and_then(|value| value.parse::<u16>().ok())
     .unwrap_or(587);
-  let username =
-    std::env::var("SMTP_USERNAME").map_err(|_| ApiError::internal("mail service unavailable"))?;
-  let password =
-    std::env::var("SMTP_PASSWORD").map_err(|_| ApiError::internal("mail service unavailable"))?;
-  let from = std::env::var("SMTP_FROM").unwrap_or_else(|_| username.clone());
-  let app_public_url =
-    std::env::var("APP_PUBLIC_URL").map_err(|_| ApiError::internal("app URL is missing"))?;
+  let username = required_env("SMTP_USERNAME", "mail service unavailable")?;
+  let password = required_env("SMTP_PASSWORD", "mail service unavailable")?;
+  let from = std::env::var("SMTP_FROM")
+    .ok()
+    .map(|value| value.trim().to_string())
+    .filter(|value| !value.is_empty())
+    .unwrap_or_else(|| username.clone());
+  let app_public_url = required_env("APP_PUBLIC_URL", "app URL is missing")?;
 
   Ok(MailConfig {
     host,
@@ -216,4 +217,12 @@ fn mail_config() -> Result<MailConfig, ApiError> {
     from,
     app_public_url,
   })
+}
+
+fn required_env(key: &str, error_message: &'static str) -> Result<String, ApiError> {
+  std::env::var(key)
+    .ok()
+    .map(|value| value.trim().to_string())
+    .filter(|value| !value.is_empty())
+    .ok_or_else(|| ApiError::internal(error_message))
 }
