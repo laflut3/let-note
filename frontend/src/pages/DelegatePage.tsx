@@ -1,6 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BookOpen, Home, LogOut, PartyPopper, Search, Shield, User, Users } from 'lucide-react';
+import {
+  BookOpen,
+  Home,
+  LogOut,
+  PartyPopper,
+  Search,
+  Shield,
+  Upload,
+  User,
+  Users,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ThemeToggle } from '@/components/auth/ThemeToggle';
@@ -13,6 +23,7 @@ import {
   addStudentToPromoRequest,
   addProfesseurRequest,
   authMeRequest,
+  createPromoMatiereResourceRequest,
   getPromotionDashboardRequest,
   listAccessiblePromotionsRequest,
   listPromoStudentsManagementRequest,
@@ -56,6 +67,12 @@ export function DelegatePage() {
   const [subjectName, setSubjectName] = useState('');
   const [subjectReferentId, setSubjectReferentId] = useState('');
   const [subjectSearch, setSubjectSearch] = useState('');
+  const [resourceSubjectCode, setResourceSubjectCode] = useState('');
+  const [resourceType, setResourceType] = useState<'cours' | 'td' | 'tp' | 'exam'>('cours');
+  const [resourceTitle, setResourceTitle] = useState('');
+  const [resourceDescription, setResourceDescription] = useState('');
+  const [resourceFile, setResourceFile] = useState<File | null>(null);
+  const [resourceInputKey, setResourceInputKey] = useState(0);
   const [isStudentsModalOpen, setIsStudentsModalOpen] = useState(false);
   const [studentSearch, setStudentSearch] = useState('');
   const [managedStudents, setManagedStudents] = useState<PromoStudentManagementItem[]>([]);
@@ -143,15 +160,47 @@ export function DelegatePage() {
           type: 'error',
           message: await extractError(response, 'Operation impossible.'),
         });
-        return;
+        return false;
       }
 
       setFeedback({ type: 'success', message: successMessage });
       if (selectedPromoId) {
         await loadPromotionData(selectedPromoId);
       }
+      return true;
     } catch {
       setFeedback({ type: 'error', message: 'Erreur reseau. Reessayez.' });
+      return false;
+    }
+  };
+
+  const resetResourceForm = () => {
+    setResourceType('cours');
+    setResourceTitle('');
+    setResourceDescription('');
+    setResourceFile(null);
+    setResourceInputKey((value) => value + 1);
+  };
+
+  const handleCreateMatiereResource = async (codeMatiere: string) => {
+    if (!selectedPromoId || !resourceTitle.trim() || !resourceFile) {
+      setFeedback({ type: 'error', message: 'Titre et fichier sont requis.' });
+      return;
+    }
+
+    const created = await runAction(
+      () =>
+        createPromoMatiereResourceRequest(selectedPromoId, codeMatiere, {
+          type_metier: resourceType,
+          title: resourceTitle.trim(),
+          description: resourceDescription.trim() || undefined,
+          file: resourceFile,
+        }),
+      'Fichier ajoute a la matiere.'
+    );
+
+    if (created) {
+      resetResourceForm();
     }
   };
 
@@ -373,17 +422,96 @@ export function DelegatePage() {
                 {(dashboard?.matieres ?? []).map((matiere) => (
                   <div
                     key={matiere.code_matiere}
-                    className="rounded-lg border border-[var(--surface-border)] bg-[var(--surface-1)] px-3 py-2 text-sm"
+                    className="rounded-lg border border-[var(--surface-border)] bg-[var(--surface-1)] px-3 py-3 text-sm"
                   >
-                    <p className="font-medium text-foreground">
-                      {matiere.nom_matiere} ({matiere.code_matiere})
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Referent:{' '}
-                      {[matiere.referent_prof_prenom, matiere.referent_prof_nom]
-                        .filter(Boolean)
-                        .join(' ') || 'Non defini'}
-                    </p>
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <p className="font-medium text-foreground">
+                          {matiere.nom_matiere} ({matiere.code_matiere})
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Referent:{' '}
+                          {[matiere.referent_prof_prenom, matiere.referent_prof_nom]
+                            .filter(Boolean)
+                            .join(' ') || 'Non defini'}
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="h-9 rounded-lg"
+                        onClick={() => {
+                          setResourceSubjectCode((prev) =>
+                            prev === matiere.code_matiere ? '' : matiere.code_matiere
+                          );
+                          resetResourceForm();
+                        }}
+                      >
+                        <Upload className="mr-2 h-4 w-4" />
+                        Ajouter fichier
+                      </Button>
+                    </div>
+
+                    {matiere.resources.length > 0 && (
+                      <ul className="mt-3 grid gap-2 md:grid-cols-2">
+                        {matiere.resources.map((resource) => (
+                          <li
+                            key={resource.id}
+                            className="rounded-lg border border-[var(--surface-border)] bg-[var(--surface-muted)] px-3 py-2"
+                          >
+                            <p className="truncate text-sm font-medium text-foreground">
+                              {resource.title}
+                            </p>
+                            <p className="text-xs uppercase text-muted-foreground">
+                              {resource.type_metier}
+                            </p>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+
+                    {resourceSubjectCode === matiere.code_matiere && (
+                      <div className="mt-3 grid gap-2 rounded-lg border border-[var(--surface-border)] bg-[var(--surface-muted)] p-3 sm:grid-cols-2">
+                        <select
+                          value={resourceType}
+                          onChange={(event) =>
+                            setResourceType(event.target.value as 'cours' | 'td' | 'tp' | 'exam')
+                          }
+                          className={adminUi.select}
+                        >
+                          <option value="cours">cours</option>
+                          <option value="td">td</option>
+                          <option value="tp">tp</option>
+                          <option value="exam">exam</option>
+                        </select>
+                        <input
+                          value={resourceTitle}
+                          onChange={(event) => setResourceTitle(event.target.value)}
+                          placeholder="Titre du fichier"
+                          className={adminUi.input}
+                        />
+                        <input
+                          value={resourceDescription}
+                          onChange={(event) => setResourceDescription(event.target.value)}
+                          placeholder="Description (optionnelle)"
+                          className={adminUi.input}
+                        />
+                        <input
+                          key={resourceInputKey}
+                          type="file"
+                          className={adminUi.input}
+                          onChange={(event) => setResourceFile(event.target.files?.[0] ?? null)}
+                        />
+                        <Button
+                          type="button"
+                          className={`${adminUi.primaryBtn} sm:col-span-2`}
+                          disabled={!resourceTitle.trim() || !resourceFile}
+                          onClick={() => void handleCreateMatiereResource(matiere.code_matiere)}
+                        >
+                          Uploader
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 ))}
                 {(dashboard?.matieres ?? []).length === 0 && (

@@ -238,6 +238,71 @@ pub async fn set_referent_for_matiere(
   })
 }
 
+pub async fn create_matiere_resource_for_promo(
+  db: &PgPool,
+  promo_id: Uuid,
+  code_matiere: &str,
+  payload: CreatePromoMatiereResourceUploadInput,
+  created_by: Uuid,
+) -> Result<MutationAck, ApiError> {
+  let code = code_matiere.trim().to_uppercase();
+  let type_metier = payload.type_metier.trim().to_lowercase();
+  let title = payload.title.trim();
+
+  if code.is_empty() || type_metier.is_empty() || title.is_empty() {
+    return Err(ApiError::bad_request(
+      "id_mat, type_metier and title are required",
+    ));
+  }
+  if payload.bytes.is_empty() {
+    return Err(ApiError::bad_request("file is required"));
+  }
+
+  ensure_subject_in_promo(db, &code, promo_id).await?;
+
+  let s3_config =
+    s3::read_s3_config().map_err(|_| ApiError::internal("unable to read S3 config"))?;
+  let resource_id = Uuid::new_v4();
+  let object_key = format!(
+    "matieres/{}/{}/{}_{}",
+    code,
+    type_metier,
+    resource_id,
+    sanitize_file_name(&payload.file_name)
+  );
+  let content_size = i64::try_from(payload.bytes.len()).unwrap_or(i64::MAX);
+
+  s3::upload_bytes(&object_key, payload.bytes, payload.content_type.as_deref())
+    .await
+    .map_err(|_| ApiError::internal("unable to upload file to S3"))?;
+
+  sqlx::query(
+    r#"
+    INSERT INTO matiere_resource
+      (id, id_mat, id_promo, type_metier, title, description, s3_bucket, s3_key, url, content_type, size_bytes, created_by)
+    VALUES ($1, $2, $3, $4::resource_type_metier, $5, $6, $7, $8, NULL, $9, $10, $11)
+    "#,
+  )
+  .bind(resource_id)
+  .bind(code)
+  .bind(promo_id)
+  .bind(type_metier)
+  .bind(title)
+  .bind(payload.description.map(|value| value.trim().to_string()))
+  .bind(s3_config.bucket)
+  .bind(object_key)
+  .bind(payload.content_type.map(|value| value.trim().to_string()))
+  .bind(content_size)
+  .bind(created_by)
+  .execute(db)
+  .await
+  .map_err(map_schema_error("unable to create subject resource"))?;
+
+  Ok(MutationAck {
+    message: "subject resource created",
+  })
+}
+
 pub async fn update_promotion_ical_url(
   db: &PgPool,
   promo_id: Uuid,

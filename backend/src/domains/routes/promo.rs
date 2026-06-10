@@ -1,16 +1,16 @@
 use axum::{
   Json, Router,
   body::Body,
-  extract::{Path, Query, State},
-  http::HeaderMap,
+  extract::{Multipart, Path, Query, State},
   http::header,
+  http::{HeaderMap, StatusCode},
   response::IntoResponse,
   routing::{get, post, put},
 };
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::domains::{middleware, services::promo_service};
+use crate::domains::{error::ApiError, middleware, services::promo_service};
 
 pub fn promo_routes(db: PgPool) -> Router<PgPool> {
   Router::new()
@@ -26,6 +26,13 @@ pub fn promo_routes(db: PgPool) -> Router<PgPool> {
     .route(
       "/promotions/{promo_id}/matieres",
       middleware::right_admin_or_delegue_for_promo(post(add_matiere_to_promo), db.clone()),
+    )
+    .route(
+      "/promotions/{promo_id}/matieres/{code_matiere}/resources",
+      middleware::right_admin_or_delegue_for_promo(
+        post(create_matiere_resource_for_promo),
+        db.clone(),
+      ),
     )
     .route(
       "/promotions/{promo_id}/professeurs",

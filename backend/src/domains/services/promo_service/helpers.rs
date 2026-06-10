@@ -110,6 +110,23 @@ async fn ensure_subject_in_promo(
   Ok(())
 }
 
+fn sanitize_file_name(name: &str) -> String {
+  let candidate = name.trim();
+  if candidate.is_empty() {
+    return "file.bin".to_string();
+  }
+  candidate
+    .chars()
+    .map(|c| {
+      if c.is_ascii_alphanumeric() || c == '.' || c == '-' || c == '_' {
+        c
+      } else {
+        '_'
+      }
+    })
+    .collect()
+}
+
 fn map_schema_error(message: &'static str) -> impl Fn(sqlx::Error) -> ApiError {
   move |error| match error {
     sqlx::Error::Database(db_err)

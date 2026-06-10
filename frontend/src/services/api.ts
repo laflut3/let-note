@@ -562,6 +562,28 @@ export async function adminCreateMatiereResourceRequest(
   });
 }
 
+export async function createPromoMatiereResourceRequest(
+  promoId: string,
+  codeMatiere: string,
+  payload: {
+    type_metier: 'cours' | 'td' | 'tp' | 'exam';
+    title: string;
+    description?: string;
+    file: File;
+  }
+): Promise<Response> {
+  const formData = new FormData();
+  formData.append('type_metier', payload.type_metier);
+  formData.append('title', payload.title);
+  if (payload.description) formData.append('description', payload.description);
+  formData.append('file', payload.file);
+
+  return jsonRequest(`/promotions/${promoId}/matieres/${codeMatiere}/resources`, {
+    method: 'POST',
+    body: formData,
+  });
+}
+
 export async function adminDeleteMatiereResourceRequest(resourceId: string): Promise<Response> {
   return jsonRequest(`/admin/matieres/resources/${resourceId}`, { method: 'DELETE' });
 }

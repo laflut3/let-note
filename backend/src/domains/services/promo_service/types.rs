@@ -5,6 +5,16 @@ pub struct CreateMatiereInput {
   pub referent_prof_id: Uuid,
 }
 
+#[derive(Debug, Clone)]
+pub struct CreatePromoMatiereResourceUploadInput {
+  pub type_metier: String,
+  pub title: String,
+  pub description: Option<String>,
+  pub file_name: String,
+  pub content_type: Option<String>,
+  pub bytes: Vec<u8>,
+}
+
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct CreateProfesseurInput {
   pub prenom: String,
