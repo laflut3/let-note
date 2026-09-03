@@ -40,7 +40,7 @@ jobs:
           cache: false
 
       - name: Upload filesystem scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@87557b9c84dde89fdd9b10e88954ac2f4248e463 # v4.36.1
+        uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
         if: always()
         with:
           sarif_file: trivy-fs.sarif
@@ -81,7 +81,7 @@ jobs:
           cache: false
 
       - name: Upload image scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@87557b9c84dde89fdd9b10e88954ac2f4248e463 # v4.36.1
+        uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
         if: always()
         with:
           sarif_file: trivy-image.sarif
@@ -122,7 +122,7 @@ jobs:
           cache: false
 
       - name: Upload image scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@87557b9c84dde89fdd9b10e88954ac2f4248e463 # v4.36.1
+        uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
         if: always()
         with:
           sarif_file: trivy-image.sarif
