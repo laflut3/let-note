@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-24.04
     services:
       postgres:
-        image: postgres:18@sha256:8ff36f3c66371cba71d20ceedccfc3de9669a68737607888c4ef0af93abe8e39
+        image: postgres:18@sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722
         env:
           POSTGRES_DB: let_note_test
           POSTGRES_USER: postgres
